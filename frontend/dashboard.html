@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -50,7 +51,7 @@
                 <div class="flex items-center space-x-4">
                     <a href="/" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
                         <i class="fas fa-home mr-1"></i>
-                        Interfaz Pública
+                        Public Interface
                     </a>
                     <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
                         <i class="fas fa-sign-out-alt mr-1"></i>
@@ -68,7 +69,7 @@
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-robot text-blue-600 mr-3"></i>
-                    Estado del Pipeline
+                    Pipeline Status
                 </h2>
             </div>
 
@@ -78,23 +79,23 @@
                     <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <div class="flex items-center justify-center mb-2">
                             <div id="pipeline-status-indicator" class="w-3 h-3 rounded-full bg-gray-400 mr-2"></div>
-                            <div id="pipeline-status-text" class="text-lg font-bold text-blue-600">Cargando...</div>
+                            <div id="pipeline-status-text" class="text-lg font-bold text-blue-600">Loading...</div>
                         </div>
-                        <div class="text-sm text-gray-600 dark:text-gray-400">Estado Actual</div>
-                        <div id="pipeline-status-description" class="text-xs text-gray-500 mt-1">Verificando estado...</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Current Status</div>
+                        <div id="pipeline-status-description" class="text-xs text-gray-500 mt-1">Checking status...</div>
                     </div>
 
                     <!-- Next Execution -->
                     <div class="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                         <div class="text-lg font-bold text-green-600" id="next-execution-time">--:--</div>
-                        <div class="text-sm text-gray-600 dark:text-gray-400">Próxima Ejecución</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Next Execution</div>
                         <div id="next-execution-countdown" class="text-xs text-gray-500 mt-1">--</div>
                     </div>
 
                     <!-- Last Execution -->
                     <div class="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                        <div class="text-lg font-bold text-purple-600" id="last-execution-status">Nunca</div>
-                        <div class="text-sm text-gray-600 dark:text-gray-400">Última Ejecución</div>
+                        <div class="text-lg font-bold text-purple-600" id="last-execution-status">Never</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Last Execution</div>
                         <div id="last-execution-time" class="text-xs text-gray-500 mt-1">--</div>
                     </div>
                 </div>
@@ -103,11 +104,11 @@
                 <div class="flex flex-col sm:flex-row gap-4">
                     <button id="trigger-pipeline-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <i class="fas fa-play mr-2"></i>
-                        Ejecutar Pipeline Ahora
+                        Execute Pipeline Now
                     </button>
                     <button id="refresh-status-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <i class="fas fa-sync-alt mr-2"></i>
-                        Actualizar Estado
+                        Refresh Status
                     </button>
                 </div>
             </div>
@@ -118,37 +119,46 @@
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-clock text-orange-600 mr-3"></i>
-                    Programación Automática
+                    Automatic Scheduling
                 </h3>
             </div>
 
             <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Días Programados</div>
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Scheduled Days</div>
                         <div class="text-lg font-bold text-blue-600">
                             <i class="fas fa-calendar-day mr-1"></i>
-                            Lun, Mié, Sáb
+                            Mon, Wed, Sat
                         </div>
-                        <div class="text-xs text-gray-500 mt-1">Después de cada sorteo</div>
+                        <div class="text-xs text-gray-500 mt-1">After each drawing</div>
                     </div>
 
                     <div class="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Horario</div>
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Time</div>
                         <div class="text-lg font-bold text-green-600">
                             <i class="fas fa-clock mr-1"></i>
                             11:30 PM ET
                         </div>
-                        <div class="text-xs text-gray-500 mt-1">30 min después del sorteo</div>
+                        <div class="text-xs text-gray-500 mt-1">30 min after drawing</div>
                     </div>
 
                     <div class="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Estado</div>
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status</div>
                         <div class="text-lg font-bold text-purple-600" id="scheduler-status">
                             <i class="fas fa-check-circle mr-1"></i>
-                            Activo
+                            Active
                         </div>
-                        <div class="text-xs text-gray-500 mt-1" id="scheduler-jobs">2 trabajos programados</div>
+                        <div class="text-xs text-gray-500 mt-1" id="scheduler-jobs">2 scheduled jobs</div>
+                    </div>
+
+                    <div class="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Next Scheduled</div>
+                        <div class="text-lg font-bold text-orange-600" id="next-scheduled-execution">
+                            <i class="fas fa-calendar-plus mr-1"></i>
+                            <span id="next-scheduled-date">Loading...</span>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1" id="next-scheduled-time">--:-- ET</div>
                     </div>
                 </div>
             </div>
@@ -159,7 +169,7 @@
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-history text-indigo-600 mr-3"></i>
-                    Historial de Ejecuciones
+                    Execution History
                 </h3>
             </div>
 
@@ -168,16 +178,16 @@
                     <table class="w-full text-sm">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Duración</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Origen</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Date</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Duration</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Source</th>
                             </tr>
                         </thead>
                         <tbody id="execution-history-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             <tr>
                                 <td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                    Cargando historial de ejecuciones...
+                                    Loading execution history...
                                 </td>
                             </tr>
                         </tbody>
@@ -193,28 +203,28 @@
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                     <i class="fas fa-play-circle text-green-600 mr-2"></i>
-                    Confirmar Ejecución
+                    Confirm Execution
                 </h3>
             </div>
             <div class="p-6">
                 <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    ¿Estás seguro de que quieres ejecutar el pipeline completo?
+                    Are you sure you want to execute the full pipeline?
                 </p>
                 <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-4">
                     <p class="text-xs text-blue-800 dark:text-blue-200">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Esto ejecutará todos los pasos: actualización de datos, análisis, optimización, validación y generación de predicciones.
+                        This will execute all steps: data update, analysis, optimization, validation and prediction generation.
                     </p>
                 </div>
             </div>
             <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
                 <button id="confirm-trigger-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium">
                     <i class="fas fa-play mr-2"></i>
-                    Ejecutar Ahora
+                    Execute Now
                 </button>
                 <button id="cancel-trigger-btn" class="flex-1 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg font-medium">
                     <i class="fas fa-times mr-2"></i>
-                    Cancelar
+                    Cancel
                 </button>
             </div>
         </div>
@@ -258,6 +268,7 @@
 
         async function initializePipelineControl() {
             await fetchPipelineStatus();
+            calculateNextScheduledExecution();
         }
 
         async function fetchPipelineStatus() {
@@ -271,9 +282,70 @@
                 return data;
             } catch (error) {
                 console.error('Pipeline status fetch error:', error);
-                showNotification('Error al obtener estado del pipeline', 'error');
-                showPipelineError('Error de conexión');
+                showNotification('Error fetching pipeline status', 'error');
+                showPipelineError('Connection error');
                 return null;
+            }
+        }
+
+        function calculateNextScheduledExecution() {
+            const now = new Date();
+            const easternTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+            
+            // Drawing days: Monday (1), Wednesday (3), Saturday (6)
+            const drawingDays = [1, 3, 6];
+            const executionHour = 23; // 11 PM
+            const executionMinute = 30;
+
+            let nextExecution = new Date(easternTime);
+            
+            // Find the next drawing day
+            for (let i = 0; i <= 7; i++) {
+                const checkDate = new Date(easternTime);
+                checkDate.setDate(easternTime.getDate() + i);
+                
+                const dayOfWeek = checkDate.getDay();
+                
+                if (drawingDays.includes(dayOfWeek)) {
+                    const executionTime = new Date(checkDate);
+                    executionTime.setHours(executionHour, executionMinute, 0, 0);
+                    
+                    // If it's today and the execution time hasn't passed yet
+                    if (i === 0 && easternTime.getTime() < executionTime.getTime()) {
+                        nextExecution = executionTime;
+                        break;
+                    }
+                    // If it's a future day
+                    else if (i > 0) {
+                        nextExecution = executionTime;
+                        break;
+                    }
+                }
+            }
+
+            updateNextScheduledExecution(nextExecution);
+        }
+
+        function updateNextScheduledExecution(nextExecution) {
+            const nextScheduledDate = document.getElementById('next-scheduled-date');
+            const nextScheduledTime = document.getElementById('next-scheduled-time');
+
+            if (nextScheduledDate && nextScheduledTime) {
+                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+                const dayName = dayNames[nextExecution.getDay()];
+                const month = monthNames[nextExecution.getMonth()];
+                const day = nextExecution.getDate();
+
+                nextScheduledDate.textContent = `${dayName} ${month} ${day}`;
+                nextScheduledTime.textContent = nextExecution.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                    timeZone: 'America/New_York'
+                }) + ' ET';
             }
         }
 
@@ -321,8 +393,8 @@
                     nextExecutionTime.textContent = nextTime.toLocaleString();
                     updateCountdown(nextTime);
                 } else {
-                    nextExecutionTime.textContent = 'No programado';
-                    nextExecutionCountdown.textContent = 'Solo manual';
+                    nextExecutionTime.textContent = 'Not scheduled';
+                    nextExecutionCountdown.textContent = 'Manual only';
                 }
             }
         }
@@ -333,11 +405,11 @@
 
             if (lastExecutionStatus && lastExecutionTime) {
                 if (lastExecution) {
-                    lastExecutionStatus.textContent = lastExecution.status || 'Completado';
+                    lastExecutionStatus.textContent = lastExecution.status || 'Completed';
                     lastExecutionTime.textContent = new Date(lastExecution.timestamp).toLocaleString();
                 } else {
-                    lastExecutionStatus.textContent = 'Nunca';
-                    lastExecutionTime.textContent = 'No hay ejecuciones previas';
+                    lastExecutionStatus.textContent = 'Never';
+                    lastExecutionTime.textContent = 'No previous executions';
                 }
             }
         }
@@ -348,16 +420,16 @@
 
             if (schedulerStatus) {
                 if (isActive) {
-                    schedulerStatus.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Activo';
+                    schedulerStatus.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Active';
                     schedulerStatus.className = 'text-lg font-bold text-green-600';
                 } else {
-                    schedulerStatus.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Inactivo';
+                    schedulerStatus.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Inactive';
                     schedulerStatus.className = 'text-lg font-bold text-red-600';
                 }
             }
 
             if (schedulerJobs) {
-                schedulerJobs.textContent = `${activeJobs || 0} trabajos programados`;
+                schedulerJobs.textContent = `${activeJobs || 0} scheduled jobs`;
             }
         }
 
@@ -367,10 +439,10 @@
                 const canTrigger = status !== 'running';
                 triggerBtn.disabled = !canTrigger;
                 if (!canTrigger) {
-                    triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Ejecutándose...';
+                    triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Running...';
                     triggerBtn.className = 'flex-1 bg-gray-400 text-white px-6 py-3 rounded-lg font-medium cursor-not-allowed';
                 } else {
-                    triggerBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Ejecutar Pipeline Ahora';
+                    triggerBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Execute Pipeline Now';
                     triggerBtn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors';
                 }
             }
@@ -385,7 +457,7 @@
                 const diff = targetTime - now;
 
                 if (diff <= 0) {
-                    nextExecutionCountdown.textContent = 'Ejecutándose pronto';
+                    nextExecutionCountdown.textContent = 'Running soon';
                     return;
                 }
 
@@ -393,11 +465,11 @@
                 const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
                 if (hours > 0) {
-                    nextExecutionCountdown.textContent = `en ${hours}h ${minutes}m`;
+                    nextExecutionCountdown.textContent = `in ${hours}h ${minutes}m`;
                 } else if (minutes > 0) {
-                    nextExecutionCountdown.textContent = `en ${minutes}m`;
+                    nextExecutionCountdown.textContent = `in ${minutes}m`;
                 } else {
-                    nextExecutionCountdown.textContent = 'muy pronto';
+                    nextExecutionCountdown.textContent = 'very soon';
                 }
             };
 
@@ -418,24 +490,24 @@
 
         function getStatusText(status) {
             const texts = {
-                'idle': 'Inactivo',
-                'running': 'Ejecutándose',
-                'completed': 'Completado',
-                'failed': 'Falló',
+                'idle': 'Idle',
+                'running': 'Running',
+                'completed': 'Completed',
+                'failed': 'Failed',
                 'error': 'Error'
             };
-            return texts[status] || 'Desconocido';
+            return texts[status] || 'Unknown';
         }
 
         function getStatusDescription(status) {
             const descriptions = {
-                'idle': 'Esperando próxima ejecución',
-                'running': 'Pipeline en ejecución',
-                'completed': 'Última ejecución exitosa',
-                'failed': 'Última ejecución falló',
-                'error': 'Error en el sistema'
+                'idle': 'Waiting for next execution',
+                'running': 'Pipeline in progress',
+                'completed': 'Last execution successful',
+                'failed': 'Last execution failed',
+                'error': 'System error'
             };
-            return descriptions[status] || 'Estado desconocido';
+            return descriptions[status] || 'Unknown status';
         }
 
         function showTriggerModal() {
@@ -452,7 +524,7 @@
             try {
                 const triggerBtn = document.getElementById('trigger-pipeline-btn');
                 triggerBtn.disabled = true;
-                triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Iniciando...';
+                triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Starting...';
 
                 const response = await fetch(`${API_BASE_URL}/pipeline/trigger`, {
                     method: 'POST',
@@ -466,7 +538,7 @@
                 }
 
                 const data = await response.json();
-                showNotification('Pipeline ejecutado exitosamente!', 'success');
+                showNotification('Pipeline executed successfully!', 'success');
 
                 // Refresh status after a delay
                 setTimeout(() => {
@@ -475,19 +547,19 @@
 
             } catch (error) {
                 console.error('Pipeline trigger error:', error);
-                showNotification('Error al ejecutar pipeline', 'error');
+                showNotification('Error executing pipeline', 'error');
 
                 // Reset button
                 const triggerBtn = document.getElementById('trigger-pipeline-btn');
                 triggerBtn.disabled = false;
-                triggerBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Ejecutar Pipeline Ahora';
+                triggerBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Execute Pipeline Now';
             }
         }
 
         function refreshPipelineStatus() {
             const refreshBtn = document.getElementById('refresh-status-btn');
             const originalHTML = refreshBtn.innerHTML;
-            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Actualizando...';
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Refreshing...';
             refreshBtn.disabled = true;
 
             fetchPipelineStatus().finally(() => {
