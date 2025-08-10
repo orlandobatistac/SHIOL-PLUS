@@ -16,6 +16,7 @@ import src.database as db
 from src.adaptive_feedback import initialize_adaptive_system
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
+import pytz
 
 # Import all modular API components
 from src.api_utils import convert_numpy_types
@@ -184,18 +185,32 @@ async def lifespan(app: FastAPI):
         max_instances=1,
         coalesce=True
     )
-    # Defer scheduler start to reduce startup time
-    logger.info("Scheduler configured, will start after port opens")
-    
-    # Log detailed scheduler configuration for debugging
-    jobs = scheduler.get_jobs()
-    logger.info(f"Active scheduled jobs: {len(jobs)}")
-    for job in jobs:
-        logger.info(f"Job: {job.id} | Next run: {job.next_run_time} | Timezone: {job.trigger.timezone}")
+    # Start scheduler after configuration
+    try:
+        scheduler.start()
+        logger.info("Scheduler started successfully")
+        
+        # Log detailed scheduler configuration for debugging
+        jobs = scheduler.get_jobs()
+        logger.info(f"Active scheduled jobs: {len(jobs)}")
+        for job in jobs:
+            try:
+                next_run = getattr(job, 'next_run_time', 'Unknown')
+                timezone = getattr(job.trigger, 'timezone', 'Unknown')
+                logger.info(f"Job: {job.id} | Next run: {next_run} | Timezone: {timezone}")
+            except AttributeError as e:
+                logger.warning(f"Job {job.id} missing attributes: {e}")
+    except Exception as e:
+        logger.error(f"Failed to start scheduler: {e}")
     
     # Log current time in multiple timezones for debugging
-    from src.date_utils import DateManager
-    current_et = DateManager.get_current_et_time()
+    try:
+        from src.date_utils import DateManager
+        current_et = DateManager.get_current_et_time()
+    except ImportError:
+        # Fallback if date_utils is not available
+        et_tz = pytz.timezone('America/New_York')
+        current_et = datetime.now(et_tz)
     current_utc = datetime.now(pytz.UTC)
     logger.info(f"Current time - UTC: {current_utc.isoformat()} | ET: {current_et.isoformat()}")
     
