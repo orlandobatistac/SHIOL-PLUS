@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -40,7 +39,7 @@
 <body class="dark bg-gray-100 dark:bg-gray-900 font-sans">
     <!-- Header -->
     <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center">
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
@@ -51,7 +50,7 @@
                 <div class="flex items-center space-x-4">
                     <a href="/" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
                         <i class="fas fa-home mr-1"></i>
-                        Public Interface
+                        Interfaz Pública
                     </a>
                     <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
                         <i class="fas fa-sign-out-alt mr-1"></i>
@@ -63,91 +62,66 @@
     </header>
 
     <!-- Main Content -->
-    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Pipeline Control Center -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
+    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Pipeline Status Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-6">
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-robot text-blue-600 mr-3"></i>
-                    Pipeline Control Center
+                    Estado del Pipeline
                 </h2>
-                <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">Administra la ejecución del pipeline AI con total transparencia y control</p>
             </div>
-            
+
             <div class="p-6">
-                <!-- Status Overview -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <!-- Pipeline Status -->
                     <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <div class="flex items-center justify-center mb-2">
                             <div id="pipeline-status-indicator" class="w-3 h-3 rounded-full bg-gray-400 mr-2"></div>
-                            <div id="pipeline-status-text" class="text-lg font-bold text-blue-600">Loading...</div>
+                            <div id="pipeline-status-text" class="text-lg font-bold text-blue-600">Cargando...</div>
                         </div>
-                        <div class="text-xs text-gray-600 dark:text-gray-400">Pipeline Status</div>
-                        <div id="pipeline-status-description" class="text-xs text-gray-500 mt-1">Checking status...</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Estado Actual</div>
+                        <div id="pipeline-status-description" class="text-xs text-gray-500 mt-1">Verificando estado...</div>
                     </div>
-                    
+
+                    <!-- Next Execution -->
                     <div class="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                         <div class="text-lg font-bold text-green-600" id="next-execution-time">--:--</div>
-                        <div class="text-xs text-gray-600 dark:text-gray-400">Próxima Ejecución</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Próxima Ejecución</div>
                         <div id="next-execution-countdown" class="text-xs text-gray-500 mt-1">--</div>
                     </div>
-                    
+
+                    <!-- Last Execution -->
                     <div class="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                        <div class="flex items-center justify-center mb-2">
-                            <div id="system-health-indicator" class="w-3 h-3 rounded-full bg-gray-400 mr-2"></div>
-                            <div id="system-health-text" class="text-lg font-bold text-purple-600">Unknown</div>
-                        </div>
-                        <div class="text-xs text-gray-600 dark:text-gray-400">System Health</div>
-                        <div id="system-health-details" class="text-xs text-gray-500 mt-1">Checking...</div>
-                    </div>
-                    
-                    <div class="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                        <div class="text-lg font-bold text-yellow-600" id="last-execution-status">Never</div>
-                        <div class="text-xs text-gray-600 dark:text-gray-400">Última Ejecución</div>
+                        <div class="text-lg font-bold text-purple-600" id="last-execution-status">Nunca</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Última Ejecución</div>
                         <div id="last-execution-time" class="text-xs text-gray-500 mt-1">--</div>
                     </div>
                 </div>
 
                 <!-- Control Buttons -->
-                <div class="flex flex-col sm:flex-row gap-4 mb-8">
+                <div class="flex flex-col sm:flex-row gap-4">
                     <button id="trigger-pipeline-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <i class="fas fa-play mr-2"></i>
-                        Ejecutar Pipeline Manualmente
+                        Ejecutar Pipeline Ahora
                     </button>
-                    <button id="view-logs-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                        <i class="fas fa-file-text mr-2"></i>
-                        Ver Logs del Sistema
-                    </button>
-                    <button id="refresh-pipeline-btn" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    <button id="refresh-status-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
                         <i class="fas fa-sync-alt mr-2"></i>
-                        Actualizar
+                        Actualizar Estado
                     </button>
-                </div>
-
-                <!-- Auto-refresh Toggle -->
-                <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg mb-8">
-                    <div>
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Auto-actualización de estado</span>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Actualiza el estado automáticamente cada 60 segundos</p>
-                    </div>
-                    <label class="flex items-center">
-                        <input type="checkbox" id="auto-refresh-checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Habilitado</span>
-                    </label>
                 </div>
             </div>
         </div>
 
         <!-- Scheduler Information -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-6">
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-clock text-orange-600 mr-3"></i>
-                    Configuración del Scheduler Automático
+                    Programación Automática
                 </h3>
-                <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">El pipeline se ejecuta automáticamente en horarios programados</p>
             </div>
-            
+
             <div class="p-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -158,93 +132,78 @@
                         </div>
                         <div class="text-xs text-gray-500 mt-1">Después de cada sorteo</div>
                     </div>
-                    
+
                     <div class="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Horario Programado</div>
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Horario</div>
                         <div class="text-lg font-bold text-green-600">
                             <i class="fas fa-clock mr-1"></i>
                             11:30 PM ET
                         </div>
                         <div class="text-xs text-gray-500 mt-1">30 min después del sorteo</div>
                     </div>
-                    
+
                     <div class="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Estado del Scheduler</div>
-                        <div class="text-lg font-bold text-purple-600">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Estado</div>
+                        <div class="text-lg font-bold text-purple-600" id="scheduler-status">
                             <i class="fas fa-check-circle mr-1"></i>
                             Activo
                         </div>
-                        <div class="text-xs text-gray-500 mt-1">Funcionando correctamente</div>
+                        <div class="text-xs text-gray-500 mt-1" id="scheduler-jobs">2 trabajos programados</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Execution History -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                     <i class="fas fa-history text-indigo-600 mr-3"></i>
-                    Historial de Ejecuciones Recientes
+                    Historial de Ejecuciones
                 </h3>
-                <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">Últimas 10 ejecuciones del pipeline con detalles de estado</p>
             </div>
-            
+
             <div class="p-6">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fecha y Hora</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Duración</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pasos</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Origen</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Duración</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Origen</th>
                             </tr>
                         </thead>
                         <tbody id="execution-history-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            <!-- Se llena dinámicamente -->
+                            <tr>
+                                <td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                    Cargando historial de ejecuciones...
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-
-        <!-- Last Generated Plays -->
-        <div id="last-generated-plays" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hidden">
-            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                    <i class="fas fa-dice text-green-600 mr-3"></i>
-                    Últimas Predicciones Generadas
-                </h3>
-                <p class="text-gray-600 dark:text-gray-400 text-sm mt-1" id="last-plays-timestamp">Generadas en la última ejecución del pipeline</p>
-            </div>
-            
-            <div class="p-6">
-                <div id="last-plays-container" class="space-y-3">
-                    <!-- Se llena dinámicamente -->
-                </div>
-            </div>
-        </div>
     </main>
 
-    <!-- Pipeline Trigger Modal -->
-    <div id="pipeline-trigger-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <!-- Trigger Confirmation Modal -->
+    <div id="trigger-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full mx-4 shadow-2xl">
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                     <i class="fas fa-play-circle text-green-600 mr-2"></i>
-                    Confirmar Ejecución Manual
+                    Confirmar Ejecución
                 </h3>
             </div>
             <div class="p-6">
                 <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    ¿Estás seguro de que quieres ejecutar el pipeline completo manualmente?
+                    ¿Estás seguro de que quieres ejecutar el pipeline completo?
                 </p>
                 <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-4">
                     <p class="text-xs text-blue-800 dark:text-blue-200">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Esta ejecución incluirá: actualización de datos, análisis adaptativo, optimización de pesos, validación histórica, generación de predicciones y análisis de rendimiento.
+                        Esto ejecutará todos los pasos: actualización de datos, análisis, optimización, validación y generación de predicciones.
                     </p>
                 </div>
             </div>
@@ -262,14 +221,13 @@
     </div>
 
     <!-- Notification -->
-    <div id="pipeline-notification" class="fixed bottom-5 left-5 py-3 px-4 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 z-50 hidden">
+    <div id="notification" class="fixed bottom-5 right-5 py-3 px-4 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 z-50 hidden">
         <div class="flex items-center">
-            <i id="pipeline-notification-icon" class="fas fa-info mr-2"></i>
-            <span id="pipeline-notification-text">Notification</span>
+            <i id="notification-icon" class="fas fa-info mr-2"></i>
+            <span id="notification-text">Notification</span>
         </div>
     </div>
 
-    <!-- Scripts -->
     <script>
         // API Configuration
         function getApiBaseUrl() {
@@ -277,35 +235,28 @@
         }
 
         const API_BASE_URL = getApiBaseUrl();
-        let autoRefreshInterval = null;
-        let countdownInterval = null;
 
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Initializing Pipeline Control Center...');
             initializePipelineControl();
             setupEventListeners();
         });
 
         function setupEventListeners() {
-            // Pipeline control buttons
             document.getElementById('trigger-pipeline-btn').addEventListener('click', showTriggerModal);
-            document.getElementById('view-logs-btn').addEventListener('click', viewPipelineLogs);
-            document.getElementById('refresh-pipeline-btn').addEventListener('click', refreshPipelineStatus);
-            document.getElementById('auto-refresh-checkbox').addEventListener('change', handleAutoRefreshToggle);
-            
-            // Modal buttons
+            document.getElementById('refresh-status-btn').addEventListener('click', refreshPipelineStatus);
             document.getElementById('cancel-trigger-btn').addEventListener('click', hideTriggerModal);
             document.getElementById('confirm-trigger-btn').addEventListener('click', triggerPipeline);
-            
+
             // Close modal when clicking outside
-            document.getElementById('pipeline-trigger-modal').addEventListener('click', (e) => {
-                if (e.target === document.getElementById('pipeline-trigger-modal')) {
+            document.getElementById('trigger-modal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('trigger-modal')) {
                     hideTriggerModal();
                 }
             });
         }
 
         async function initializePipelineControl() {
-            console.log('🚀 Initializing Pipeline Control Center...');
             await fetchPipelineStatus();
         }
 
@@ -320,7 +271,8 @@
                 return data;
             } catch (error) {
                 console.error('Pipeline status fetch error:', error);
-                showPipelineError('Failed to fetch pipeline status');
+                showNotification('Error al obtener estado del pipeline', 'error');
+                showPipelineError('Error de conexión');
                 return null;
             }
         }
@@ -332,59 +284,125 @@
             const status = pipelineStatus.current_status || 'unknown';
 
             // Update current status
+            updateStatusIndicator(status);
+
+            // Update next execution time
+            updateNextExecution(pipelineStatus.next_scheduled_execution);
+
+            // Update last execution
+            updateLastExecution(pipelineStatus.last_execution);
+
+            // Update scheduler status
+            updateSchedulerStatus(pipelineStatus.scheduler_active, pipelineStatus.active_jobs);
+
+            // Update trigger button state
+            updateTriggerButton(status);
+        }
+
+        function updateStatusIndicator(status) {
             const statusIndicator = document.getElementById('pipeline-status-indicator');
             const statusText = document.getElementById('pipeline-status-text');
             const statusDescription = document.getElementById('pipeline-status-description');
-            
+
             if (statusIndicator && statusText && statusDescription) {
                 statusIndicator.className = `w-3 h-3 rounded-full ${getStatusColor(status)}`;
                 statusText.textContent = getStatusText(status);
-                statusDescription.textContent = `Pipeline está ${getStatusText(status).toLowerCase()}`;
+                statusDescription.textContent = getStatusDescription(status);
             }
+        }
 
-            // Update next execution time
+        function updateNextExecution(nextExecution) {
             const nextExecutionTime = document.getElementById('next-execution-time');
             const nextExecutionCountdown = document.getElementById('next-execution-countdown');
-            
+
             if (nextExecutionTime && nextExecutionCountdown) {
-                if (pipelineStatus.next_scheduled_execution) {
-                    const nextTime = new Date(pipelineStatus.next_scheduled_execution);
-                    nextExecutionTime.textContent = nextTime.toLocaleTimeString();
+                if (nextExecution) {
+                    const nextTime = new Date(nextExecution);
+                    nextExecutionTime.textContent = nextTime.toLocaleString();
                     updateCountdown(nextTime);
                 } else {
                     nextExecutionTime.textContent = 'No programado';
-                    nextExecutionCountdown.textContent = 'Solo ejecución manual';
+                    nextExecutionCountdown.textContent = 'Solo manual';
+                }
+            }
+        }
+
+        function updateLastExecution(lastExecution) {
+            const lastExecutionStatus = document.getElementById('last-execution-status');
+            const lastExecutionTime = document.getElementById('last-execution-time');
+
+            if (lastExecutionStatus && lastExecutionTime) {
+                if (lastExecution) {
+                    lastExecutionStatus.textContent = lastExecution.status || 'Completado';
+                    lastExecutionTime.textContent = new Date(lastExecution.timestamp).toLocaleString();
+                } else {
+                    lastExecutionStatus.textContent = 'Nunca';
+                    lastExecutionTime.textContent = 'No hay ejecuciones previas';
+                }
+            }
+        }
+
+        function updateSchedulerStatus(isActive, activeJobs) {
+            const schedulerStatus = document.getElementById('scheduler-status');
+            const schedulerJobs = document.getElementById('scheduler-jobs');
+
+            if (schedulerStatus) {
+                if (isActive) {
+                    schedulerStatus.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Activo';
+                    schedulerStatus.className = 'text-lg font-bold text-green-600';
+                } else {
+                    schedulerStatus.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Inactivo';
+                    schedulerStatus.className = 'text-lg font-bold text-red-600';
                 }
             }
 
-            // Update system health
-            updateSystemHealth(pipelineStatus.system_health || {});
-
-            // Update execution history
-            if (pipelineStatus.recent_execution_history) {
-                updateExecutionHistory(pipelineStatus.recent_execution_history);
+            if (schedulerJobs) {
+                schedulerJobs.textContent = `${activeJobs || 0} trabajos programados`;
             }
+        }
 
-            // Update last generated plays
-            if (data.generated_plays_last_run && data.generated_plays_last_run.length > 0) {
-                updateLastGeneratedPlays({
-                    plays: data.generated_plays_last_run.map(play => [...play.numbers, play.powerball]),
-                    scores: data.generated_plays_last_run.map(play => play.score),
-                    timestamp: data.generated_plays_last_run[0].timestamp
-                });
-            }
-
-            // Update trigger button state
+        function updateTriggerButton(status) {
             const triggerBtn = document.getElementById('trigger-pipeline-btn');
             if (triggerBtn) {
                 const canTrigger = status !== 'running';
                 triggerBtn.disabled = !canTrigger;
                 if (!canTrigger) {
-                    triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Pipeline Ejecutándose...';
+                    triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Ejecutándose...';
+                    triggerBtn.className = 'flex-1 bg-gray-400 text-white px-6 py-3 rounded-lg font-medium cursor-not-allowed';
                 } else {
-                    triggerBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Ejecutar Pipeline Manualmente';
+                    triggerBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Ejecutar Pipeline Ahora';
+                    triggerBtn.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors';
                 }
             }
+        }
+
+        function updateCountdown(targetTime) {
+            const nextExecutionCountdown = document.getElementById('next-execution-countdown');
+            if (!nextExecutionCountdown) return;
+
+            const updateTimer = () => {
+                const now = new Date();
+                const diff = targetTime - now;
+
+                if (diff <= 0) {
+                    nextExecutionCountdown.textContent = 'Ejecutándose pronto';
+                    return;
+                }
+
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+                if (hours > 0) {
+                    nextExecutionCountdown.textContent = `en ${hours}h ${minutes}m`;
+                } else if (minutes > 0) {
+                    nextExecutionCountdown.textContent = `en ${minutes}m`;
+                } else {
+                    nextExecutionCountdown.textContent = 'muy pronto';
+                }
+            };
+
+            updateTimer();
+            setInterval(updateTimer, 60000); // Update every minute
         }
 
         function getStatusColor(status) {
@@ -409,223 +427,23 @@
             return texts[status] || 'Desconocido';
         }
 
-        function updateSystemHealth(health) {
-            const healthIndicator = document.getElementById('system-health-indicator');
-            const healthText = document.getElementById('system-health-text');
-            const healthDetails = document.getElementById('system-health-details');
-            
-            if (!healthIndicator || !healthText || !healthDetails) return;
-
-            let healthStatus = 'unknown';
-            let healthDetailsText = 'No hay información disponible';
-
-            if (health.cpu_usage_percent !== undefined) {
-                if (health.cpu_usage_percent < 80 && health.memory_usage_percent < 85) {
-                    healthStatus = 'healthy';
-                    healthDetailsText = `CPU: ${health.cpu_usage_percent}%, Memoria: ${health.memory_usage_percent}%`;
-                } else {
-                    healthStatus = 'warning';
-                    healthDetailsText = `Uso elevado - CPU: ${health.cpu_usage_percent}%, Memoria: ${health.memory_usage_percent}%`;
-                }
-            }
-
-            const healthColors = {
-                'healthy': 'bg-green-500',
-                'warning': 'bg-yellow-500',
-                'critical': 'bg-red-500',
-                'unknown': 'bg-gray-400'
+        function getStatusDescription(status) {
+            const descriptions = {
+                'idle': 'Esperando próxima ejecución',
+                'running': 'Pipeline en ejecución',
+                'completed': 'Última ejecución exitosa',
+                'failed': 'Última ejecución falló',
+                'error': 'Error en el sistema'
             };
-
-            const healthTexts = {
-                'healthy': 'Saludable',
-                'warning': 'Advertencia',
-                'critical': 'Crítico',
-                'unknown': 'Desconocido'
-            };
-
-            healthIndicator.className = `w-3 h-3 rounded-full ${healthColors[healthStatus]}`;
-            healthText.textContent = healthTexts[healthStatus];
-            healthDetails.textContent = healthDetailsText;
-        }
-
-        function updateCountdown(targetTime) {
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-
-            const nextExecutionCountdown = document.getElementById('next-execution-countdown');
-            if (!nextExecutionCountdown) return;
-
-            countdownInterval = setInterval(() => {
-                const now = new Date();
-                const diff = targetTime - now;
-
-                if (diff <= 0) {
-                    nextExecutionCountdown.textContent = 'Ejecución pendiente';
-                    clearInterval(countdownInterval);
-                    return;
-                }
-
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-                if (hours > 0) {
-                    nextExecutionCountdown.textContent = `en ${hours}h ${minutes}m`;
-                } else if (minutes > 0) {
-                    nextExecutionCountdown.textContent = `en ${minutes}m`;
-                } else {
-                    nextExecutionCountdown.textContent = 'muy pronto';
-                }
-            }, 1000);
-        }
-
-        function updateExecutionHistory(executions) {
-            const tbody = document.getElementById('execution-history-tbody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '';
-
-            if (!executions || executions.length === 0) {
-                const row = tbody.insertRow();
-                const cell = row.insertCell();
-                cell.colSpan = 5;
-                cell.className = 'px-4 py-8 text-center text-gray-500 dark:text-gray-400';
-                cell.textContent = 'No hay historial de ejecuciones disponible';
-                return;
-            }
-
-            executions.slice(0, 10).forEach(execution => {
-                const row = tbody.insertRow();
-                
-                // Fecha y hora
-                const timeCell = row.insertCell();
-                timeCell.className = 'px-4 py-3 text-sm text-gray-900 dark:text-gray-100';
-                timeCell.textContent = execution.start_time ? 
-                    new Date(execution.start_time).toLocaleString() : 'N/A';
-
-                // Estado
-                const statusCell = row.insertCell();
-                statusCell.className = 'px-4 py-3';
-                const statusBadge = document.createElement('span');
-                statusBadge.className = `px-2 py-1 rounded-full text-xs font-medium ${getExecutionStatusColor(execution.status)}`;
-                statusBadge.innerHTML = `<i class="${getExecutionStatusIcon(execution.status)} mr-1"></i>${getExecutionStatusText(execution.status)}`;
-                statusCell.appendChild(statusBadge);
-
-                // Duración
-                const durationCell = row.insertCell();
-                durationCell.className = 'px-4 py-3 text-sm text-gray-900 dark:text-gray-100';
-                durationCell.textContent = execution.execution_time || 'N/A';
-
-                // Pasos
-                const stepsCell = row.insertCell();
-                stepsCell.className = 'px-4 py-3 text-sm text-gray-900 dark:text-gray-100';
-                stepsCell.textContent = `${execution.steps_completed || 0}/${execution.total_steps || 7}`;
-
-                // Origen
-                const sourceCell = row.insertCell();
-                sourceCell.className = 'px-4 py-3 text-sm text-gray-900 dark:text-gray-100';
-                sourceCell.textContent = getExecutionSource(execution.execution_source);
-            });
-        }
-
-        function getExecutionStatusColor(status) {
-            const colors = {
-                'success': 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-                'failed': 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-                'partial': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-            };
-            return colors[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400';
-        }
-
-        function getExecutionStatusIcon(status) {
-            const icons = {
-                'success': 'fas fa-check',
-                'failed': 'fas fa-times',
-                'partial': 'fas fa-exclamation-triangle'
-            };
-            return icons[status] || 'fas fa-question';
-        }
-
-        function getExecutionStatusText(status) {
-            const texts = {
-                'success': 'Exitoso',
-                'failed': 'Falló',
-                'partial': 'Parcial'
-            };
-            return texts[status] || 'Desconocido';
-        }
-
-        function getExecutionSource(source) {
-            const sources = {
-                'automatic_scheduler': 'Automático',
-                'manual_dashboard': 'Manual',
-                'api_trigger': 'API'
-            };
-            return sources[source] || 'Desconocido';
-        }
-
-        function updateLastGeneratedPlays(lastRun) {
-            const lastGeneratedPlays = document.getElementById('last-generated-plays');
-            const lastPlaysContainer = document.getElementById('last-plays-container');
-            const lastPlaysTimestamp = document.getElementById('last-plays-timestamp');
-            
-            if (!lastGeneratedPlays || !lastPlaysContainer || !lastRun.plays) return;
-
-            const timestamp = new Date(lastRun.timestamp).toLocaleString();
-            lastPlaysTimestamp.textContent = `Generadas: ${timestamp}`;
-
-            lastPlaysContainer.innerHTML = '';
-
-            lastRun.plays.slice(0, 5).forEach((play, index) => {
-                const playContainer = document.createElement('div');
-                playContainer.className = 'flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg';
-
-                const leftContainer = document.createElement('div');
-                leftContainer.className = 'flex items-center space-x-2';
-
-                const playLabel = document.createElement('span');
-                playLabel.className = 'text-sm font-medium text-gray-600 dark:text-gray-400';
-                playLabel.textContent = `Play ${index + 1}:`;
-                leftContainer.appendChild(playLabel);
-
-                // White balls
-                play.slice(0, 5).forEach(num => {
-                    const ballSpan = document.createElement('span');
-                    ballSpan.className = 'inline-flex items-center justify-center w-8 h-8 bg-gray-200 dark:bg-gray-600 rounded-full text-sm font-semibold text-gray-800 dark:text-white';
-                    ballSpan.textContent = num;
-                    leftContainer.appendChild(ballSpan);
-                });
-
-                // Powerball
-                const powerballSpan = document.createElement('span');
-                powerballSpan.className = 'inline-flex items-center justify-center w-8 h-8 bg-red-500 rounded-full text-sm font-semibold text-white';
-                powerballSpan.textContent = play[5];
-                leftContainer.appendChild(powerballSpan);
-
-                const rightContainer = document.createElement('div');
-                rightContainer.className = 'text-xs text-gray-500 dark:text-gray-400';
-                
-                if (lastRun.scores && lastRun.scores[index]) {
-                    const score = Math.round(parseFloat(lastRun.scores[index]) * 100);
-                    rightContainer.textContent = `Score: ${score}%`;
-                } else {
-                    rightContainer.textContent = 'Score: N/A';
-                }
-
-                playContainer.appendChild(leftContainer);
-                playContainer.appendChild(rightContainer);
-                lastPlaysContainer.appendChild(playContainer);
-            });
-
-            lastGeneratedPlays.classList.remove('hidden');
+            return descriptions[status] || 'Estado desconocido';
         }
 
         function showTriggerModal() {
-            document.getElementById('pipeline-trigger-modal').classList.remove('hidden');
+            document.getElementById('trigger-modal').classList.remove('hidden');
         }
 
         function hideTriggerModal() {
-            document.getElementById('pipeline-trigger-modal').classList.add('hidden');
+            document.getElementById('trigger-modal').classList.add('hidden');
         }
 
         async function triggerPipeline() {
@@ -648,77 +466,26 @@
                 }
 
                 const data = await response.json();
-                showPipelineNotification('Pipeline ejecutado exitosamente!', 'success');
+                showNotification('Pipeline ejecutado exitosamente!', 'success');
 
+                // Refresh status after a delay
                 setTimeout(() => {
                     refreshPipelineStatus();
                 }, 2000);
 
             } catch (error) {
                 console.error('Pipeline trigger error:', error);
-                showPipelineNotification('Error al ejecutar pipeline', 'error');
-            }
-        }
+                showNotification('Error al ejecutar pipeline', 'error');
 
-        async function viewPipelineLogs() {
-            try {
-                const response = await fetch(`${API_BASE_URL}/pipeline/logs`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                const data = await response.json();
-
-                // Create logs modal
-                const logsModal = document.createElement('div');
-                logsModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-                
-                const modalContent = document.createElement('div');
-                modalContent.className = 'bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-96 overflow-hidden';
-
-                const headerDiv = document.createElement('div');
-                headerDiv.className = 'flex justify-between items-center mb-4';
-
-                const title = document.createElement('h3');
-                title.className = 'text-lg font-semibold text-gray-800 dark:text-white';
-                title.textContent = 'Logs del Pipeline';
-
-                const closeButton = document.createElement('button');
-                closeButton.className = 'text-gray-500 hover:text-gray-700';
-                closeButton.onclick = () => logsModal.remove();
-                closeButton.innerHTML = '<i class="fas fa-times"></i>';
-
-                headerDiv.appendChild(title);
-                headerDiv.appendChild(closeButton);
-
-                const logsContainer = document.createElement('div');
-                logsContainer.className = 'bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-y-auto max-h-80';
-
-                if (data.logs) {
-                    const lines = data.logs.split('\n');
-                    lines.forEach((line, index) => {
-                        if (index > 0) {
-                            logsContainer.appendChild(document.createElement('br'));
-                        }
-                        const textNode = document.createTextNode(line);
-                        logsContainer.appendChild(textNode);
-                    });
-                } else {
-                    logsContainer.textContent = 'No hay logs disponibles';
-                }
-
-                modalContent.appendChild(headerDiv);
-                modalContent.appendChild(logsContainer);
-                logsModal.appendChild(modalContent);
-                document.body.appendChild(logsModal);
-
-            } catch (error) {
-                console.error('Logs fetch error:', error);
-                showPipelineNotification('Error al obtener logs', 'error');
+                // Reset button
+                const triggerBtn = document.getElementById('trigger-pipeline-btn');
+                triggerBtn.disabled = false;
+                triggerBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Ejecutar Pipeline Ahora';
             }
         }
 
         function refreshPipelineStatus() {
-            const refreshBtn = document.getElementById('refresh-pipeline-btn');
+            const refreshBtn = document.getElementById('refresh-status-btn');
             const originalHTML = refreshBtn.innerHTML;
             refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Actualizando...';
             refreshBtn.disabled = true;
@@ -729,26 +496,11 @@
             });
         }
 
-        function handleAutoRefreshToggle() {
-            const checkbox = document.getElementById('auto-refresh-checkbox');
-            
-            if (checkbox.checked) {
-                autoRefreshInterval = setInterval(fetchPipelineStatus, 60000);
-                showPipelineNotification('Auto-actualización habilitada', 'info');
-            } else {
-                if (autoRefreshInterval) {
-                    clearInterval(autoRefreshInterval);
-                    autoRefreshInterval = null;
-                }
-                showPipelineNotification('Auto-actualización deshabilitada', 'info');
-            }
-        }
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            const icon = document.getElementById('notification-icon');
+            const text = document.getElementById('notification-text');
 
-        function showPipelineNotification(message, type = 'info') {
-            const notification = document.getElementById('pipeline-notification');
-            const icon = document.getElementById('pipeline-notification-icon');
-            const text = document.getElementById('pipeline-notification-text');
-            
             if (!notification || !icon || !text) return;
 
             const icons = {
@@ -767,7 +519,7 @@
 
             icon.className = icons[type] || icons.info;
             text.textContent = message;
-            notification.className = `fixed bottom-5 left-5 py-3 px-4 rounded-lg shadow-xl text-white opacity-100 transition-opacity duration-300 z-50 ${colors[type] || colors.info}`;
+            notification.className = `fixed bottom-5 right-5 py-3 px-4 rounded-lg shadow-xl text-white opacity-100 transition-opacity duration-300 z-50 ${colors[type] || colors.info}`;
 
             setTimeout(() => {
                 notification.classList.remove('opacity-100');
@@ -779,7 +531,7 @@
             const statusText = document.getElementById('pipeline-status-text');
             const statusDescription = document.getElementById('pipeline-status-description');
             const statusIndicator = document.getElementById('pipeline-status-indicator');
-            
+
             if (statusText) statusText.textContent = 'Error';
             if (statusDescription) statusDescription.textContent = message;
             if (statusIndicator) statusIndicator.className = 'w-3 h-3 rounded-full bg-red-500';
