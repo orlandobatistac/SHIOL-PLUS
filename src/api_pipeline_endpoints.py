@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 from datetime import datetime
@@ -32,19 +31,22 @@ async def test_pipeline():
 
 @pipeline_router.get("/status")
 async def get_pipeline_status():
-    """Get current pipeline execution status"""
+    """Get current pipeline status and recent execution history"""
     try:
-        from src.api import app, pipeline_executions
-        
-        # Get pipeline status from orchestrator if available
-        pipeline_status = "ready"
-        last_execution = "Never"
-        current_executions = []
+        from src.api import pipeline_executions
+        from datetime import datetime, timezone
+        import pytz
 
+        pipeline_status = "idle"
+        last_execution = None
+        current_executions = []
+        next_scheduled_execution = None
+
+        # Check if there's an active orchestrator in the app state
         if hasattr(app.state, 'orchestrator') and app.state.orchestrator:
             try:
                 status_info = app.state.orchestrator.get_pipeline_status()
-                pipeline_status = status_info.get('current_status', 'ready')
+                pipeline_status = status_info.get('current_status', 'idle')
                 last_execution_info = status_info.get('last_execution')
                 if last_execution_info and isinstance(last_execution_info, dict) and last_execution_info.get('start_time'):
                     last_execution = last_execution_info['start_time']
@@ -52,7 +54,34 @@ async def get_pipeline_status():
                     last_execution = last_execution_info
             except Exception as e:
                 logger.warning(f"Could not retrieve pipeline status: {e}")
-                pipeline_status = "Error"
+                pipeline_status = "idle"
+
+        # Calculate next scheduled execution (Mon, Wed, Sat at 11:30 PM ET)
+        try:
+            et_tz = pytz.timezone('America/New_York')
+            now_et = datetime.now(et_tz)
+
+            # Drawing days: Monday (0), Wednesday (2), Saturday (5) (weekday format)
+            drawing_days = [0, 2, 5]  # Monday, Wednesday, Saturday
+            execution_hour = 23  # 11 PM
+            execution_minute = 30
+
+            # Find the next drawing day
+            for i in range(8):  # Check next 8 days
+                check_date = now_et.replace(hour=execution_hour, minute=execution_minute, second=0, microsecond=0)
+                check_date = check_date + timezone.timedelta(days=i)
+
+                if check_date.weekday() in drawing_days:
+                    # If it's today and the execution time hasn't passed yet
+                    if i == 0 and now_et.time() < check_date.time():
+                        next_scheduled_execution = check_date.isoformat()
+                        break
+                    # If it's a future day
+                    elif i > 0:
+                        next_scheduled_execution = check_date.isoformat()
+                        break
+        except Exception as e:
+            logger.warning(f"Could not calculate next scheduled execution: {e}")
 
         # Get current running executions
         for execution_id, execution_data in pipeline_executions.items():
@@ -68,6 +97,7 @@ async def get_pipeline_status():
         return {
             "status": pipeline_status,
             "last_execution": last_execution,
+            "next_scheduled_execution": next_scheduled_execution,
             "current_executions": current_executions,
             "total_executions": len(pipeline_executions),
             "timestamp": datetime.now().isoformat()
@@ -82,7 +112,7 @@ async def get_pipeline_history():
     """Get recent pipeline execution history"""
     try:
         from src.api import pipeline_executions
-        
+
         # Convert pipeline executions to list and sort by start time
         history = []
         for execution_id, execution_data in pipeline_executions.items():
