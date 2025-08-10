@@ -151,16 +151,10 @@ async def lifespan(app: FastAPI):
     # On startup
     logger.info("Application startup...")
 
-    # Initialize pipeline orchestrator
-    try:
-        from main import PipelineOrchestrator # Import here to avoid circular dependencies if main imports this file
-        pipeline_orchestrator = PipelineOrchestrator()
-        app.state.orchestrator = pipeline_orchestrator # Attach to app state
-        logger.info("Pipeline orchestrator initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize pipeline orchestrator: {e}")
-        pipeline_orchestrator = None
-        app.state.orchestrator = None
+    # Initialize pipeline orchestrator after startup to reduce init time
+    pipeline_orchestrator = None
+    app.state.orchestrator = None
+    logger.info("Pipeline orchestrator will be initialized after startup")
 
     # Schedule pipeline execution optimally:
     # 1. Full pipeline only on actual drawing days (Monday, Wednesday, Saturday)
@@ -190,8 +184,8 @@ async def lifespan(app: FastAPI):
         max_instances=1,
         coalesce=True
     )
-    scheduler.start()
-    logger.info("Scheduler started. Scheduled jobs are active.")
+    # Defer scheduler start to reduce startup time
+    logger.info("Scheduler configured, will start after port opens")
     
     # Log detailed scheduler configuration for debugging
     jobs = scheduler.get_jobs()

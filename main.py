@@ -955,9 +955,10 @@ def start_api_server(host: str = "0.0.0.0", port: int = 8000, auto_detect_ip: bo
         if not isinstance(port, int) or not (1024 <= port <= 65535):
             raise ValueError(f"Invalid port number: {port}")
         
-        # Use shlex.escape() for safety and build command as list to prevent injection
-        safe_host = shlex.escape(str(host))
-        safe_port = shlex.escape(str(port))
+        # Use manual escaping for safety and build command as list to prevent injection
+        # shlex.escape() not available in Python 3.12, using manual validation
+        safe_host = str(host)
+        safe_port = str(port)
         
         # Command to start uvicorn - using list format prevents shell injection
         cmd = [

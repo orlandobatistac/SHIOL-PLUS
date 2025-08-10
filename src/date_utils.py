@@ -9,7 +9,7 @@ y logging detallado para tracking y debugging.
 
 import pytz
 from datetime import datetime, timedelta
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict, Any
 from loguru import logger
 
 
