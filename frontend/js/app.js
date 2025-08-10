@@ -125,16 +125,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Pipeline Dashboard Functions ---
     async function fetchPipelineStatus() {
         try {
-            const response = await fetch(`${API_BASE_URL}/pipeline/status`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+            const response = await fetch(`${API_BASE_URL}/pipeline/status`, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.status === 401) {
+                showPipelineError('Authentication required. Please login.');
+                setTimeout(() => window.location.href = '/login', 2000);
+                return null;
             }
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
             const data = await response.json();
             updatePipelineStatus(data);
             return data;
         } catch (error) {
             console.error('Pipeline status fetch error:', error);
-            showPipelineError('Failed to fetch pipeline status');
+            showPipelineError(`Failed to fetch pipeline status: ${error.message}`);
             return null;
         }
     }
@@ -387,36 +403,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             triggerPipelineBtn.disabled = true;
-            triggerPipelineBtn.textContent = 'Triggering...';
-            triggerPipelineBtn.className += ' opacity-75';
+            triggerPipelineBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Triggering Pipeline...';
+            triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-gray-500');
 
             const response = await fetch(`${API_BASE_URL}/pipeline/trigger`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 }
             });
 
+            if (response.status === 401) {
+                showPipelineNotification('Authentication required. Please login.', 'error');
+                setTimeout(() => window.location.href = '/login', 2000);
+                return;
+            }
+
+            if (response.status === 409) {
+                showPipelineNotification('Pipeline is already running', 'warning');
+                return;
+            }
+
             if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || `HTTP ${response.status}`);
             }
 
             const data = await response.json();
-            showPipelineNotification('Pipeline triggered successfully!', 'success');
+            showPipelineNotification(`Pipeline started successfully! Execution ID: ${data.execution_id}`, 'success');
 
-            // Refresh status after a short delay
-            setTimeout(() => {
-                refreshPipelineStatus();
-            }, 2000);
+            // Start monitoring pipeline status
+            startPipelineMonitoring();
 
         } catch (error) {
             console.error('Pipeline trigger error:', error);
-            showPipelineNotification('Failed to trigger pipeline', 'error');
+            showPipelineNotification(`Failed to trigger pipeline: ${error.message}`, 'error');
         } finally {
             triggerPipelineBtn.disabled = false;
-            triggerPipelineBtn.textContent = 'Trigger Pipeline';
-            triggerPipelineBtn.className = triggerPipelineBtn.className.replace(' opacity-75', '');
+            triggerPipelineBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Run Pipeline Now';
+            triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-gray-500', 'bg-green-600 hover:bg-green-700');
         }
+    }
+
+    function startPipelineMonitoring() {
+        // Refresh status immediately and then every 10 seconds while running
+        const monitoringInterval = setInterval(async () => {
+            const status = await fetchPipelineStatus();
+            if (status && status.pipeline_status.current_status !== 'running') {
+                clearInterval(monitoringInterval);
+                if (status.pipeline_status.current_status === 'completed') {
+                    showPipelineNotification('Pipeline execution completed successfully!', 'success');
+                } else if (status.pipeline_status.current_status === 'failed') {
+                    showPipelineNotification('Pipeline execution failed. Check logs for details.', 'error');
+                }
+            }
+        }, 10000);
+
+        // Clear monitoring after 30 minutes max
+        setTimeout(() => {
+            clearInterval(monitoringInterval);
+        }, 1800000); // 30 minutes
     }
 
     function showTriggerModal() {
