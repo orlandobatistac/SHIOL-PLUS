@@ -170,6 +170,7 @@ async def lifespan(app: FastAPI):
         day_of_week="mon,wed,sat", # Only on actual Powerball drawing days
         hour=23,                    # 11 PM ET
         minute=30,                  # 30 minutes after drawing
+        timezone="America/New_York", # EXPLICIT TIMEZONE FIX
         id="post_drawing_pipeline",
         name="Full Pipeline After Drawing Results",
         max_instances=1,           # Prevent overlapping executions
@@ -183,6 +184,7 @@ async def lifespan(app: FastAPI):
         day_of_week="tue,thu,fri,sun", # Non-drawing days only
         hour=6,                        # 6 AM instead of every 12 hours
         minute=0,
+        timezone="America/New_York", # EXPLICIT TIMEZONE FIX
         id="maintenance_data_update",
         name="Maintenance Data Update on Non-Drawing Days",
         max_instances=1,
@@ -190,6 +192,19 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     logger.info("Scheduler started. Scheduled jobs are active.")
+    
+    # Log detailed scheduler configuration for debugging
+    jobs = scheduler.get_jobs()
+    logger.info(f"Active scheduled jobs: {len(jobs)}")
+    for job in jobs:
+        logger.info(f"Job: {job.id} | Next run: {job.next_run_time} | Timezone: {job.trigger.timezone}")
+    
+    # Log current time in multiple timezones for debugging
+    from src.date_utils import DateManager
+    current_et = DateManager.get_current_et_time()
+    current_utc = datetime.now(pytz.UTC)
+    logger.info(f"Current time - UTC: {current_utc.isoformat()} | ET: {current_et.isoformat()}")
+    
     yield
     # On shutdown
     logger.info("Application shutdown...")
