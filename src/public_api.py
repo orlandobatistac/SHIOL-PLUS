@@ -18,22 +18,7 @@ from src.database import get_all_draws, save_prediction_log, get_prediction_hist
 from src.predictor import Predictor
 from src.intelligent_generator import DeterministicGenerator
 from src.loader import get_data_loader
-
-# Assuming DateManager is available and has POWERBALL_TIMEZONE and DRAWING_HOUR defined
-# For demonstration purposes, let's mock a simple DateManager if not provided
-class MockDateManager:
-    def __init__(self):
-        from pytz import timezone
-        self.POWERBALL_TIMEZONE = timezone("America/New_York")
-        self.DRAWING_HOUR = 22 # 10 PM ET
-
-    def get_current_et_time(self):
-        return datetime.now(self.POWERBALL_TIMEZONE)
-
-# Replace this with the actual import if DateManager is in a separate file
-# from src.date_utils import DateManager as ActualDateManager
-# DateManager = ActualDateManager
-DateManager = MockDateManager()
+from src.date_utils import DateManager
 
 
 # Create router for public endpoints
@@ -45,79 +30,70 @@ security = HTTPBearer()
 
 def get_next_powerball_drawing() -> Dict[str, Any]:
     """
-    Calculate the next Powerball drawing date and time.
-    Powerball drawings are on Wednesdays and Saturdays at 10:59 PM ET.
+    Calculate the next Powerball drawing date and time using DateManager.
     """
-    now_et = DateManager.get_current_et_time() # Use ET time
-
-    # Find next Wednesday or Saturday
-    days_ahead = 0
-    current_weekday = now_et.weekday()  # Monday = 0, Sunday = 6
-
-    if current_weekday < 2:  # Monday or Tuesday
-        days_ahead = 2 - current_weekday  # Next Wednesday
-    elif current_weekday == 2:  # Wednesday
-        # Check if it's before 10:59 PM ET
-        if now_et.hour < DateManager.DRAWING_HOUR or (now_et.hour == DateManager.DRAWING_HOUR and now_et.minute < 59):
-            days_ahead = 0  # Today
+    try:
+        # Get current ET time with clock drift correction
+        now_et = DateManager.get_current_et_time()
+        
+        # Get next drawing date using the centralized DateManager
+        next_drawing_date_str = DateManager.calculate_next_drawing_date(now_et)
+        
+        # Parse the date and set the drawing time (10:59 PM ET)
+        next_drawing_date = datetime.strptime(next_drawing_date_str, '%Y-%m-%d')
+        next_drawing = DateManager.POWERBALL_TIMEZONE.localize(
+            next_drawing_date.replace(hour=22, minute=59, second=0, microsecond=0)  # 10:59 PM ET
+        )
+        
+        # Calculate countdown in seconds
+        countdown_seconds = int((next_drawing - now_et).total_seconds())
+        countdown_seconds = max(0, countdown_seconds)
+        
+        # Calculate days and hours for display
+        days_until = max(0, (next_drawing.date() - now_et.date()).days)
+        hours_until = int(countdown_seconds / 3600)
+        minutes_until = int((countdown_seconds % 3600) / 60)
+        
+        # Determine display text based on time remaining
+        if countdown_seconds <= 0:
+            display_text = "Drawing in progress"
+            status = "drawing_active"
+        elif countdown_seconds <= 3600:  # Less than 1 hour
+            display_text = f"Drawing in {minutes_until + 1} minutes"
+            status = "very_soon"
+        elif days_until == 0:  # Same day
+            display_text = f"Drawing in {hours_until} hours"
+            status = "today"
+        elif days_until == 1:
+            display_text = "Drawing tomorrow"
+            status = "tomorrow"
         else:
-            days_ahead = 3  # Next Saturday
-    elif current_weekday < 5:  # Thursday or Friday
-        days_ahead = 5 - current_weekday  # Next Saturday
-    elif current_weekday == 5:  # Saturday
-        # Check if it's before 10:59 PM ET
-        if now_et.hour < DateManager.DRAWING_HOUR or (now_et.hour == DateManager.DRAWING_HOUR and now_et.minute < 59):
-            days_ahead = 0  # Today
-        else:
-            days_ahead = 4  # Next Wednesday
-    else:  # Sunday
-        days_ahead = 2  # Next Wednesday
+            display_text = f"Drawing in {days_until} days"
+            status = "future"
 
-    next_drawing_naive = now_et + timedelta(days=days_ahead)
-    next_drawing = next_drawing_naive.replace(hour=DateManager.DRAWING_HOUR, minute=59, second=0, microsecond=0)
-
-    # Calculate countdown in seconds
-    countdown_seconds = int((next_drawing - now_et).total_seconds())
-
-    # Format for API response
-    next_drawing_date_str = next_drawing.strftime("%Y-%m-%d")
-    next_drawing_time_str = next_drawing.strftime("%H:%M:%S")
-
-    # Calculate days and hours for better display
-    days_until = max(0, (next_drawing.date() - now_et.date()).days)
-    hours_until = int(countdown_seconds / 3600)
-    minutes_until = int((countdown_seconds % 3600) / 60)
-    
-    # Determine display text based on time remaining
-    if countdown_seconds <= 0:
-        display_text = "Drawing in progress"
-        status = "drawing_active"
-    elif countdown_seconds <= 3600:  # Less than 1 hour
-        display_text = f"Drawing in {minutes_until + 1} minutes"
-        status = "very_soon"
-    elif days_until == 0:  # Same day
-        display_text = f"Drawing in {hours_until} hours"
-        status = "today"
-    elif days_until == 1:
-        display_text = "Drawing tomorrow"
-        status = "tomorrow"
-    else:
-        display_text = f"Drawing in {days_until} days"
-        status = "future"
-
-    return {
-        "date": next_drawing_date_str,
-        "time": next_drawing_time_str,
-        "timezone": "ET",
-        "datetime_iso": next_drawing.isoformat(),
-        "countdown_seconds": max(0, countdown_seconds),
-        "days_until": days_until,
-        "hours_until": hours_until,
-        "minutes_until": minutes_until,
-        "display_text": display_text,
-        "status": status,
-        "exact_drawing_time": next_drawing.strftime("%A, %B %d at %I:%M %p ET")
-    }
+        return {
+            "date": next_drawing_date_str,
+            "time": next_drawing.strftime("%H:%M:%S"),
+            "timezone": "ET",
+            "datetime_iso": next_drawing.isoformat(),
+            "countdown_seconds": countdown_seconds,
+            "days_until": days_until,
+            "hours_until": hours_until,
+            "minutes_until": minutes_until,
+            "display_text": display_text,
+            "status": status,
+            "exact_drawing_time": next_drawing.strftime("%A, %B %d at %I:%M %p ET")
+        }
+    except Exception as e:
+        logger.error(f"Error calculating next drawing: {e}")
+        # Fallback response
+        return {
+            "date": "2025-08-11",
+            "time": "22:59:00", 
+            "timezone": "ET",
+            "display_text": "Next drawing",
+            "status": "future"
+        }
 
 @public_router.get("/next-drawing")
 async def get_next_drawing_info():
