@@ -113,4 +113,4 @@ def debug_dashboard_issues():
     print("🏁 DEBUG COMPLETED")
 
 if __name__ == "__main__":
-    debug_dashboard_verification()
+    debug_dashboard_issues()
