@@ -156,10 +156,10 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent pipeline execution history from SQLite database"""
     try:
         from src.database import get_pipeline_execution_history
-        
+
         # Get executions from SQLite database
         executions = get_pipeline_execution_history(limit=limit)
-        
+
         # Format for API response
         formatted_executions = []
         for execution in executions:
@@ -179,10 +179,10 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
                 'duration': _calculate_execution_duration(execution.get('start_time'), execution.get('end_time'))
             }
             formatted_executions.append(formatted_execution)
-        
+
         logger.info(f"Retrieved {len(formatted_executions)} pipeline executions from database")
         return formatted_executions
-        
+
     except Exception as e:
         logger.error(f"Error getting execution history: {e}")
         return []
@@ -192,25 +192,25 @@ def _calculate_execution_duration(start_time_str: str, end_time_str: str) -> Opt
     try:
         if not start_time_str or not end_time_str:
             return None
-            
+
         from datetime import datetime
-        
+
         # Parse ISO format timestamps
         start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
         end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
-        
+
         duration = end_time - start_time
-        
+
         # Format duration
         total_seconds = int(duration.total_seconds())
         minutes = total_seconds // 60
         seconds = total_seconds % 60
-        
+
         if minutes > 0:
             return f"{minutes}m {seconds}s"
         else:
             return f"{seconds}s"
-            
+
     except Exception as e:
         logger.error(f"Error calculating duration: {e}")
         return None
@@ -256,15 +256,15 @@ async def get_pipeline_logs(
     """Get recent pipeline logs with filtering support"""
     try:
         logs_data = []
-        
+
         # Try to read from log files
         logs_dir = "logs"
         log_files = []
-        
+
         if os.path.exists(logs_dir):
             log_files = [f for f in os.listdir(logs_dir) if f.endswith('.log')]
             log_files.sort(key=lambda x: os.path.getmtime(os.path.join(logs_dir, x)), reverse=True)
-        
+
         # If no log files, check for pipeline execution logs in memory
         try:
             from src.api import pipeline_logs
@@ -282,11 +282,11 @@ async def get_pipeline_logs(
                         logs_content = "".join(lines[-limit:])
                 except Exception as e:
                     logger.warning(f"Could not read log file: {e}")
-            
+
             # Fallback to recent pipeline logs in memory
             if not logs_content and pipeline_logs:
                 logs_content = "\n".join(pipeline_logs[-limit:])
-            
+
             # Final fallback - create some sample logs
             if not logs_content:
                 from datetime import datetime
@@ -346,13 +346,11 @@ async def trigger_pipeline_execution(
         from src.api import pipeline_executions, run_full_pipeline_background, pipeline_orchestrator
 
         # Check if pipeline is already running (unless force is True)
-        if not force:
-            running_executions = [ex for ex in pipeline_executions.values() if ex.get("status") == "running"]
-            if running_executions:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Pipeline already running (ID: {running_executions[0].get('execution_id')}). Use force=true to override."
-                )
+        if pipeline_orchestrator.is_running():
+            return JSONResponse(
+                status_code=409,
+                content={"detail": "Pipeline is already running"}
+            )
 
         # Validate num_predictions
         if not (1 <= num_predictions <= 500):
@@ -390,19 +388,12 @@ async def trigger_pipeline_execution(
         import asyncio
         asyncio.create_task(run_full_pipeline_background(execution_id, num_predictions))
 
-        logger.info(f"Pipeline execution triggered manually by user {current_user.username}, execution ID: {execution_id}")
-
+        logger.info(f"Pipeline started successfully with ID: {execution_id}")
         return {
+            "success": True,
+            "message": "Pipeline started successfully",
             "execution_id": execution_id,
-            "status": "started",
-            "message": f"Pipeline execution started with {num_predictions} predictions",
-            "parameters": {
-                "num_predictions": num_predictions,
-                "force": force,
-                "triggered_by": current_user.username
-            },
-            "tracking_url": f"/api/v1/pipeline/status",
-            "timestamp": current_time.isoformat()
+            "status": "starting"
         }
 
     except HTTPException as e:
@@ -419,7 +410,7 @@ async def get_pipeline_history():
 
         # Get executions from SQLite database
         executions = get_pipeline_execution_history(limit=50)  # Get more for detailed history
-        
+
         # Format for API response
         formatted_executions = []
         for execution in executions:

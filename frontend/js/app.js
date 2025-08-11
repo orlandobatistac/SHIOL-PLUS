@@ -263,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const cell = document.createElement('td');
             cell.colSpan = 5;
             cell.className = 'px-4 py-8 text-center text-gray-500 dark:text-gray-400';
-            cell.textContent = 'No hay historial de ejecuciones disponible';
+            cell.textContent = 'No execution history available';
             row.appendChild(cell);
             executionHistoryTbody.appendChild(row);
             return;
@@ -279,13 +279,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         sortedExecutions.forEach((execution, index) => {
-            const startTime = execution.start_time ? new Date(execution.start_time).toLocaleString('es-ES') : 'N/A';
+            const startTime = execution.start_time ? new Date(execution.start_time).toLocaleString('en-US') : 'N/A';
             const endTime = execution.end_time ? new Date(execution.end_time) : null;
             const startTimeObj = execution.start_time ? new Date(execution.start_time) : null;
 
             let duration = 'N/A';
             if (execution.status === 'running') {
-                duration = 'En progreso...';
+                duration = 'In progress...';
             } else if (startTimeObj && endTime) {
                 const durationMs = endTime - startTimeObj;
                 const minutes = Math.floor(durationMs / 60000);
@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
             actionsCell.className = 'px-4 py-3';
             const detailsButton = document.createElement('button');
             detailsButton.className = 'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium';
-            detailsButton.textContent = 'Ver Detalles';
+            detailsButton.textContent = 'View Details';
             detailsButton.onclick = () => window.viewExecutionDetails(executionId);
             actionsCell.appendChild(detailsButton);
             row.appendChild(actionsCell);
@@ -468,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Set initial loading state
             triggerPipelineBtn.disabled = true;
-            triggerPipelineBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Iniciando Pipeline...';
+            triggerPipelineBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Starting Pipeline...';
             triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-orange-500');
 
             const response = await fetch(`${API_BASE_URL}/pipeline/trigger`, {
@@ -488,7 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (response.status === 409) {
-                showPipelineNotification('Pipeline ya está ejecutándose', 'warning');
+                showPipelineNotification('Pipeline is already running', 'warning');
                 return;
             }
 
@@ -498,10 +498,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
-            showPipelineNotification(`Pipeline iniciado exitosamente! ID: ${data.execution_id}`, 'success');
+            showPipelineNotification(`Pipeline started successfully! ID: ${data.execution_id}`, 'success');
 
             // Update button to show execution in progress
-            triggerPipelineBtn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i>Pipeline Ejecutándose...';
+            triggerPipelineBtn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i>Pipeline Running...';
             triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-orange-500', 'bg-blue-600');
             
             // Start monitoring pipeline status with execution ID
@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Pipeline trigger error:', error);
-            showPipelineNotification(`Error al iniciar pipeline: ${error.message}`, 'error');
+            showPipelineNotification(`Error starting pipeline: ${error.message}`, 'error');
             resetPipelineButton();
         }
     }
@@ -538,14 +538,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         if (ourExecution.status === 'completed') {
                             clearInterval(monitoringInterval);
-                            showPipelineNotification('¡Pipeline completado exitosamente!', 'success');
+                            showPipelineNotification('Pipeline completed successfully!', 'success');
                             resetPipelineButton();
                             // Force refresh of execution history
                             setTimeout(() => fetchPipelineStatus(), 1000);
                             return;
                         } else if (ourExecution.status === 'failed') {
                             clearInterval(monitoringInterval);
-                            showPipelineNotification(`Pipeline falló: ${ourExecution.error || 'Error desconocido'}`, 'error');
+                            showPipelineNotification(`Pipeline failed: ${ourExecution.error || 'Unknown error'}`, 'error');
                             resetPipelineButton();
                             return;
                         }
@@ -563,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Timeout check
                 if (monitoringAttempts >= maxAttempts) {
                     clearInterval(monitoringInterval);
-                    showPipelineNotification('Timeout de monitoreo alcanzado. El pipeline puede seguir ejecutándose.', 'warning');
+                    showPipelineNotification('Monitoring timeout reached. Pipeline may still be running.', 'warning');
                     resetPipelineButton();
                     return;
                 }
@@ -583,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentStep = execution.current_step || 'processing';
         
         // Update button text with progress
-        triggerPipelineBtn.innerHTML = `<i class="fas fa-cog fa-spin mr-2"></i>Paso ${stepsCompleted}/${totalSteps} - ${currentStep}`;
+        triggerPipelineBtn.innerHTML = `<i class="fas fa-cog fa-spin mr-2"></i>Step ${stepsCompleted}/${totalSteps} - ${currentStep}`;
         
         // Keep blue color while running
         if (!triggerPipelineBtn.className.includes('bg-blue-600')) {
