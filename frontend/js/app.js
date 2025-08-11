@@ -1467,5 +1467,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize UI state
     initializePipelineDashboard();
+    
+    // Enable auto-refresh by default
+    if (autoRefreshCheckbox) {
+        autoRefreshCheckbox.checked = true;
+        handleAutoRefreshToggle();
+    }
 
 });
