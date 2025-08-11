@@ -1,0 +1,78 @@
+{
+  "pipeline_execution": {
+    "start_time": "2025-08-11T21:51:52.697210",
+    "end_time": "2025-08-11T21:54:13.068379",
+    "total_execution_time": "0:02:20.371169",
+    "status": {
+      "data_update": {
+        "status": "success",
+        "execution_time": "0:00:00.450875",
+        "timestamp": "2025-08-11T21:51:53.148449"
+      },
+      "adaptive_analysis": {
+        "status": "success",
+        "execution_time": "0:00:00.012058",
+        "timestamp": "2025-08-11T21:51:53.160805"
+      },
+      "weight_optimization": {
+        "status": "success",
+        "execution_time": "0:00:00.028724",
+        "timestamp": "2025-08-11T21:51:53.189783"
+      },
+      "historical_validation": {
+        "status": "success",
+        "execution_time": "0:00:00.014344",
+        "timestamp": "2025-08-11T21:51:53.204403"
+      },
+      "prediction_generation": {
+        "status": "success",
+        "execution_time": "0:02:19.859321",
+        "timestamp": "2025-08-11T21:54:13.063964"
+      },
+      "performance_analysis": {
+        "status": "success",
+        "execution_time": "0:00:00.003571",
+        "timestamp": "2025-08-11T21:54:13.067991"
+      }
+    },
+    "execution_source": "scheduled_pipeline",
+    "trigger_details": {
+      "type": "scheduled",
+      "scheduled_config": {
+        "days": [
+          "monday",
+          "wednesday",
+          "saturday"
+        ],
+        "time": "23:30",
+        "timezone": "America/New_York"
+      },
+      "actual_execution": {
+        "day": "monday",
+        "time": "21:54",
+        "matches_schedule": false
+      },
+      "triggered_by": "automatic_scheduler"
+    }
+  },
+  "system_info": {
+    "config_file": "config/config.ini",
+    "historical_data_records": 35,
+    "adaptive_system_initialized": true,
+    "execution_context": {
+      "is_drawing_day": true,
+      "expected_vs_actual": {
+        "expected_days": [
+          "monday",
+          "wednesday",
+          "saturday"
+        ],
+        "actual_day": "monday",
+        "expected_time": "23:30",
+        "actual_time": "21:54",
+        "schedule_compliance": false
+      }
+    }
+  },
+  "generated_at": "2025-08-11T21:54:13.068379"
+}
