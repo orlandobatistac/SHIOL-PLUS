@@ -486,19 +486,21 @@ async def verify_auth(request: Request):
         session_token = request.cookies.get("shiol_session_token")
 
         if not session_token:
-            raise HTTPException(
-                status_code=401,
-                detail="No authentication cookie found"
-            )
+            return {
+                "valid": False,
+                "authenticated": False,
+                "message": "No authentication cookie found"
+            }
 
         # Verify the session
         user = auth_manager.verify_session(session_token)
 
         if not user:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid or expired session"
-            )
+            return {
+                "valid": False,
+                "authenticated": False,
+                "message": "Invalid or expired session"
+            }
 
         return {
             "valid": True,
@@ -511,14 +513,13 @@ async def verify_auth(request: Request):
             }
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Auth verification error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Authentication verification failed"
-        )
+        return {
+            "valid": False,
+            "authenticated": False,
+            "message": "Authentication verification failed"
+        }
 
 # Dependency for protected endpoints
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:

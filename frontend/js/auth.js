@@ -144,9 +144,9 @@ class SimpleAuthManager {
 
             const data = await response.json();
 
-            if (data.success) {
-                // Token is now stored in HttpOnly, Secure, SameSite=Strict cookie
-                // This prevents XSS attacks and CSRF vulnerabilities
+            if (response.ok && data.success) {
+                // Token is now stored in HttpOnly, Secure, SameSite=Lax cookie
+                // This prevents XSS attacks and provides good CSRF protection
                 console.log('Login successful - token stored securely in HttpOnly cookie');
 
                 this.showLoginSuccess('Login successful! Redirecting...');
@@ -156,7 +156,7 @@ class SimpleAuthManager {
                     window.location.href = '/dashboard.html';
                 }, 1500);
             } else {
-                this.showLoginError(data.message || 'Invalid username or password');
+                this.showLoginError(data.message || data.detail || 'Invalid username or password');
             }
         } catch (error) {
             console.error('Login error:', error);

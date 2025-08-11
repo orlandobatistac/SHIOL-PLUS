@@ -327,11 +327,19 @@ async def login(request: LoginRequest, response: Response):
             value=session_token,
             httponly=True,        # Prevents JavaScript access (XSS protection)
             secure=False,         # Set to True in production with HTTPS
-            samesite="strict",    # CSRF protection
+            samesite="lax",       # Changed from strict to lax for better compatibility
             max_age=cookie_max_age,  # Duration based on remember_me
             path="/"
         )
-        return {"message": "Login successful"}
+        return {
+            "success": True,
+            "message": "Login successful",
+            "user": {
+                "username": user.username,
+                "role": user.role,
+                "email": user.email
+            }
+        }
     except HTTPException as e:
         raise e
     except Exception as e:
