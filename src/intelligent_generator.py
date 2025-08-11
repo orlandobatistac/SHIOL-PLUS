@@ -710,6 +710,144 @@ class IntelligentGenerator:
         # Implementar lógica mejorada aquí
         return [[1, 2, 3, 4, 5, 6] for _ in range(n_samples)]  # Ejemplo
 
+    def generate_smart_play(self) -> Dict:
+        """
+        Genera una sola combinación inteligente con scoring.
+
+        Returns:
+            Dict: Diccionario con números, powerball y score
+        """
+        try:
+            # Usar DeterministicGenerator para generar una predicción de calidad
+            from datetime import datetime
+            import numpy as np
+            
+            # Generar números basados en análisis histórico simple
+            if not self.historical_data.empty:
+                # Análisis de frecuencia básico
+                white_ball_cols = ["n1", "n2", "n3", "n4", "n5"]
+                pb_col = "pb"
+                
+                # Calcular frecuencias de números blancos
+                wb_frequencies = {}
+                for col in white_ball_cols:
+                    if col in self.historical_data.columns:
+                        for num in range(1, 70):
+                            wb_frequencies[num] = wb_frequencies.get(num, 0) + (self.historical_data[col] == num).sum()
+                
+                # Calcular frecuencias de powerball
+                pb_frequencies = {}
+                if pb_col in self.historical_data.columns:
+                    for num in range(1, 27):
+                        pb_frequencies[num] = (self.historical_data[pb_col] == num).sum()
+                
+                # Seleccionar números con balance de frecuencia y diversidad
+                # Usar números con frecuencia media-alta pero no los más comunes
+                sorted_wb = sorted(wb_frequencies.items(), key=lambda x: x[1], reverse=True)
+                sorted_pb = sorted(pb_frequencies.items(), key=lambda x: x[1], reverse=True)
+                
+                # Tomar números del rango medio-alto (evitar extremos)
+                top_count = min(25, len(sorted_wb))
+                candidate_wb = [num for num, _ in sorted_wb[5:top_count]]  # Skip top 5, take next 20
+                
+                # Si no hay suficientes candidatos, usar rango completo
+                if len(candidate_wb) < 5:
+                    candidate_wb = list(range(1, 70))
+                
+                # Seleccionar 5 números únicos
+                np.random.seed(42)  # Para reproducibilidad
+                selected_wb = sorted(np.random.choice(candidate_wb, size=5, replace=False))
+                
+                # Seleccionar powerball del rango medio
+                pb_count = min(15, len(sorted_pb))
+                candidate_pb = [num for num, _ in sorted_pb[2:pb_count]]  # Skip top 2, take next 13
+                if not candidate_pb:
+                    candidate_pb = list(range(1, 27))
+                
+                selected_pb = np.random.choice(candidate_pb)
+                
+                # Calcular score básico
+                score = self._calculate_basic_score(selected_wb, selected_pb)
+                
+                return {
+                    'numbers': selected_wb,
+                    'powerball': int(selected_pb),
+                    'score': score,
+                    'method': 'intelligent_generator',
+                    'timestamp': datetime.now().isoformat()
+                }
+            
+            else:
+                # Fallback si no hay datos históricos
+                np.random.seed(42)
+                numbers = sorted(np.random.choice(range(1, 70), size=5, replace=False))
+                powerball = np.random.choice(range(1, 27))
+                
+                return {
+                    'numbers': numbers.tolist(),
+                    'powerball': int(powerball),
+                    'score': 0.5,  # Score neutral
+                    'method': 'intelligent_generator_fallback',
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Error generating smart play: {e}")
+            # Fallback simple
+            return {
+                'numbers': [1, 15, 25, 35, 45],
+                'powerball': 10,
+                'score': 0.3,
+                'method': 'intelligent_generator_error_fallback',
+                'timestamp': datetime.now().isoformat()
+            }
+
+    def _calculate_basic_score(self, white_balls: List[int], powerball: int) -> float:
+        """
+        Calcula un score básico para la combinación.
+        """
+        try:
+            score = 0.0
+            
+            # Score por balance par/impar
+            even_count = sum(1 for num in white_balls if num % 2 == 0)
+            if even_count in [2, 3]:
+                score += 0.25
+            else:
+                score += 0.1
+            
+            # Score por spread (diferencia entre max y min)
+            spread = max(white_balls) - min(white_balls)
+            if 30 <= spread <= 50:
+                score += 0.25
+            else:
+                score += 0.1
+            
+            # Score por suma total
+            total_sum = sum(white_balls)
+            if 120 <= total_sum <= 240:
+                score += 0.25
+            else:
+                score += 0.1
+            
+            # Score por distribución en rangos
+            range1 = sum(1 for num in white_balls if 1 <= num <= 23)
+            range2 = sum(1 for num in white_balls if 24 <= num <= 46)
+            range3 = sum(1 for num in white_balls if 47 <= num <= 69)
+            
+            # Penalizar concentración excesiva en un rango
+            max_in_range = max(range1, range2, range3)
+            if max_in_range <= 3:
+                score += 0.25
+            else:
+                score += 0.1
+            
+            return min(1.0, score)  # Limitar a 1.0
+            
+        except Exception as e:
+            logger.warning(f"Error calculating basic score: {e}")
+            return 0.4
+
 
 class PlayScorer:
     """
