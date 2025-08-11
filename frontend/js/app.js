@@ -263,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const cell = document.createElement('td');
             cell.colSpan = 5;
             cell.className = 'px-4 py-8 text-center text-gray-500 dark:text-gray-400';
-            cell.textContent = 'No execution history available';
+            cell.textContent = 'No hay historial de ejecuciones disponible';
             row.appendChild(cell);
             executionHistoryTbody.appendChild(row);
             return;
@@ -271,21 +271,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
         executionHistoryTbody.textContent = ''; // Clear previous content safely
 
-        executions.forEach(execution => {
-            const startTime = execution.start_time ? new Date(execution.start_time).toLocaleString() : 'N/A';
+        // Sort executions by start time (most recent first)
+        const sortedExecutions = [...executions].sort((a, b) => {
+            const timeA = new Date(a.start_time || 0);
+            const timeB = new Date(b.start_time || 0);
+            return timeB - timeA;
+        });
+
+        sortedExecutions.forEach((execution, index) => {
+            const startTime = execution.start_time ? new Date(execution.start_time).toLocaleString('es-ES') : 'N/A';
             const endTime = execution.end_time ? new Date(execution.end_time) : null;
             const startTimeObj = execution.start_time ? new Date(execution.start_time) : null;
 
             let duration = 'N/A';
-            if (startTimeObj && endTime) {
+            if (execution.status === 'running') {
+                duration = 'En progreso...';
+            } else if (startTimeObj && endTime) {
                 const durationMs = endTime - startTimeObj;
-                duration = `${Math.round(durationMs / 1000)}s`;
+                const minutes = Math.floor(durationMs / 60000);
+                const seconds = Math.floor((durationMs % 60000) / 1000);
+                duration = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
             }
 
             const status = execution.status || 'unknown';
             const executionId = execution.execution_id || 'unknown';
 
             const row = document.createElement('tr');
+            
+            // Highlight the most recent execution
+            if (index === 0) {
+                row.className = 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500';
+            }
 
             // Start time cell
             const startTimeCell = document.createElement('td');
@@ -293,12 +309,34 @@ document.addEventListener('DOMContentLoaded', () => {
             startTimeCell.textContent = startTime;
             row.appendChild(startTimeCell);
 
-            // Status cell
+            // Status cell with enhanced styling
             const statusCell = document.createElement('td');
             statusCell.className = 'px-4 py-3';
             const statusSpan = document.createElement('span');
-            statusSpan.className = `status-badge ${status}`;
-            statusSpan.textContent = status;
+            
+            // Enhanced status styling
+            const statusStyles = {
+                'running': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 animate-pulse',
+                'completed': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                'failed': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                'starting': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+            };
+            
+            statusSpan.className = `px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`;
+            
+            // Add icon based on status
+            const statusIcons = {
+                'running': 'fas fa-spinner fa-spin',
+                'completed': 'fas fa-check-circle',
+                'failed': 'fas fa-exclamation-circle',
+                'starting': 'fas fa-play-circle'
+            };
+            
+            const statusIcon = document.createElement('i');
+            statusIcon.className = `${statusIcons[status] || 'fas fa-question-circle'} mr-1`;
+            
+            statusSpan.appendChild(statusIcon);
+            statusSpan.appendChild(document.createTextNode(status.charAt(0).toUpperCase() + status.slice(1)));
             statusCell.appendChild(statusSpan);
             row.appendChild(statusCell);
 
@@ -308,10 +346,35 @@ document.addEventListener('DOMContentLoaded', () => {
             durationCell.textContent = duration;
             row.appendChild(durationCell);
 
-            // Steps cell
+            // Steps cell with progress bar for running executions
             const stepsCell = document.createElement('td');
-            stepsCell.className = 'px-4 py-3 text-sm text-gray-900 dark:text-gray-100';
-            stepsCell.textContent = `${execution.steps_completed || 0}/${execution.total_steps || 7}`;
+            stepsCell.className = 'px-4 py-3';
+            
+            const stepsContainer = document.createElement('div');
+            const stepsCompleted = execution.steps_completed || 0;
+            const totalSteps = execution.total_steps || 7;
+            
+            const stepsText = document.createElement('div');
+            stepsText.className = 'text-sm text-gray-900 dark:text-gray-100';
+            stepsText.textContent = `${stepsCompleted}/${totalSteps}`;
+            
+            if (status === 'running' && totalSteps > 0) {
+                const progressBar = document.createElement('div');
+                progressBar.className = 'w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1';
+                
+                const progressFill = document.createElement('div');
+                const progressPercent = (stepsCompleted / totalSteps) * 100;
+                progressFill.className = 'bg-blue-600 h-1.5 rounded-full transition-all duration-300';
+                progressFill.style.width = `${progressPercent}%`;
+                
+                progressBar.appendChild(progressFill);
+                stepsContainer.appendChild(stepsText);
+                stepsContainer.appendChild(progressBar);
+            } else {
+                stepsContainer.appendChild(stepsText);
+            }
+            
+            stepsCell.appendChild(stepsContainer);
             row.appendChild(stepsCell);
 
             // Actions cell
@@ -319,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
             actionsCell.className = 'px-4 py-3';
             const detailsButton = document.createElement('button');
             detailsButton.className = 'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium';
-            detailsButton.textContent = 'View Details';
+            detailsButton.textContent = 'Ver Detalles';
             detailsButton.onclick = () => window.viewExecutionDetails(executionId);
             actionsCell.appendChild(detailsButton);
             row.appendChild(actionsCell);
@@ -403,9 +466,10 @@ document.addEventListener('DOMContentLoaded', () => {
         hideTriggerModal();
 
         try {
+            // Set initial loading state
             triggerPipelineBtn.disabled = true;
-            triggerPipelineBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Triggering Pipeline...';
-            triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-gray-500');
+            triggerPipelineBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Iniciando Pipeline...';
+            triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-orange-500');
 
             const response = await fetch(`${API_BASE_URL}/pipeline/trigger`, {
                 method: 'POST',
@@ -424,7 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (response.status === 409) {
-                showPipelineNotification('Pipeline is already running', 'warning');
+                showPipelineNotification('Pipeline ya está ejecutándose', 'warning');
                 return;
             }
 
@@ -434,39 +498,105 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
-            showPipelineNotification(`Pipeline started successfully! Execution ID: ${data.execution_id}`, 'success');
+            showPipelineNotification(`Pipeline iniciado exitosamente! ID: ${data.execution_id}`, 'success');
 
-            // Start monitoring pipeline status
-            startPipelineMonitoring();
+            // Update button to show execution in progress
+            triggerPipelineBtn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i>Pipeline Ejecutándose...';
+            triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-orange-500', 'bg-blue-600');
+            
+            // Start monitoring pipeline status with execution ID
+            startPipelineMonitoring(data.execution_id);
 
         } catch (error) {
             console.error('Pipeline trigger error:', error);
-            showPipelineNotification(`Failed to trigger pipeline: ${error.message}`, 'error');
-        } finally {
-            triggerPipelineBtn.disabled = false;
-            triggerPipelineBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Run Pipeline Now';
-            triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-gray-500', 'bg-green-600 hover:bg-green-700');
+            showPipelineNotification(`Error al iniciar pipeline: ${error.message}`, 'error');
+            resetPipelineButton();
         }
     }
 
-    function startPipelineMonitoring() {
-        // Refresh status immediately and then every 10 seconds while running
+    function startPipelineMonitoring(executionId) {
+        let monitoringAttempts = 0;
+        const maxAttempts = 120; // 10 minutos máximo
+        const checkInterval = 5000; // Check every 5 seconds
+        
+        // Update status immediately and continue monitoring
         const monitoringInterval = setInterval(async () => {
-            const status = await fetchPipelineStatus();
-            if (status && status.pipeline_status.current_status !== 'running') {
-                clearInterval(monitoringInterval);
-                if (status.pipeline_status.current_status === 'completed') {
-                    showPipelineNotification('Pipeline execution completed successfully!', 'success');
-                } else if (status.pipeline_status.current_status === 'failed') {
-                    showPipelineNotification('Pipeline execution failed. Check logs for details.', 'error');
+            monitoringAttempts++;
+            
+            try {
+                const status = await fetchPipelineStatus();
+                
+                if (status && status.pipeline_status) {
+                    const currentStatus = status.pipeline_status.current_status;
+                    const recentHistory = status.pipeline_status.recent_execution_history || [];
+                    
+                    // Find our specific execution
+                    const ourExecution = recentHistory.find(ex => ex.execution_id === executionId);
+                    
+                    if (ourExecution) {
+                        updatePipelineButtonForExecution(ourExecution);
+                        
+                        if (ourExecution.status === 'completed') {
+                            clearInterval(monitoringInterval);
+                            showPipelineNotification('¡Pipeline completado exitosamente!', 'success');
+                            resetPipelineButton();
+                            // Force refresh of execution history
+                            setTimeout(() => fetchPipelineStatus(), 1000);
+                            return;
+                        } else if (ourExecution.status === 'failed') {
+                            clearInterval(monitoringInterval);
+                            showPipelineNotification(`Pipeline falló: ${ourExecution.error || 'Error desconocido'}`, 'error');
+                            resetPipelineButton();
+                            return;
+                        }
+                    }
+                    
+                    // Check if pipeline is no longer running (generic check)
+                    if (currentStatus !== 'running' && monitoringAttempts > 3) {
+                        clearInterval(monitoringInterval);
+                        showPipelineNotification('Pipeline completado', 'info');
+                        resetPipelineButton();
+                        return;
+                    }
                 }
+                
+                // Timeout check
+                if (monitoringAttempts >= maxAttempts) {
+                    clearInterval(monitoringInterval);
+                    showPipelineNotification('Timeout de monitoreo alcanzado. El pipeline puede seguir ejecutándose.', 'warning');
+                    resetPipelineButton();
+                    return;
+                }
+                
+            } catch (error) {
+                console.warn('Error during pipeline monitoring:', error);
+                // Continue monitoring despite errors
             }
-        }, 10000);
+        }, checkInterval);
+    }
 
-        // Clear monitoring after 30 minutes max
-        setTimeout(() => {
-            clearInterval(monitoringInterval);
-        }, 1800000); // 30 minutes
+    function updatePipelineButtonForExecution(execution) {
+        if (!triggerPipelineBtn) return;
+        
+        const stepsCompleted = execution.steps_completed || 0;
+        const totalSteps = execution.total_steps || 7;
+        const currentStep = execution.current_step || 'processing';
+        
+        // Update button text with progress
+        triggerPipelineBtn.innerHTML = `<i class="fas fa-cog fa-spin mr-2"></i>Paso ${stepsCompleted}/${totalSteps} - ${currentStep}`;
+        
+        // Keep blue color while running
+        if (!triggerPipelineBtn.className.includes('bg-blue-600')) {
+            triggerPipelineBtn.className = triggerPipelineBtn.className.replace(/bg-\w+-\d+/g, 'bg-blue-600');
+        }
+    }
+
+    function resetPipelineButton() {
+        if (!triggerPipelineBtn) return;
+        
+        triggerPipelineBtn.disabled = false;
+        triggerPipelineBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Run Pipeline Now';
+        triggerPipelineBtn.className = triggerPipelineBtn.className.replace(/bg-\w+-\d+/g, 'bg-green-600 hover:bg-green-700');
     }
 
     function showTriggerModal() {
