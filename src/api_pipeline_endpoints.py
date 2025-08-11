@@ -65,6 +65,7 @@ async def get_pipeline_status_endpoint(current_user: User = Depends(get_current_
                 "scheduler_active": scheduler_info.get("active", False),
                 "active_jobs": scheduler_info.get("job_count", 0),
                 "recent_execution_history": execution_history,
+                "execution_method": "robust_subprocess",
                 "system_health": {
                     "cpu_usage_percent": round(cpu_usage, 1),
                     "memory_usage_percent": round(memory_usage, 1),

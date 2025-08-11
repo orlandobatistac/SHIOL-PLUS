@@ -109,8 +109,7 @@ async def trigger_full_pipeline_automatically():
                 }
             }
 
-            # Run the full 7-step pipeline in background with 100 predictions
-            from src.api import run_full_pipeline_background
+            # Run the full 7-step pipeline in background with 100 predictions using robust subprocess
             asyncio.create_task(run_full_pipeline_background(execution_id, 100))
             logger.info(f"Automatic pipeline execution started with ID: {execution_id} - Full 7-step pipeline (scheduled: {matches_schedule})")
         else:
@@ -119,53 +118,87 @@ async def trigger_full_pipeline_automatically():
         logger.error(f"Error triggering automatic full pipeline: {e}")
 
 async def run_full_pipeline_background(execution_id: str, num_predictions: int = 100):
-    """Run the full pipeline in background with execution tracking"""
+    """Run the full pipeline in background using robust subprocess execution"""
+    import subprocess
+    import asyncio
+    import os
+    
     try:
         # Update execution status
         if execution_id in pipeline_executions:
             pipeline_executions[execution_id]["status"] = "running"
-            pipeline_executions[execution_id]["current_step"] = "initialization"
+            pipeline_executions[execution_id]["current_step"] = "subprocess_execution"
 
-        logger.info(f"Starting background pipeline execution {execution_id} with {num_predictions} predictions")
+        logger.info(f"Starting robust pipeline execution {execution_id} with subprocess: python main.py")
 
-        # Use the orchestrator to run the pipeline
-        if pipeline_orchestrator:
+        # Prepare subprocess command
+        cmd = ["python", "main.py"]
+        
+        # Set working directory to project root
+        working_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Set environment variables for subprocess
+        env = os.environ.copy()
+        env["PIPELINE_EXECUTION_ID"] = execution_id
+        env["PIPELINE_NUM_PREDICTIONS"] = str(num_predictions)
+        env["PIPELINE_SOURCE"] = "dashboard_subprocess"
+        
+        # Execute subprocess in thread pool to avoid blocking
+        def run_subprocess():
             try:
-                result = await pipeline_orchestrator.run_full_pipeline_async(
-                    execution_id=execution_id,
-                    num_predictions=num_predictions
+                result = subprocess.run(
+                    cmd,
+                    cwd=working_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=600,  # 10 minute timeout
+                    env=env
                 )
+                return result
+            except subprocess.TimeoutExpired:
+                return {"timeout": True, "error": "Pipeline execution timed out after 10 minutes"}
+            except Exception as e:
+                return {"error": str(e)}
 
-                if result.get("status") == "completed":
-                    pipeline_executions[execution_id]["status"] = "completed"
-                    pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-                    pipeline_executions[execution_id]["predictions_generated"] = result.get("num_predictions_generated", 0)
-                    logger.info(f"Pipeline execution {execution_id} completed successfully with {result.get('num_predictions_generated', 0)} predictions")
-                else:
-                    pipeline_executions[execution_id]["status"] = "failed"
-                    pipeline_executions[execution_id]["error"] = result.get("error", "Unknown pipeline error")
-                    pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-                    logger.error(f"Pipeline execution {execution_id} failed: {result.get('error', 'Unknown error')}")
-            except Exception as orch_error:
-                logger.error(f"CRITICAL: Pipeline orchestrator failed - {orch_error}")
-                pipeline_executions[execution_id]["status"] = "failed"
-                pipeline_executions[execution_id]["error"] = f"Orchestrator failure: {str(orch_error)}"
+        # Run subprocess in executor
+        result = await asyncio.get_event_loop().run_in_executor(None, run_subprocess)
+        
+        if hasattr(result, 'returncode'):
+            # Successful subprocess execution
+            if result.returncode == 0:
+                pipeline_executions[execution_id]["status"] = "completed"
                 pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-                raise orch_error  # Re-raise to ensure the error is visible
+                pipeline_executions[execution_id]["predictions_generated"] = num_predictions
+                pipeline_executions[execution_id]["stdout"] = result.stdout[-2000:] if result.stdout else ""  # Last 2000 chars
+                pipeline_executions[execution_id]["subprocess_success"] = True
+                
+                logger.info(f"Pipeline execution {execution_id} completed successfully via subprocess")
+                logger.info(f"Subprocess output (last 500 chars): {result.stdout[-500:] if result.stdout else 'No output'}")
+            else:
+                pipeline_executions[execution_id]["status"] = "failed"
+                pipeline_executions[execution_id]["error"] = f"Subprocess failed with exit code {result.returncode}"
+                pipeline_executions[execution_id]["stderr"] = result.stderr[-1000:] if result.stderr else ""
+                pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
+                
+                logger.error(f"Pipeline execution {execution_id} failed with exit code {result.returncode}")
+                logger.error(f"Subprocess stderr: {result.stderr[-500:] if result.stderr else 'No error output'}")
         else:
-            # Critical error - orchestrator not available
-            error_msg = "CRITICAL: Pipeline orchestrator not initialized - check system startup logs"
-            logger.error(error_msg)
+            # Subprocess execution failed
+            error_msg = result.get("error", "Unknown subprocess error")
+            if result.get("timeout"):
+                error_msg = "Pipeline execution timed out"
+                
             pipeline_executions[execution_id]["status"] = "failed"
             pipeline_executions[execution_id]["error"] = error_msg
             pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-            raise RuntimeError(error_msg)
+            
+            logger.error(f"Pipeline execution {execution_id} failed: {error_msg}")
 
     except Exception as e:
-        logger.error(f"Error in background pipeline execution {execution_id}: {e}")
+        logger.error(f"Error in subprocess pipeline execution {execution_id}: {e}")
         if execution_id in pipeline_executions:
             pipeline_executions[execution_id]["status"] = "failed"
-            pipeline_executions[execution_id]["error"] = str(e)
+            pipeline_executions[execution_id]["error"] = f"Subprocess execution error: {str(e)}"
             pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
 
 
