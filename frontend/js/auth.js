@@ -416,7 +416,7 @@ class SimpleAuthManager {
         try {
             // Verify authentication using secure HttpOnly cookies
             const response = await fetch('/api/v1/auth/verify', {
-                method: 'POST',
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
                 },
@@ -425,15 +425,15 @@ class SimpleAuthManager {
 
             if (response.ok) {
                 const data = await response.json();
-                if (data.valid) {
+                if (data.valid && data.authenticated) {
                     this.user = data.user;
-                    console.log('Authentication verified via secure HttpOnly cookie');
+                    console.log('Authentication verified via secure HttpOnly cookie for user:', data.user.username);
                     return true;
                 }
             }
 
             // Authentication failed
-            console.log('Authentication verification failed');
+            console.log('Authentication verification failed - response status:', response.status);
             return false;
 
         } catch (error) {

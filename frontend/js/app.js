@@ -622,12 +622,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
             
-            if (response.status === 401) {
+            if (response.status === 401 || response.status === 403) {
+                console.log('Authentication failed, redirecting to login...');
                 window.location.href = '/login.html';
                 return false;
             }
             
-            return response.ok;
+            if (response.ok) {
+                const data = await response.json();
+                if (data.valid && data.authenticated) {
+                    console.log('Dashboard authentication verified for user:', data.user.username);
+                    return true;
+                }
+            }
+            
+            console.log('Authentication check failed, redirecting to login...');
+            window.location.href = '/login.html';
+            return false;
+            
         } catch (error) {
             console.error('Auth check failed:', error);
             window.location.href = '/login.html';

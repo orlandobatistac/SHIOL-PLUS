@@ -316,7 +316,7 @@ class AuthManager:
 
         except Exception as e:
             logger.error(f"Error during logout: {e}")
-            raise HTTPException(status_code=500, detail="Logout failed")
+            return False
 
 # Global auth manager instance
 auth_manager = AuthManager()

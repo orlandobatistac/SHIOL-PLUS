@@ -35,25 +35,25 @@ def get_next_powerball_drawing() -> Dict[str, Any]:
     try:
         # Get current ET time with clock drift correction
         now_et = DateManager.get_current_et_time()
-        
+
         # Get next drawing date using the centralized DateManager
         next_drawing_date_str = DateManager.calculate_next_drawing_date(now_et)
-        
+
         # Parse the date and set the drawing time (10:59 PM ET)
         next_drawing_date = datetime.strptime(next_drawing_date_str, '%Y-%m-%d')
         next_drawing = DateManager.POWERBALL_TIMEZONE.localize(
             next_drawing_date.replace(hour=22, minute=59, second=0, microsecond=0)  # 10:59 PM ET
         )
-        
+
         # Calculate countdown in seconds
         countdown_seconds = int((next_drawing - now_et).total_seconds())
         countdown_seconds = max(0, countdown_seconds)
-        
+
         # Calculate days and hours for display
         days_until = max(0, (next_drawing.date() - now_et.date()).days)
         hours_until = int(countdown_seconds / 3600)
         minutes_until = int((countdown_seconds % 3600) / 60)
-        
+
         # Determine display text based on time remaining
         if countdown_seconds <= 0:
             display_text = "Drawing in progress"
@@ -89,7 +89,7 @@ def get_next_powerball_drawing() -> Dict[str, Any]:
         # Fallback response
         return {
             "date": "2025-08-11",
-            "time": "22:59:00", 
+            "time": "22:59:00",
             "timezone": "ET",
             "display_text": "Next drawing",
             "status": "future"
@@ -384,28 +384,33 @@ async def get_predictions_performance(limit: int = 10):
 
 # Authentication endpoints
 @auth_router.post("/login")
-async def login(request: Request, response: Response):
-    """
-    Authenticate user with username and password.
-    Returns session token for accessing protected areas.
-    """
+async def login(
+    request: Request,
+    response: Response,
+    credentials: dict
+):
+    """Login endpoint with secure HttpOnly cookie authentication"""
     try:
-        body = await request.json()
-        username = body.get('username')
-        password = body.get('password')
+        username = credentials.get("username", "").strip()
+        password = credentials.get("password", "")
 
         if not username or not password:
-            raise HTTPException(status_code=400, detail="Username and password required")
-
-        # Get client info
-        client_ip = request.client.host
-        user_agent = request.headers.get('user-agent')
+            raise HTTPException(
+                status_code=400,
+                detail="Username and password are required"
+            )
 
         # Authenticate user
         user = auth_manager.authenticate_user(username, password)
         if not user:
-            logger.warning(f"Failed login attempt for username: {username} from IP: {client_ip}")
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid username or password"
+            )
+
+        # Get client info
+        client_ip = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
 
         # Create session
         session_token = auth_manager.create_session(
@@ -416,27 +421,42 @@ async def login(request: Request, response: Response):
         )
 
         if not session_token:
-            raise HTTPException(status_code=500, detail="Failed to create session")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create session"
+            )
+
+        # Set secure HttpOnly cookie
+        response.set_cookie(
+            key="shiol_session_token",
+            value=session_token,
+            max_age=24 * 60 * 60,  # 24 hours in seconds
+            httponly=True,  # Prevents XSS attacks
+            secure=False,   # Set to True in production with HTTPS
+            samesite="lax",  # Changed from strict to lax for better compatibility
+            path="/"  # Ensure cookie is available for all paths
+        )
 
         logger.info(f"User '{username}' logged in successfully from IP: {client_ip}")
 
         return {
             "success": True,
-            "session_token": session_token,
+            "message": "Login successful",
             "user": {
                 "username": user.username,
                 "role": user.role,
                 "email": user.email
-            },
-            "expires_in_hours": 24,
-            "message": "Login successful"
+            }
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during login: {e}")
-        raise HTTPException(status_code=500, detail="Login failed")
+        logger.error(f"Login error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Login failed"
+        )
 
 @auth_router.post("/logout")
 async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -458,33 +478,47 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=500, detail="Logout failed")
 
 @auth_router.get("/verify")
-async def verify_session(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    Verify if session token is valid and return user info.
-    """
+@auth_router.post("/verify")
+async def verify_auth(request: Request):
+    """Verify current authentication status using HttpOnly cookies"""
     try:
-        session_token = credentials.credentials
+        # Get session token from HttpOnly cookie
+        session_token = request.cookies.get("shiol_session_token")
 
+        if not session_token:
+            raise HTTPException(
+                status_code=401,
+                detail="No authentication cookie found"
+            )
+
+        # Verify the session
         user = auth_manager.verify_session(session_token)
 
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid or expired session")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired session"
+            )
 
         return {
             "valid": True,
+            "authenticated": True,
             "user": {
+                "id": user.id,
                 "username": user.username,
                 "role": user.role,
-                "email": user.email,
-                "last_login": user.last_login.isoformat() if user.last_login else None
+                "email": user.email
             }
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error verifying session: {e}")
-        raise HTTPException(status_code=500, detail="Session verification failed")
+        logger.error(f"Auth verification error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Authentication verification failed"
+        )
 
 # Dependency for protected endpoints
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
