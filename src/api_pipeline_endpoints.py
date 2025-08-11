@@ -283,6 +283,83 @@ async def get_scheduler_jobs():
         logger.error(f"Error getting scheduler jobs: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving scheduler jobs")
 
+@pipeline_router.post("/trigger")
+async def trigger_pipeline_execution(
+    num_predictions: int = 100,
+    force: bool = False,
+    current_user: User = Depends(get_current_user)
+):
+    """Trigger manual pipeline execution"""
+    try:
+        import uuid
+        from src.api import pipeline_executions, run_full_pipeline_background, pipeline_orchestrator
+
+        # Check if pipeline is already running (unless force is True)
+        if not force:
+            running_executions = [ex for ex in pipeline_executions.values() if ex.get("status") == "running"]
+            if running_executions:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Pipeline already running (ID: {running_executions[0].get('execution_id')}). Use force=true to override."
+                )
+
+        # Validate num_predictions
+        if not (1 <= num_predictions <= 500):
+            raise HTTPException(
+                status_code=400,
+                detail="num_predictions must be between 1 and 500"
+            )
+
+        # Generate execution ID
+        execution_id = str(uuid.uuid4())[:8]
+
+        # Create execution metadata
+        current_time = datetime.now()
+        pipeline_executions[execution_id] = {
+            "execution_id": execution_id,
+            "status": "starting",
+            "start_time": current_time.isoformat(),
+            "current_step": "manual_trigger",
+            "steps_completed": 0,
+            "total_steps": 7,
+            "num_predictions": num_predictions,
+            "error": None,
+            "trigger_type": "manual_dashboard",
+            "execution_source": "manual_dashboard",
+            "trigger_details": {
+                "type": "manual",
+                "triggered_by": f"user_{current_user.username}",
+                "trigger_time": current_time.isoformat(),
+                "num_predictions_requested": num_predictions,
+                "force_execution": force
+            }
+        }
+
+        # Start background pipeline execution
+        import asyncio
+        asyncio.create_task(run_full_pipeline_background(execution_id, num_predictions))
+
+        logger.info(f"Pipeline execution triggered manually by user {current_user.username}, execution ID: {execution_id}")
+
+        return {
+            "execution_id": execution_id,
+            "status": "started",
+            "message": f"Pipeline execution started with {num_predictions} predictions",
+            "parameters": {
+                "num_predictions": num_predictions,
+                "force": force,
+                "triggered_by": current_user.username
+            },
+            "tracking_url": f"/api/v1/pipeline/status",
+            "timestamp": current_time.isoformat()
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error triggering pipeline: {e}")
+        raise HTTPException(status_code=500, detail=f"Error triggering pipeline: {str(e)}")
+
 @pipeline_router.get("/history")
 async def get_pipeline_history():
     """Get recent pipeline execution history"""
