@@ -27,11 +27,12 @@ class DateManager:
     # Timezone estándar para todo el proyecto
     POWERBALL_TIMEZONE = pytz.timezone('America/New_York')
     
-    # Días de sorteo de Powerball (Miércoles=2, Sábado=5)
-    DRAWING_DAYS = [2, 5]
+    # Días de sorteo de Powerball (Lunes=0, Miércoles=2, Sábado=5)
+    DRAWING_DAYS = [0, 2, 5]
     
-    # Hora de sorteo (11 PM ET)
-    DRAWING_HOUR = 23
+    # Hora de sorteo (10:59 PM ET)
+    DRAWING_HOUR = 22
+    DRAWING_MINUTE = 59
     
     def __init__(self):
         """Inicializa el administrador de fechas."""
@@ -53,31 +54,36 @@ class DateManager:
         current_time = system_utc.astimezone(cls.POWERBALL_TIMEZONE)
         
         # DEPLOYMENT FIX: Detectar y corregir drift de zona horaria
-        # Si estamos en deployment y el sistema muestra fechas incorrectas
-        expected_date_range = ["2025-01-11", "2025-01-12", "2025-01-13"]  # Rango esperado actual
+        # Actualizar el rango de fechas esperadas a agosto 2025 (fecha actual)
+        expected_date_range = ["2025-08-11", "2025-08-12", "2025-08-13"]  # Rango esperado actual (agosto 2025)
         actual_date = current_time.strftime('%Y-%m-%d')
         
-        # Si la fecha está fuera del rango esperado, aplicar corrección
+        # Temporal: Deshabilitar corrección automática para evitar confusión
+        # El sistema funciona correctamente con las fechas actuales
+        logger.debug(f"Current system date: {actual_date} - Clock drift correction disabled")
+        
+        # Solo aplicar corrección si hay una diferencia extrema (más de 30 días)
         if actual_date not in expected_date_range:
-            logger.warning(f"Clock drift detected: {actual_date} not in expected range {expected_date_range}")
+            logger.info(f"System date outside expected range: {actual_date} not in {expected_date_range}")
             
-            # Calcular corrección basada en fecha esperada vs actual
+            # Verificar si es una diferencia extrema que requiere corrección
             from datetime import date
-            expected_date = date(2025, 1, 11)  # Fecha conocida correcta
-            actual_date_obj = current_time.date()
-            
-            if actual_date_obj != expected_date:
-                # Calcular días de diferencia
-                drift_days = (actual_date_obj - expected_date).days
+            try:
+                actual_date_obj = datetime.strptime(actual_date, '%Y-%m-%d').date()
+                expected_date = date(2025, 8, 11)  # Fecha base de referencia
                 
-                # Aplicar corrección
-                corrected_time = current_time - timedelta(days=drift_days)
+                drift_days = abs((actual_date_obj - expected_date).days)
                 
-                logger.info(f"Applied clock correction: {drift_days} days")
-                logger.info(f"Original time: {current_time.isoformat()}")
-                logger.info(f"Corrected time: {corrected_time.isoformat()}")
-                
-                return corrected_time
+                if drift_days > 30:  # Solo corregir si hay más de 30 días de diferencia
+                    logger.warning(f"Extreme clock drift detected: {drift_days} days difference")
+                    # En este caso, usar la fecha actual del sistema sin corrección
+                    logger.info("Using system date without correction due to extreme drift")
+                else:
+                    logger.debug(f"Minor date difference ({drift_days} days) - no correction needed")
+            except ValueError:
+                logger.warning(f"Could not parse date for drift calculation: {actual_date}")
+        
+        # Retornar tiempo actual sin corrección para funcionamiento normal
         
         logger.debug(f"System UTC: {system_utc.isoformat()}")
         logger.debug(f"ET time: {current_time.isoformat()}")
@@ -149,10 +155,15 @@ class DateManager:
         # CORRECCIÓN: Los días de sorteo son Miércoles (2) y Sábado (5)
         # NO incluir Lunes (0) como estaba en el código anterior
         
-        # Si es día de sorteo y es antes de las 11 PM ET, el sorteo es ese día
-        if current_weekday in cls.DRAWING_DAYS and reference_date.hour < cls.DRAWING_HOUR:
+        # Si es día de sorteo y es antes de las 10:59 PM ET, el sorteo es ese día
+        cutoff_reached = (
+            reference_date.hour > cls.DRAWING_HOUR or 
+            (reference_date.hour == cls.DRAWING_HOUR and reference_date.minute >= cls.DRAWING_MINUTE)
+        )
+        
+        if current_weekday in cls.DRAWING_DAYS and not cutoff_reached:
             next_draw_date = reference_date.strftime('%Y-%m-%d')
-            logger.info(f"Drawing day before cutoff time - next drawing today: {next_draw_date}")
+            logger.info(f"Drawing day before cutoff time (10:59 PM) - next drawing today: {next_draw_date}")
             return next_draw_date
         
         # Encontrar el próximo día de sorteo

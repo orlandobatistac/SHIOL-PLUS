@@ -159,15 +159,16 @@ async def lifespan(app: FastAPI):
 
     # Schedule pipeline execution optimally:
     # 1. Full pipeline only on actual drawing days (Monday, Wednesday, Saturday)
+    # Drawing is at 10:59 PM ET, so pipeline runs at 11:29 PM ET (30 minutes after)
     scheduler.add_job(
         func=trigger_full_pipeline_automatically,
         trigger="cron",
         day_of_week="mon,wed,sat", # Only on actual Powerball drawing days
         hour=23,                    # 11 PM ET
-        minute=30,                  # 30 minutes after drawing
+        minute=29,                  # 11:29 PM - 30 minutes after 10:59 PM drawing
         timezone="America/New_York", # EXPLICIT TIMEZONE FIX
         id="post_drawing_pipeline",
-        name="Full Pipeline After Drawing Results",
+        name="Full Pipeline 30 Minutes After Drawing (11:29 PM ET)",
         max_instances=1,           # Prevent overlapping executions
         coalesce=True             # Merge multiple pending executions into one
     )
