@@ -118,6 +118,7 @@ class SimpleAuthManager {
 
         const username = document.getElementById('username')?.value.trim();
         const password = document.getElementById('password')?.value;
+        const rememberMe = document.getElementById('remember-me')?.checked || false;
 
         if (!username || !password) {
             this.showLoginError('Please enter both username and password');
@@ -135,7 +136,8 @@ class SimpleAuthManager {
                 },
                 body: JSON.stringify({ 
                     username, 
-                    password
+                    password,
+                    remember_me: rememberMe
                 }),
                 credentials: 'include' // Include cookies for secure token storage
             });

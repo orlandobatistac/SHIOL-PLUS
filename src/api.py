@@ -17,6 +17,9 @@ from src.adaptive_feedback import initialize_adaptive_system
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
 import pytz
+from pydantic import BaseModel
+from starlette import status
+from starlette.responses import Response
 
 # Import all modular API components
 from src.api_utils import convert_numpy_types
@@ -27,7 +30,7 @@ from src.api_database_endpoints import database_router
 from src.api_analytics_endpoints import analytics_router
 from src.api_model_endpoints import model_router
 from src.api_pipeline_endpoints import pipeline_router
-from src.public_api import public_router, auth_router
+from src.public_api import public_router, auth_manager, auth_router
 from src.api_public_endpoints import public_frontend_router, set_public_components
 from src.api_dashboard_endpoints import dashboard_frontend_router, set_dashboard_components
 
@@ -190,7 +193,7 @@ async def lifespan(app: FastAPI):
     try:
         scheduler.start()
         logger.info("Scheduler started successfully")
-        
+
         # Log detailed scheduler configuration for debugging
         jobs = scheduler.get_jobs()
         logger.info(f"Active scheduled jobs: {len(jobs)}")
@@ -203,7 +206,7 @@ async def lifespan(app: FastAPI):
                 logger.warning(f"Job {job.id} missing attributes: {e}")
     except Exception as e:
         logger.error(f"Failed to start scheduler: {e}")
-    
+
     # Log current time in multiple timezones for debugging
     try:
         from src.date_utils import DateManager
@@ -214,7 +217,7 @@ async def lifespan(app: FastAPI):
         current_et = datetime.now(et_tz)
     current_utc = datetime.now(pytz.UTC)
     logger.info(f"Current time - UTC: {current_utc.isoformat()} | ET: {current_et.isoformat()}")
-    
+
     yield
     # On shutdown
     logger.info("Application shutdown...")
@@ -286,6 +289,71 @@ async def get_system_info():
         "database_status": "connected" if db.is_database_connected() else "disconnected",
         "model_status": "loaded" if predictor and hasattr(predictor, 'model') and predictor.model else "not_loaded"
     }
+
+# --- Login Request Model ---
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    remember_me: bool = False
+
+# --- Authentication Endpoints ---
+@app.post("/api/v1/auth/login")
+async def login(request: LoginRequest, response: Response):
+    """Login endpoint that stores session token in HttpOnly cookie"""
+    try:
+        user = auth_manager.authenticate_user(request.username, request.password)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials"
+            )
+
+        # Determine session duration based on remember_me preference
+        remember_me = getattr(request, 'remember_me', False)
+        session_hours = 24 * 30 if remember_me else 24  # 30 days vs 24 hours
+        cookie_max_age = session_hours * 3600  # Convert to seconds
+
+        # Create session token with appropriate duration
+        session_token = auth_manager.create_session(user, expires_hours=session_hours)
+        if not session_token:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create session"
+            )
+
+        # Set HttpOnly, Secure, SameSite=Strict cookie
+        response.set_cookie(
+            key="shiol_session_token",
+            value=session_token,
+            httponly=True,        # Prevents JavaScript access (XSS protection)
+            secure=False,         # Set to True in production with HTTPS
+            samesite="strict",    # CSRF protection
+            max_age=cookie_max_age,  # Duration based on remember_me
+            path="/"
+        )
+        return {"message": "Login successful"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred during login."
+        )
+
+@app.post("/api/v1/auth/logout")
+async def logout(response: Response):
+    """Logout endpoint that clears session token from HttpOnly cookie"""
+    try:
+        # Clear the session cookie
+        response.delete_cookie(key="shiol_session_token", path="/")
+        return {"message": "Logout successful"}
+    except Exception as e:
+        logger.error(f"Logout error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred during logout."
+        )
 
 # --- Application Mounting ---
 # Mount all API routers before static files
