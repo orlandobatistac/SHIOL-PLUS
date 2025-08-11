@@ -215,8 +215,12 @@ async def get_pipeline_logs(
             log_files.sort(key=lambda x: os.path.getmtime(os.path.join(logs_dir, x)), reverse=True)
         
         # If no log files, check for pipeline execution logs in memory
-        if not log_files and pipeline_logs:
-            logs_content = "\n".join(pipeline_logs[-limit:])
+        try:
+            from src.api import pipeline_logs
+            if not log_files and pipeline_logs:
+                logs_content = "\n".join(pipeline_logs[-limit:])
+        except ImportError:
+            pipeline_logs = []
         else:
             # Read from the most recent log file
             logs_content = ""
