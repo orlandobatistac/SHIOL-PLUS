@@ -184,7 +184,7 @@ async def _run_basic_pipeline(execution_id: str, num_predictions: int):
 
             for i in range(min(num_predictions, 50)):  # Limit to 50 for performance
                 try:
-                    prediction = intelligent_generator.generate_deterministic_play()
+                    prediction = intelligent_generator.generate_smart_play()
                     if prediction:
                         predictions.append({
                             'numbers': prediction.get('numbers', []),
