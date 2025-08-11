@@ -483,7 +483,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function viewPipelineLogs() {
         try {
-            const response = await fetch(`${API_BASE_URL}/pipeline/logs`);
+            const response = await fetch(`${API_BASE_URL}/pipeline/logs`, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.status === 401) {
+                showPipelineNotification('Authentication required. Please login.', 'error');
+                setTimeout(() => window.location.href = '/login', 2000);
+                return;
+            }
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
