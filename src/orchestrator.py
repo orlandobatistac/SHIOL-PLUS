@@ -5,13 +5,10 @@ from datetime import datetime
 from loguru import logger
 from typing import Dict, Any, Optional
 
-from src.generative_predictor import GenerativePredictor
-from src.rnn_predictor import RNNPredictor
 from src.intelligent_generator import IntelligentGenerator, FeatureEngineer
 from src.adaptive_feedback import AdaptivePlayScorer
 from src.loader import get_data_loader
 from src.database import save_prediction_log, get_db_connection
-from src.ensemble_predictor import EnsemblePredictor, EnsembleMethod
 
 class PipelineOrchestrator:
     """
@@ -34,9 +31,13 @@ class PipelineOrchestrator:
             historical_data = self.data_loader.load_historical_data()
             self.intelligent_generator = IntelligentGenerator(historical_data)
             
-            # Initialize adaptive feedback system
-            from src.adaptive_feedback import initialize_adaptive_system
-            self.adaptive_system = initialize_adaptive_system()
+            # Initialize adaptive feedback system (optional)
+            try:
+                from src.adaptive_feedback import initialize_adaptive_system
+                self.adaptive_system = initialize_adaptive_system()
+            except Exception as adaptive_error:
+                logger.warning(f"Adaptive system initialization failed: {adaptive_error}")
+                self.adaptive_system = None
             
             logger.info("PipelineOrchestrator initialized successfully")
             
