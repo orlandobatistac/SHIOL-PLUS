@@ -36,7 +36,7 @@ async def test_pipeline():
         raise HTTPException(status_code=500, detail=f"Pipeline test failed: {str(e)}")
 
 @pipeline_router.get("/status")
-async def get_pipeline_status(current_user: User = Depends(get_current_user)):
+async def get_pipeline_status_endpoint(current_user: User = Depends(get_current_user)):
     """Get comprehensive pipeline status for dashboard"""
     try:
         # Get system health metrics

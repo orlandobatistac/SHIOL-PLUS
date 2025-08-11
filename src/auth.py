@@ -123,7 +123,7 @@ class AuthManager:
                     default_password = "shiol2024!"  # TODO: Change this!
 
                     password_hash = bcrypt.hashpw(
-                        default_password.encode('utf-8'), 
+                        default_password.encode('utf-8'),
                         bcrypt.gensalt()
                     ).decode('utf-8')
 
@@ -156,9 +156,9 @@ class AuthManager:
                 cursor = conn.cursor()
 
                 cursor.execute("""
-                    SELECT id, username, password_hash, email, role, is_active, 
+                    SELECT id, username, password_hash, email, role, is_active,
                            created_at, last_login, subscription_type, subscription_expires
-                    FROM users 
+                    FROM users
                     WHERE username = ? AND is_active = 1
                 """, (username,))
 
@@ -199,8 +199,8 @@ class AuthManager:
             logger.error(f"Error during authentication: {e}")
             return None
 
-    def create_session(self, user: User, ip_address: Optional[str] = None, 
-                      user_agent: Optional[str] = None, 
+    def create_session(self, user: User, ip_address: Optional[str] = None,
+                      user_agent: Optional[str] = None,
                       expires_hours: int = 24) -> Optional[str]:
         """
         Create a new session for authenticated user.
@@ -250,7 +250,7 @@ class AuthManager:
                 cursor = conn.cursor()
 
                 cursor.execute("""
-                    SELECT s.user_id, s.expires_at, u.username, u.email, u.role, 
+                    SELECT s.user_id, s.expires_at, u.username, u.email, u.role,
                            u.is_active, u.created_at, u.last_login, u.subscription_type, u.subscription_expires
                     FROM user_sessions s
                     JOIN users u ON s.user_id = u.id
@@ -316,30 +316,17 @@ class AuthManager:
 
         except Exception as e:
             logger.error(f"Error during logout: {e}")
-            return False
-
-    def cleanup_expired_sessions(self):
-        """Clean up expired sessions from database."""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-
-                cursor.execute("DELETE FROM user_sessions WHERE expires_at < ?", (datetime.now().isoformat(),))
-                deleted_count = cursor.rowcount
-                conn.commit()
-
-                if deleted_count > 0:
-                    logger.info(f"Cleaned up {deleted_count} expired sessions")
-
-        except Exception as e:
-            logger.error(f"Error cleaning up expired sessions: {e}")
+            raise HTTPException(status_code=500, detail="Logout failed")
 
 # Global auth manager instance
 auth_manager = AuthManager()
 
 # FastAPI dependency functions
-from fastapi import Depends, HTTPException, status, Cookie, Response
+from fastapi import Depends, HTTPException, status, Cookie, Response, APIRouter
 from typing import Optional
+
+# Define auth_router
+auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 async def get_current_user(session_token: Optional[str] = Cookie(None, alias="shiol_session_token")) -> User:
     """
@@ -411,3 +398,14 @@ def verify_session_token(token: str) -> dict:
         return {"valid": True, "user_id": user.id, "username": user.username, "role": user.role}
     else:
         return {"valid": False, "error": "Invalid or expired session token"}
+
+@auth_router.get("/verify")
+async def verify_auth(current_user: User = Depends(get_current_user)):
+    """Verify current authentication status"""
+    return {
+        "authenticated": True,
+        "user": {
+            "username": current_user.username,
+            "role": current_user.role
+        }
+    }

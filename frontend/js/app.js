@@ -130,7 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentials: 'include',
                 headers: {
                     'Accept': 'application/json',
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
                 }
             });
             
@@ -411,7 +412,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache'
                 }
             });
 
@@ -609,22 +611,54 @@ document.addEventListener('DOMContentLoaded', () => {
         showPipelineNotification(`Viewing details for execution ${executionId}`, 'info');
     };
 
+    // Check authentication status
+    async function checkAuthStatus() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (response.status === 401) {
+                window.location.href = '/login.html';
+                return false;
+            }
+            
+            return response.ok;
+        } catch (error) {
+            console.error('Auth check failed:', error);
+            window.location.href = '/login.html';
+            return false;
+        }
+    }
+
     // Initialize pipeline dashboard
     function initializePipelineDashboard() {
-        // Test API connectivity first
-        testApiConnectivity().then(isConnected => {
-            if (isConnected) {
-                console.log('✅ API connectivity confirmed');
-                // Initial status fetch
-                fetchPipelineStatus();
+        // Check authentication first
+        checkAuthStatus().then(isAuthenticated => {
+            if (isAuthenticated) {
+                // Test API connectivity
+                testApiConnectivity().then(isConnected => {
+                    if (isConnected) {
+                        console.log('✅ API connectivity confirmed');
+                        // Initial status fetch
+                        fetchPipelineStatus();
 
-                // Start auto-refresh if enabled
-                if (autoRefreshCheckbox && autoRefreshCheckbox.checked) {
-                    handleAutoRefreshToggle();
-                }
+                        // Start auto-refresh if enabled
+                        if (autoRefreshCheckbox && autoRefreshCheckbox.checked) {
+                            handleAutoRefreshToggle();
+                        }
+                    } else {
+                        console.warn('⚠️ API connectivity issues detected');
+                        showPipelineError('Unable to connect to API server. Check if server is running.');
+                    }
+                });
             } else {
-                console.warn('⚠️ API connectivity issues detected');
-                showPipelineError('Unable to connect to API server. Check if server is running.');
+                showPipelineError('Authentication required. Redirecting to login...');
+                setTimeout(() => window.location.href = '/login.html', 2000);
             }
         });
     }
