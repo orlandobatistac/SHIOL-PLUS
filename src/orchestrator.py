@@ -44,7 +44,7 @@ class PipelineOrchestrator:
             logger.error(f"Failed to initialize PipelineOrchestrator: {e}")
             raise
     
-    async def run_full_pipeline_async(self, num_predictions: int = 100) -> Dict[str, Any]:
+    async def run_full_pipeline_async(self, execution_id: str, num_predictions: int = 100) -> Dict[str, Any]:
         """
         Run the complete ML pipeline asynchronously
         
@@ -55,7 +55,7 @@ class PipelineOrchestrator:
             Dict containing pipeline execution results
         """
         start_time = datetime.now()
-        logger.info(f"Starting full pipeline execution with {num_predictions} predictions")
+        logger.info(f"Starting full pipeline execution {execution_id} with {num_predictions} predictions")
         
         try:
             # Step 1: Data Update

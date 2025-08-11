@@ -131,27 +131,35 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
         # Use the orchestrator to run the pipeline
         if pipeline_orchestrator:
             try:
-                success = await pipeline_orchestrator.run_full_pipeline_async(
+                result = await pipeline_orchestrator.run_full_pipeline_async(
                     execution_id=execution_id,
                     num_predictions=num_predictions
                 )
 
-                if success:
+                if result.get("status") == "completed":
                     pipeline_executions[execution_id]["status"] = "completed"
                     pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-                    logger.info(f"Pipeline execution {execution_id} completed successfully")
+                    pipeline_executions[execution_id]["predictions_generated"] = result.get("num_predictions_generated", 0)
+                    logger.info(f"Pipeline execution {execution_id} completed successfully with {result.get('num_predictions_generated', 0)} predictions")
                 else:
                     pipeline_executions[execution_id]["status"] = "failed"
-                    pipeline_executions[execution_id]["error"] = "Pipeline execution failed"
+                    pipeline_executions[execution_id]["error"] = result.get("error", "Unknown pipeline error")
                     pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-                    logger.error(f"Pipeline execution {execution_id} failed")
+                    logger.error(f"Pipeline execution {execution_id} failed: {result.get('error', 'Unknown error')}")
             except Exception as orch_error:
-                logger.warning(f"Orchestrator failed: {orch_error}, falling back to basic pipeline")
-                await _run_basic_pipeline(execution_id, num_predictions)
+                logger.error(f"CRITICAL: Pipeline orchestrator failed - {orch_error}")
+                pipeline_executions[execution_id]["status"] = "failed"
+                pipeline_executions[execution_id]["error"] = f"Orchestrator failure: {str(orch_error)}"
+                pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
+                raise orch_error  # Re-raise to ensure the error is visible
         else:
-            # Fallback execution without orchestrator
-            logger.warning("No orchestrator available, running basic pipeline")
-            await _run_basic_pipeline(execution_id, num_predictions)
+            # Critical error - orchestrator not available
+            error_msg = "CRITICAL: Pipeline orchestrator not initialized - check system startup logs"
+            logger.error(error_msg)
+            pipeline_executions[execution_id]["status"] = "failed"
+            pipeline_executions[execution_id]["error"] = error_msg
+            pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
+            raise RuntimeError(error_msg)
 
     except Exception as e:
         logger.error(f"Error in background pipeline execution {execution_id}: {e}")
@@ -160,89 +168,7 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
             pipeline_executions[execution_id]["error"] = str(e)
             pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
 
-async def _run_basic_pipeline(execution_id: str, num_predictions: int):
-    """Basic pipeline execution when orchestrator is not available"""
-    try:
-        logger.info(f"Running basic pipeline for execution {execution_id}")
 
-        # Update status
-        pipeline_executions[execution_id]["current_step"] = "generating_predictions"
-        pipeline_executions[execution_id]["steps_completed"] = 1
-
-        # Add delay to simulate processing
-        import asyncio
-        await asyncio.sleep(1)
-
-        # Generate predictions using the available predictor
-        predictions = []
-        if intelligent_generator:
-            logger.info(f"Generating {num_predictions} predictions using intelligent generator")
-
-            pipeline_executions[execution_id]["current_step"] = "intelligent_analysis"
-            pipeline_executions[execution_id]["steps_completed"] = 2
-            await asyncio.sleep(1)
-
-            for i in range(min(num_predictions, 50)):  # Limit to 50 for performance
-                try:
-                    prediction = intelligent_generator.generate_smart_play()
-                    if prediction:
-                        predictions.append({
-                            'numbers': prediction.get('numbers', []),
-                            'powerball': prediction.get('powerball', 1),
-                            'score': prediction.get('score', 0.0),
-                            'method': 'manual_pipeline_trigger'
-                        })
-                except Exception as pred_error:
-                    logger.warning(f"Error generating prediction {i}: {pred_error}")
-                    continue
-
-                # Update progress every 10 predictions
-                if i > 0 and i % 10 == 0:
-                    progress_step = min(5, 2 + (i // 10))
-                    pipeline_executions[execution_id]["steps_completed"] = progress_step
-                    logger.info(f"Generated {i}/{num_predictions} predictions")
-                    await asyncio.sleep(0.1)  # Small delay to prevent blocking
-
-        # Save predictions to database if any were generated
-        if predictions:
-            pipeline_executions[execution_id]["current_step"] = "saving_predictions"
-            pipeline_executions[execution_id]["steps_completed"] = 6
-
-            saved_count = 0
-            for pred in predictions[:20]:  # Save top 20 predictions
-                try:
-                    db.save_prediction_log(
-                        numbers=pred['numbers'],
-                        powerball=pred['powerball'],
-                        score_total=pred['score'],
-                        method=pred['method'],
-                        prediction_metadata={
-                            'execution_id': execution_id,
-                            'manual_trigger': True,
-                            'timestamp': datetime.now().isoformat()
-                        }
-                    )
-                    saved_count += 1
-                except Exception as save_error:
-                    logger.warning(f"Error saving prediction: {save_error}")
-                    continue
-
-            logger.info(f"Saved {saved_count} predictions to database")
-
-        # Mark as completed
-        pipeline_executions[execution_id]["status"] = "completed"
-        pipeline_executions[execution_id]["current_step"] = "completed"
-        pipeline_executions[execution_id]["steps_completed"] = 7
-        pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-        pipeline_executions[execution_id]["predictions_generated"] = len(predictions)
-
-        logger.info(f"Basic pipeline execution {execution_id} completed with {len(predictions)} predictions generated")
-
-    except Exception as e:
-        logger.error(f"Error in basic pipeline execution {execution_id}: {e}")
-        pipeline_executions[execution_id]["status"] = "failed"
-        pipeline_executions[execution_id]["error"] = str(e)
-        pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -250,25 +176,24 @@ async def lifespan(app: FastAPI):
     # On startup
     logger.info("Application startup...")
 
-    # Initialize pipeline orchestrator
+    # Initialize pipeline orchestrator - CRITICAL COMPONENT
     try:
         from src.orchestrator import PipelineOrchestrator
         pipeline_orchestrator = PipelineOrchestrator()
         app.state.orchestrator = pipeline_orchestrator
         logger.info("Pipeline orchestrator initialized successfully")
-    except ImportError:
-        # Fallback if orchestrator doesn't have PipelineOrchestrator class
-        logger.warning("PipelineOrchestrator class not found, creating basic orchestrator")
-        pipeline_orchestrator = type('BasicOrchestrator', (), {
-            'run_full_pipeline_async': lambda self, num_predictions: self._run_basic_pipeline(num_predictions),
-            '_run_basic_pipeline': lambda self, num_predictions: {"status": "completed", "predictions": num_predictions}
-        })()
-        app.state.orchestrator = pipeline_orchestrator
-        logger.info("Basic pipeline orchestrator created as fallback")
-    except Exception as e:
-        logger.error(f"Failed to initialize pipeline orchestrator: {e}")
+    except ImportError as import_error:
+        logger.critical(f"CRITICAL ERROR: PipelineOrchestrator class not found - {import_error}")
+        logger.critical("Check src/orchestrator.py file exists and contains PipelineOrchestrator class")
         pipeline_orchestrator = None
         app.state.orchestrator = None
+        raise RuntimeError(f"Pipeline orchestrator import failed: {import_error}")
+    except Exception as e:
+        logger.critical(f"CRITICAL ERROR: Failed to initialize pipeline orchestrator - {e}")
+        logger.critical("Pipeline system cannot function without orchestrator")
+        pipeline_orchestrator = None
+        app.state.orchestrator = None
+        raise RuntimeError(f"Pipeline orchestrator initialization failed: {e}")
 
     # Schedule pipeline execution optimally:
     # 1. Full pipeline only on actual drawing days (Monday, Wednesday, Saturday)
