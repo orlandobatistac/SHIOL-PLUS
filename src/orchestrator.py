@@ -83,8 +83,8 @@ class PipelineOrchestrator:
             logger.info("Pipeline Step 6/7: Performance Analysis")
             performance_result = await self._analyze_performance()
             
-            # Step 7: Save Results
-            logger.info("Pipeline Step 7/7: Save Results")
+            # Step 6: Save Results
+            logger.info("Pipeline Step 6/6: Save Results")
             save_result = await self._save_results(predictions)
             
             end_time = datetime.now()
@@ -96,7 +96,7 @@ class PipelineOrchestrator:
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
                 "num_predictions_generated": len(predictions),
-                "steps_completed": 7,
+                "steps_completed": 6,
                 "results": {
                     "data_update": data_update_result,
                     "adaptive_analysis": adaptive_result,

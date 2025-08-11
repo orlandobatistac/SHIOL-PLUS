@@ -3,14 +3,13 @@
 SHIOL+ Phase 5 Pipeline Orchestrator
 ====================================
 
-Main pipeline orchestrator that coordinates all 7 pipeline steps:
+Main pipeline orchestrator that coordinates all 6 pipeline steps:
 1. Data Update
 2. Adaptive Analysis
 3. Prediction Generation
 4. Weight Optimization
 5. Historical Validation
 6. Performance Analysis
-7. Notifications & Reports
 
 Usage:
     python main.py                    # Run full pipeline
@@ -129,7 +128,7 @@ class PipelineOrchestrator:
 
         Args:
             num_predictions (int): Number of predictions to generate (default: 100)
-            requested_steps (list): Specific steps to run, or None for all 7 steps
+            requested_steps (list): Specific steps to run, or None for all 6 steps
             execution_source (str): Source of execution ('scheduled_pipeline', 'manual_dashboard', etc.)
             trigger_details (dict): Additional trigger metadata
         """
@@ -147,50 +146,34 @@ class PipelineOrchestrator:
         hours_after_drawing = current_date.hour >= 23  # After 11 PM ET
 
         logger.info(f"Pipeline execution context: Drawing day: {is_drawing_day}, After 11PM: {hours_after_drawing}")
-        logger.info(f"Pipeline configuration: {num_predictions} predictions, Full 7-step execution")
+        logger.info("Pipeline configuration: {num_predictions} predictions, Full 6-step execution")
         logger.info(f"Execution source: {execution_source}")
 
         try:
             # STEP 1: Data Update & Drawing Detection
-            logger.info("STEP 1/7: Data Update & Drawing Detection")
+            logger.info("STEP 1/6: Data Update & Drawing Detection")
             pipeline_results['data_update'] = self._execute_step('data_update', self.step_data_update)
 
-            # STEP 2: Historical Validation (PRIORITY on drawing days after 11 PM)
-            if is_drawing_day and hours_after_drawing:
-                logger.info("STEP 2/7: Historical Validation (Drawing Day Priority)")
-                pipeline_results['historical_validation'] = self._execute_step('historical_validation', self.step_historical_validation)
+            # STEP 2: Adaptive Analysis (Regular maintenance)
+            logger.info("STEP 2/6: Adaptive Analysis (Maintenance Mode)")
+            pipeline_results['adaptive_analysis'] = self._execute_step('adaptive_analysis', self.step_adaptive_analysis)
 
-                # STEP 3: Adaptive Analysis (Enhanced learning from fresh results)
-                logger.info("STEP 3/7: Adaptive Analysis (Post-Drawing Learning)")
-                pipeline_results['adaptive_analysis'] = self._execute_step('adaptive_analysis', self.step_adaptive_analysis)
+            # STEP 3: Weight Optimization (Regular optimization)
+            logger.info("STEP 3/6: Weight Optimization (Scheduled)")
+            pipeline_results['weight_optimization'] = self._execute_step('weight_optimization', self.step_weight_optimization)
 
-                # STEP 4: Weight Optimization (Triggered by new results)
-                logger.info("STEP 4/7: Weight Optimization (Results-Based)")
-                pipeline_results['weight_optimization'] = self._execute_step('weight_optimization', self.step_weight_optimization)
-            else:
-                # STEP 2: Adaptive Analysis (Regular maintenance)
-                logger.info("STEP 2/7: Adaptive Analysis (Maintenance Mode)")
-                pipeline_results['adaptive_analysis'] = self._execute_step('adaptive_analysis', self.step_adaptive_analysis)
-
-                # STEP 3: Weight Optimization (Regular optimization)
-                logger.info("STEP 3/7: Weight Optimization (Scheduled)")
-                pipeline_results['weight_optimization'] = self._execute_step('weight_optimization', self.step_weight_optimization)
-
-                # STEP 4: Historical Validation (Maintenance validation)
-                logger.info("STEP 4/7: Historical Validation (Maintenance)")
-                pipeline_results['historical_validation'] = self._execute_step('historical_validation', self.step_historical_validation)
+            # STEP 4: Historical Validation (Maintenance validation)
+            logger.info("STEP 4/6: Historical Validation (Maintenance)")
+            pipeline_results['historical_validation'] = self._execute_step('historical_validation', self.step_historical_validation)
 
             # STEP 5: Prediction Generation (ALWAYS generate for next drawing)
-            logger.info("STEP 5/7: Prediction Generation (Next Drawing)")
+            logger.info("STEP 5/6: Prediction Generation (Next Drawing)")
             pipeline_results['prediction_generation'] = self._execute_step('prediction_generation', self.step_prediction_generation)
 
             # STEP 6: Performance Analysis
-            logger.info("STEP 6/7: Performance Analysis")
+            logger.info("STEP 6/6: Performance Analysis")
             pipeline_results['performance_analysis'] = self._execute_step('performance_analysis', self.step_performance_analysis)
 
-            # STEP 7: Notifications & Reports
-            logger.info("STEP 7/7: Notifications & Reports")
-            pipeline_results['notifications_reports'] = self._execute_step('notifications_reports', self.step_notifications_reports)
 
             # Calculate execution time
             execution_time = datetime.now() - self.execution_start_time
@@ -201,7 +184,7 @@ class PipelineOrchestrator:
             logger.info("=" * 60)
             logger.info("SHIOL+ PHASE 5 PIPELINE EXECUTION COMPLETED SUCCESSFULLY")
             logger.info(f"Total execution time: {execution_time}")
-            logger.info(f"Steps completed: {pipeline_summary.get('successful_steps', 0)}/7")
+            logger.info(f"Steps completed: {pipeline_summary.get('successful_steps', 0)}/6")
             logger.info(f"Pipeline health: {pipeline_summary.get('pipeline_health', 'unknown')}")
             logger.info("=" * 60)
 
@@ -211,7 +194,7 @@ class PipelineOrchestrator:
                 'results': pipeline_results,
                 'summary': pipeline_summary,
                 'steps_completed': pipeline_summary.get('successful_steps', 0),
-                'total_steps': 7  # Always 7 for full pipeline
+                'total_steps': 6  # Updated to 6 steps
             }
 
         except Exception as e:
@@ -658,42 +641,6 @@ class PipelineOrchestrator:
             logger.error(f"Performance analysis step failed: {e}")
             raise
 
-    def step_notifications_reports(self) -> Dict[str, Any]:
-        """
-        Step 7: Notifications & Reports - Generate reports and notifications.
-
-        Returns:
-            Dict with notifications and reports results
-        """
-        try:
-            # Generate pipeline execution report
-            report = self._generate_execution_report()
-
-            # Save report to file
-            report_dir = "reports"
-            os.makedirs(report_dir, exist_ok=True)
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            report_file = os.path.join(report_dir, f"pipeline_report_{timestamp}.json")
-
-            import json
-            with open(report_file, 'w', encoding='utf-8') as f:
-                json.dump(report, f, indent=2, ensure_ascii=False, default=str)
-
-            result = {
-                'report_generated': True,
-                'report_file': report_file,
-                'report_timestamp': timestamp,
-                'pipeline_status': self.pipeline_status,
-                'notifications_sent': 0  # Basic implementation - no actual notifications yet
-            }
-
-            logger.info(f"Reports and notifications completed: {report_file}")
-            return result
-
-        except Exception as e:
-            logger.error(f"Notifications and reports step failed: {e}")
-            raise
 
     def _generate_execution_report(self) -> Dict[str, Any]:
         """Generate comprehensive execution report with enhanced metadata."""
@@ -799,8 +746,6 @@ class PipelineOrchestrator:
             'historical_validation': self.step_historical_validation,
             'performance': self.step_performance_analysis,
             'performance_analysis': self.step_performance_analysis,
-            'reports': self.step_notifications_reports,
-            'notifications_reports': self.step_notifications_reports
         }
 
         if step_name not in step_mapping:
@@ -946,20 +891,20 @@ def start_api_server(host: str = "0.0.0.0", port: int = 8000, auto_detect_ip: bo
 
     try:
         import shlex
-        
+
         # Validate and sanitize inputs to prevent command injection
         # Only allow safe characters for host and validate port range
         if not re.match(r'^[0-9a-zA-Z\.-]+$', host):
             raise ValueError(f"Invalid host format: {host}")
-        
+
         if not isinstance(port, int) or not (1024 <= port <= 65535):
             raise ValueError(f"Invalid port number: {port}")
-        
+
         # Use manual escaping for safety and build command as list to prevent injection
         # shlex.escape() not available in Python 3.12, using manual validation
         safe_host = str(host)
         safe_port = str(port)
-        
+
         # Command to start uvicorn - using list format prevents shell injection
         cmd = [
             "uvicorn",
@@ -1004,7 +949,7 @@ Examples:
   python main.py --help             # Show this help message
 
 Available steps:
-  data, adaptive, weights, prediction, validation, performance, reports
+  data, adaptive, weights, prediction, validation, performance
 
 Server mode:
   --server or --api starts the web API server optimized for VPN access
@@ -1097,7 +1042,7 @@ Server mode:
                 report = SystemDiagnostics.run_system_health_check()
 
                 print(f"\nEstado del sistema: {report['health_status'].upper()}")
-                
+
                 if report['issues_found']:
                     print(f"Problemas detectados: {', '.join(report['issues_found'])}")
                     print(f"\nRecomendaciones:")
@@ -1115,7 +1060,7 @@ Server mode:
                 print(f"\nDiagnóstico de corrupción:")
                 corruption = report['corruption_diagnosis']
                 print(f"  Registros corruptos: {corruption['total_corrupted_records']}")
-                
+
                 # Save detailed report
                 import json
                 with open("reports/system_diagnostics.json", "w") as f:
