@@ -153,17 +153,67 @@ async def _get_detailed_scheduler_jobs() -> List[Dict[str, Any]]:
 
 
 async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
-    """Get recent pipeline execution history"""
+    """Get recent pipeline execution history from PostgreSQL database"""
     try:
-        history_file = "data/pipeline_history.json"
-        if os.path.exists(history_file):
-            with open(history_file, 'r') as f:
-                history = json.load(f)
-                return history[-limit:] if isinstance(history, list) else []
-        return []
+        from src.database import get_pipeline_execution_history
+        
+        # Get executions from PostgreSQL (with SQLite fallback built-in)
+        executions = get_pipeline_execution_history(limit=limit)
+        
+        # Format for API response
+        formatted_executions = []
+        for execution in executions:
+            formatted_execution = {
+                'execution_id': execution.get('execution_id'),
+                'status': execution.get('status'),
+                'start_time': execution.get('start_time'),
+                'end_time': execution.get('end_time'),
+                'trigger_type': execution.get('trigger_type', 'unknown'),
+                'trigger_source': execution.get('trigger_source', 'unknown'),
+                'current_step': execution.get('current_step'),
+                'steps_completed': execution.get('steps_completed', 0),
+                'total_steps': execution.get('total_steps', 7),
+                'num_predictions': execution.get('num_predictions', 100),
+                'error': execution.get('error'),
+                'subprocess_success': execution.get('subprocess_success', False),
+                'duration': _calculate_execution_duration(execution.get('start_time'), execution.get('end_time'))
+            }
+            formatted_executions.append(formatted_execution)
+        
+        logger.info(f"Retrieved {len(formatted_executions)} pipeline executions from database")
+        return formatted_executions
+        
     except Exception as e:
         logger.error(f"Error getting execution history: {e}")
         return []
+
+def _calculate_execution_duration(start_time_str: str, end_time_str: str) -> Optional[str]:
+    """Calculate execution duration in human readable format"""
+    try:
+        if not start_time_str or not end_time_str:
+            return None
+            
+        from datetime import datetime
+        
+        # Parse ISO format timestamps
+        start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+        end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+        
+        duration = end_time - start_time
+        
+        # Format duration
+        total_seconds = int(duration.total_seconds())
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
+        
+        if minutes > 0:
+            return f"{minutes}m {seconds}s"
+        else:
+            return f"{seconds}s"
+            
+    except Exception as e:
+        logger.error(f"Error calculating duration: {e}")
+        return None
 
 async def _get_last_generated_plays() -> List[Dict[str, Any]]:
     """Get last generated predictions from pipeline"""
@@ -363,31 +413,37 @@ async def trigger_pipeline_execution(
 
 @pipeline_router.get("/history")
 async def get_pipeline_history():
-    """Get recent pipeline execution history"""
+    """Get recent pipeline execution history from PostgreSQL database"""
     try:
-        from src.api import pipeline_executions
+        from src.database import get_pipeline_execution_history
 
-        # Convert pipeline executions to list and sort by start time
-        history = []
-        for execution_id, execution_data in pipeline_executions.items():
-            history.append({
-                "execution_id": execution_id,
-                "status": execution_data.get("status"),
-                "start_time": execution_data.get("start_time"),
-                "end_time": execution_data.get("end_time"),
-                "trigger_type": execution_data.get("trigger_type", "unknown"),
-                "steps_completed": execution_data.get("steps_completed", 0),
-                "total_steps": execution_data.get("total_steps", 7),
-                "num_predictions": execution_data.get("num_predictions", 0),
-                "error": execution_data.get("error")
-            })
-
-        # Sort by start time (most recent first)
-        history.sort(key=lambda x: x.get("start_time", ""), reverse=True)
+        # Get executions from PostgreSQL (with SQLite fallback built-in)
+        executions = get_pipeline_execution_history(limit=50)  # Get more for detailed history
+        
+        # Format for API response
+        formatted_executions = []
+        for execution in executions:
+            formatted_execution = {
+                "execution_id": execution.get('execution_id'),
+                "status": execution.get('status'),
+                "start_time": execution.get('start_time'),
+                "end_time": execution.get('end_time'),
+                "trigger_type": execution.get('trigger_type', 'unknown'),
+                "trigger_source": execution.get('trigger_source', 'unknown'),
+                "steps_completed": execution.get('steps_completed', 0),
+                "total_steps": execution.get('total_steps', 7),
+                "num_predictions": execution.get('num_predictions', 0),
+                "error": execution.get('error'),
+                "subprocess_success": execution.get('subprocess_success', False),
+                "duration": execution.get('duration'),
+                "progress_percentage": (execution.get('steps_completed', 0) / max(execution.get('total_steps', 7), 1)) * 100
+            }
+            formatted_executions.append(formatted_execution)
 
         return {
-            "executions": history[:20],  # Return last 20 executions
-            "total_executions": len(history),
+            "executions": formatted_executions[:30],  # Return last 30 executions
+            "total_executions": len(formatted_executions),
+            "database_source": "postgresql_with_sqlite_fallback",
             "timestamp": datetime.now().isoformat()
         }
 

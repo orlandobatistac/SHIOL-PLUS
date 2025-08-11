@@ -122,7 +122,7 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
     import subprocess
     import asyncio
     import os
-    
+
     try:
         # Update execution status
         if execution_id in pipeline_executions:
@@ -133,16 +133,16 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
 
         # Prepare subprocess command
         cmd = ["python", "main.py"]
-        
+
         # Set working directory to project root
         working_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
+
         # Set environment variables for subprocess
         env = os.environ.copy()
         env["PIPELINE_EXECUTION_ID"] = execution_id
         env["PIPELINE_NUM_PREDICTIONS"] = str(num_predictions)
         env["PIPELINE_SOURCE"] = "dashboard_subprocess"
-        
+
         # Execute subprocess in thread pool to avoid blocking
         def run_subprocess():
             try:
@@ -162,7 +162,7 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
 
         # Run subprocess in executor
         result = await asyncio.get_event_loop().run_in_executor(None, run_subprocess)
-        
+
         if hasattr(result, 'returncode'):
             # Successful subprocess execution
             if result.returncode == 0:
@@ -171,7 +171,7 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
                 pipeline_executions[execution_id]["predictions_generated"] = num_predictions
                 pipeline_executions[execution_id]["stdout"] = result.stdout[-2000:] if result.stdout else ""  # Last 2000 chars
                 pipeline_executions[execution_id]["subprocess_success"] = True
-                
+
                 logger.info(f"Pipeline execution {execution_id} completed successfully via subprocess")
                 logger.info(f"Subprocess output (last 500 chars): {result.stdout[-500:] if result.stdout else 'No output'}")
             else:
@@ -179,7 +179,7 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
                 pipeline_executions[execution_id]["error"] = f"Subprocess failed with exit code {result.returncode}"
                 pipeline_executions[execution_id]["stderr"] = result.stderr[-1000:] if result.stderr else ""
                 pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-                
+
                 logger.error(f"Pipeline execution {execution_id} failed with exit code {result.returncode}")
                 logger.error(f"Subprocess stderr: {result.stderr[-500:] if result.stderr else 'No error output'}")
         else:
@@ -187,11 +187,11 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
             error_msg = result.get("error", "Unknown subprocess error")
             if result.get("timeout"):
                 error_msg = "Pipeline execution timed out"
-                
+
             pipeline_executions[execution_id]["status"] = "failed"
             pipeline_executions[execution_id]["error"] = error_msg
             pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-            
+
             logger.error(f"Pipeline execution {execution_id} failed: {error_msg}")
 
     except Exception as e:
