@@ -19,6 +19,10 @@ class PipelineOrchestrator:
         """Initialize pipeline orchestrator with all required components"""
         logger.info("Initializing PipelineOrchestrator...")
         
+        # Initialize execution state tracking
+        self._is_running = False
+        self._current_execution_id = None
+        
         try:
             # Initialize data loader
             self.data_loader = get_data_loader()
@@ -45,6 +49,24 @@ class PipelineOrchestrator:
             logger.error(f"Failed to initialize PipelineOrchestrator: {e}")
             raise
     
+    def is_running(self) -> bool:
+        """
+        Check if pipeline is currently running
+        
+        Returns:
+            bool: True if pipeline is currently executing, False otherwise
+        """
+        return self._is_running
+    
+    def get_current_execution_id(self) -> Optional[str]:
+        """
+        Get current execution ID if pipeline is running
+        
+        Returns:
+            str: Current execution ID or None if not running
+        """
+        return self._current_execution_id if self._is_running else None
+
     async def run_full_pipeline_async(self, execution_id: str, num_predictions: int = 100) -> Dict[str, Any]:
         """
         Run the complete ML pipeline asynchronously
@@ -55,6 +77,10 @@ class PipelineOrchestrator:
         Returns:
             Dict containing pipeline execution results
         """
+        # Set running state
+        self._is_running = True
+        self._current_execution_id = execution_id
+        
         start_time = datetime.now()
         logger.info(f"Starting full pipeline execution {execution_id} with {num_predictions} predictions")
         
@@ -120,6 +146,10 @@ class PipelineOrchestrator:
                 "start_time": start_time.isoformat(),
                 "end_time": datetime.now().isoformat()
             }
+        finally:
+            # Reset execution state
+            self._is_running = False
+            self._current_execution_id = None
     
     async def _update_data(self) -> Dict[str, Any]:
         """Update database from source"""
