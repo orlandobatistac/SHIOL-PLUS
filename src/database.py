@@ -7,10 +7,6 @@ import json
 import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import psycopg2.pool
-
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle numpy types."""
     def default(self, obj):
@@ -84,130 +80,12 @@ def get_db_connection() -> sqlite3.Connection:
         raise
 
 # ========================================================================
-# POSTGRESQL CONNECTION MANAGEMENT
-# ========================================================================
-
-def get_postgresql_connection():
-    """
-    Get PostgreSQL connection using Replit environment variables.
-    
-    Returns:
-        psycopg2.Connection: PostgreSQL connection object
-    """
-    try:
-        database_url = os.environ.get('DATABASE_URL')
-        if not database_url:
-            logger.warning("PostgreSQL DATABASE_URL not found, falling back to SQLite for pipeline executions")
-            return None
-            
-        # Use connection pooling for better performance
-        pooled_url = database_url.replace('.us-east-2', '-pooler.us-east-2') if '.us-east-2' in database_url else database_url
-        
-        conn = psycopg2.connect(
-            pooled_url,
-            cursor_factory=RealDictCursor
-        )
-        logger.debug("PostgreSQL connection established successfully")
-        return conn
-        
-    except Exception as e:
-        logger.error(f"Error connecting to PostgreSQL: {e}")
-        return None
-
-def initialize_postgresql_pipeline_table():
-    """
-    Initialize PostgreSQL table for pipeline executions.
-    This table will store all pipeline execution history.
-    """
-    try:
-        conn = get_postgresql_connection()
-        if not conn:
-            logger.warning("PostgreSQL not available, pipeline executions will use SQLite fallback")
-            return False
-            
-        with conn:
-            cursor = conn.cursor()
-            
-            # Create pipeline_executions table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS pipeline_executions (
-                    id SERIAL PRIMARY KEY,
-                    execution_id VARCHAR(50) UNIQUE NOT NULL,
-                    status VARCHAR(20) NOT NULL DEFAULT 'starting',
-                    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-                    end_time TIMESTAMP WITH TIME ZONE,
-                    trigger_type VARCHAR(50) NOT NULL,
-                    trigger_source VARCHAR(50) NOT NULL,
-                    current_step VARCHAR(100),
-                    steps_completed INTEGER DEFAULT 0,
-                    total_steps INTEGER DEFAULT 7,
-                    num_predictions INTEGER DEFAULT 100,
-                    error_message TEXT,
-                    execution_details JSONB,
-                    subprocess_success BOOLEAN DEFAULT FALSE,
-                    stdout_output TEXT,
-                    stderr_output TEXT,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # Create indexes for performance
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_pipeline_executions_status 
-                ON pipeline_executions (status)
-            """)
-            
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_pipeline_executions_start_time 
-                ON pipeline_executions (start_time DESC)
-            """)
-            
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_pipeline_executions_trigger_type 
-                ON pipeline_executions (trigger_type)
-            """)
-            
-            # Create trigger for updated_at
-            cursor.execute("""
-                CREATE OR REPLACE FUNCTION update_updated_at_column()
-                RETURNS TRIGGER AS $$
-                BEGIN
-                    NEW.updated_at = CURRENT_TIMESTAMP;
-                    RETURN NEW;
-                END;
-                $$ language 'plpgsql'
-            """)
-            
-            cursor.execute("""
-                DROP TRIGGER IF EXISTS update_pipeline_executions_updated_at 
-                ON pipeline_executions
-            """)
-            
-            cursor.execute("""
-                CREATE TRIGGER update_pipeline_executions_updated_at 
-                BEFORE UPDATE ON pipeline_executions 
-                FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
-            """)
-            
-            conn.commit()
-            logger.info("PostgreSQL pipeline_executions table initialized successfully")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error initializing PostgreSQL pipeline table: {e}")
-        return False
-    finally:
-        if conn:
-            conn.close()
-
-# ========================================================================
-# PIPELINE EXECUTION FUNCTIONS - POSTGRESQL
+# PIPELINE EXECUTION FUNCTIONS - SQLITE
 # ========================================================================
 
 def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
     """
-    Save pipeline execution to PostgreSQL database.
+    Save pipeline execution to SQLite database.
     
     Args:
         execution_data: Dictionary with execution details
@@ -216,59 +94,41 @@ def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
         execution_id if successful, None if error
     """
     try:
-        conn = get_postgresql_connection()
-        if not conn:
-            logger.warning("PostgreSQL not available, using SQLite fallback")
-            return _save_pipeline_execution_sqlite_fallback(execution_data)
-            
-        with conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             
             execution_id = execution_data.get('execution_id')
             
             cursor.execute("""
-                INSERT INTO pipeline_executions (
+                INSERT OR REPLACE INTO pipeline_executions (
                     execution_id, status, start_time, trigger_type, trigger_source,
                     current_step, steps_completed, total_steps, num_predictions,
                     execution_details
-                ) VALUES (
-                    %(execution_id)s, %(status)s, %(start_time)s, %(trigger_type)s, 
-                    %(trigger_source)s, %(current_step)s, %(steps_completed)s, 
-                    %(total_steps)s, %(num_predictions)s, %(execution_details)s
-                )
-                ON CONFLICT (execution_id) DO UPDATE SET
-                    status = EXCLUDED.status,
-                    current_step = EXCLUDED.current_step,
-                    steps_completed = EXCLUDED.steps_completed,
-                    execution_details = EXCLUDED.execution_details,
-                    updated_at = CURRENT_TIMESTAMP
-            """, {
-                'execution_id': execution_id,
-                'status': execution_data.get('status', 'starting'),
-                'start_time': execution_data.get('start_time'),
-                'trigger_type': execution_data.get('trigger_type', 'unknown'),
-                'trigger_source': execution_data.get('execution_source', 'unknown'), 
-                'current_step': execution_data.get('current_step'),
-                'steps_completed': execution_data.get('steps_completed', 0),
-                'total_steps': execution_data.get('total_steps', 7),
-                'num_predictions': execution_data.get('num_predictions', 100),
-                'execution_details': json.dumps(execution_data.get('trigger_details', {}))
-            })
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                execution_id,
+                execution_data.get('status', 'starting'),
+                execution_data.get('start_time'),
+                execution_data.get('trigger_type', 'unknown'),
+                execution_data.get('execution_source', 'unknown'), 
+                execution_data.get('current_step'),
+                execution_data.get('steps_completed', 0),
+                execution_data.get('total_steps', 7),
+                execution_data.get('num_predictions', 100),
+                json.dumps(execution_data.get('trigger_details', {}), cls=NumpyEncoder)
+            ))
             
             conn.commit()
-            logger.info(f"Pipeline execution {execution_id} saved to PostgreSQL")
+            logger.info(f"Pipeline execution {execution_id} saved to SQLite")
             return execution_id
             
     except Exception as e:
-        logger.error(f"Error saving pipeline execution to PostgreSQL: {e}")
+        logger.error(f"Error saving pipeline execution to SQLite: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) -> bool:
     """
-    Update pipeline execution in PostgreSQL database.
+    Update pipeline execution in SQLite database.
     
     Args:
         execution_id: Execution ID to update
@@ -278,80 +138,78 @@ def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) ->
         True if successful, False if error
     """
     try:
-        conn = get_postgresql_connection()
-        if not conn:
-            logger.warning("PostgreSQL not available, using SQLite fallback")
-            return _update_pipeline_execution_sqlite_fallback(execution_id, update_data)
-            
-        with conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             
             # Build dynamic update query
             update_fields = []
-            params = {'execution_id': execution_id}
+            params = []
             
             if 'status' in update_data:
-                update_fields.append("status = %(status)s")
-                params['status'] = update_data['status']
+                update_fields.append("status = ?")
+                params.append(update_data['status'])
                 
             if 'end_time' in update_data:
-                update_fields.append("end_time = %(end_time)s")
-                params['end_time'] = update_data['end_time']
+                update_fields.append("end_time = ?")
+                params.append(update_data['end_time'])
                 
             if 'current_step' in update_data:
-                update_fields.append("current_step = %(current_step)s")
-                params['current_step'] = update_data['current_step']
+                update_fields.append("current_step = ?")
+                params.append(update_data['current_step'])
                 
             if 'steps_completed' in update_data:
-                update_fields.append("steps_completed = %(steps_completed)s")
-                params['steps_completed'] = update_data['steps_completed']
+                update_fields.append("steps_completed = ?")
+                params.append(update_data['steps_completed'])
                 
             if 'error_message' in update_data:
-                update_fields.append("error_message = %(error_message)s")
-                params['error_message'] = update_data['error_message']
+                update_fields.append("error_message = ?")
+                params.append(update_data['error_message'])
                 
             if 'subprocess_success' in update_data:
-                update_fields.append("subprocess_success = %(subprocess_success)s")
-                params['subprocess_success'] = update_data['subprocess_success']
+                update_fields.append("subprocess_success = ?")
+                params.append(update_data['subprocess_success'])
                 
             if 'stdout_output' in update_data:
-                update_fields.append("stdout_output = %(stdout_output)s")
-                params['stdout_output'] = update_data['stdout_output']
+                update_fields.append("stdout_output = ?")
+                params.append(update_data['stdout_output'])
                 
             if 'stderr_output' in update_data:
-                update_fields.append("stderr_output = %(stderr_output)s")
-                params['stderr_output'] = update_data['stderr_output']
+                update_fields.append("stderr_output = ?")
+                params.append(update_data['stderr_output'])
             
             if not update_fields:
                 logger.warning(f"No valid fields to update for execution {execution_id}")
                 return False
+            
+            # Add updated_at field
+            update_fields.append("updated_at = CURRENT_TIMESTAMP")
+            
+            # Add execution_id parameter
+            params.append(execution_id)
                 
             query = f"""
                 UPDATE pipeline_executions 
                 SET {', '.join(update_fields)}
-                WHERE execution_id = %(execution_id)s
+                WHERE execution_id = ?
             """
             
             cursor.execute(query, params)
             
             if cursor.rowcount > 0:
                 conn.commit()
-                logger.info(f"Pipeline execution {execution_id} updated in PostgreSQL")
+                logger.info(f"Pipeline execution {execution_id} updated in SQLite")
                 return True
             else:
                 logger.warning(f"Pipeline execution {execution_id} not found for update")
                 return False
                 
     except Exception as e:
-        logger.error(f"Error updating pipeline execution in PostgreSQL: {e}")
+        logger.error(f"Error updating pipeline execution in SQLite: {e}")
         return False
-    finally:
-        if conn:
-            conn.close()
 
 def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
     """
-    Get pipeline execution history from PostgreSQL database.
+    Get pipeline execution history from SQLite database.
     
     Args:
         limit: Maximum number of executions to return
@@ -360,12 +218,7 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
         List of execution dictionaries
     """
     try:
-        conn = get_postgresql_connection()
-        if not conn:
-            logger.warning("PostgreSQL not available, using SQLite fallback")
-            return _get_pipeline_execution_history_sqlite_fallback(limit)
-            
-        with conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -376,41 +229,38 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
                     error_message, subprocess_success, created_at
                 FROM pipeline_executions
                 ORDER BY start_time DESC
-                LIMIT %s
+                LIMIT ?
             """, (limit,))
             
             executions = []
             for row in cursor.fetchall():
                 execution = {
-                    'execution_id': row['execution_id'],
-                    'status': row['status'],
-                    'start_time': row['start_time'].isoformat() if row['start_time'] else None,
-                    'end_time': row['end_time'].isoformat() if row['end_time'] else None,
-                    'trigger_type': row['trigger_type'],
-                    'trigger_source': row['trigger_source'],
-                    'current_step': row['current_step'],
-                    'steps_completed': row['steps_completed'],
-                    'total_steps': row['total_steps'],
-                    'num_predictions': row['num_predictions'],
-                    'error': row['error_message'],
-                    'subprocess_success': row['subprocess_success'],
-                    'created_at': row['created_at'].isoformat() if row['created_at'] else None
+                    'execution_id': row[0],
+                    'status': row[1],
+                    'start_time': row[2],
+                    'end_time': row[3],
+                    'trigger_type': row[4],
+                    'trigger_source': row[5],
+                    'current_step': row[6],
+                    'steps_completed': row[7],
+                    'total_steps': row[8],
+                    'num_predictions': row[9],
+                    'error': row[10],
+                    'subprocess_success': row[11] == 1 if row[11] is not None else False,
+                    'created_at': row[12]
                 }
                 executions.append(execution)
             
-            logger.info(f"Retrieved {len(executions)} pipeline executions from PostgreSQL")
+            logger.info(f"Retrieved {len(executions)} pipeline executions from SQLite")
             return executions
             
     except Exception as e:
-        logger.error(f"Error getting pipeline execution history from PostgreSQL: {e}")
+        logger.error(f"Error getting pipeline execution history from SQLite: {e}")
         return []
-    finally:
-        if conn:
-            conn.close()
 
 def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
     """
-    Get specific pipeline execution by ID from PostgreSQL.
+    Get specific pipeline execution by ID from SQLite.
     
     Args:
         execution_id: Execution ID to retrieve
@@ -419,12 +269,7 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
         Execution dictionary or None if not found
     """
     try:
-        conn = get_postgresql_connection()
-        if not conn:
-            logger.warning("PostgreSQL not available, using SQLite fallback")
-            return _get_pipeline_execution_by_id_sqlite_fallback(execution_id)
-            
-        with conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -435,188 +280,48 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
                     error_message, execution_details, subprocess_success,
                     stdout_output, stderr_output, created_at, updated_at
                 FROM pipeline_executions
-                WHERE execution_id = %s
+                WHERE execution_id = ?
             """, (execution_id,))
             
             row = cursor.fetchone()
             if row:
                 execution = {
-                    'execution_id': row['execution_id'],
-                    'status': row['status'],
-                    'start_time': row['start_time'].isoformat() if row['start_time'] else None,
-                    'end_time': row['end_time'].isoformat() if row['end_time'] else None,
-                    'trigger_type': row['trigger_type'],
-                    'trigger_source': row['trigger_source'],
-                    'current_step': row['current_step'],
-                    'steps_completed': row['steps_completed'],
-                    'total_steps': row['total_steps'],
-                    'num_predictions': row['num_predictions'],
-                    'error': row['error_message'],
-                    'execution_details': json.loads(row['execution_details']) if row['execution_details'] else {},
-                    'subprocess_success': row['subprocess_success'],
-                    'stdout_output': row['stdout_output'],
-                    'stderr_output': row['stderr_output'],
-                    'created_at': row['created_at'].isoformat() if row['created_at'] else None,
-                    'updated_at': row['updated_at'].isoformat() if row['updated_at'] else None
+                    'execution_id': row[0],
+                    'status': row[1],
+                    'start_time': row[2],
+                    'end_time': row[3],
+                    'trigger_type': row[4],
+                    'trigger_source': row[5],
+                    'current_step': row[6],
+                    'steps_completed': row[7],
+                    'total_steps': row[8],
+                    'num_predictions': row[9],
+                    'error': row[10],
+                    'execution_details': json.loads(row[11]) if row[11] else {},
+                    'subprocess_success': row[12] == 1 if row[12] is not None else False,
+                    'stdout_output': row[13],
+                    'stderr_output': row[14],
+                    'created_at': row[15],
+                    'updated_at': row[16]
                 }
                 
-                logger.info(f"Retrieved pipeline execution {execution_id} from PostgreSQL")
+                logger.info(f"Retrieved pipeline execution {execution_id} from SQLite")
                 return execution
             else:
-                logger.warning(f"Pipeline execution {execution_id} not found in PostgreSQL")
+                logger.warning(f"Pipeline execution {execution_id} not found in SQLite")
                 return None
                 
     except Exception as e:
-        logger.error(f"Error getting pipeline execution by ID from PostgreSQL: {e}")
-        return None
-    finally:
-        if conn:
-            conn.close()
-
-# ========================================================================
-# SQLITE FALLBACK FUNCTIONS
-# ========================================================================
-
-def _save_pipeline_execution_sqlite_fallback(execution_data: Dict[str, Any]) -> Optional[str]:
-    """Fallback to save pipeline execution in SQLite"""
-    try:
-        # Create a simple JSON file storage as fallback
-        history_file = "data/pipeline_history.json"
-        
-        # Load existing history
-        history = []
-        if os.path.exists(history_file):
-            try:
-                with open(history_file, 'r') as f:
-                    history = json.load(f)
-            except:
-                history = []
-        
-        # Add new execution
-        execution_record = {
-            'execution_id': execution_data.get('execution_id'),
-            'status': execution_data.get('status', 'starting'),
-            'start_time': execution_data.get('start_time'),
-            'trigger_type': execution_data.get('trigger_type', 'unknown'),
-            'trigger_source': execution_data.get('execution_source', 'unknown'),
-            'current_step': execution_data.get('current_step'),
-            'steps_completed': execution_data.get('steps_completed', 0),
-            'total_steps': execution_data.get('total_steps', 7),
-            'num_predictions': execution_data.get('num_predictions', 100),
-            'created_at': datetime.now().isoformat()
-        }
-        
-        # Remove old execution with same ID if exists
-        history = [h for h in history if h.get('execution_id') != execution_record['execution_id']]
-        
-        # Add new execution
-        history.append(execution_record)
-        
-        # Keep only last 100 executions
-        history = history[-100:]
-        
-        # Save to file
-        os.makedirs(os.path.dirname(history_file), exist_ok=True)
-        with open(history_file, 'w') as f:
-            json.dump(history, f, indent=2)
-            
-        logger.info(f"Pipeline execution {execution_record['execution_id']} saved to SQLite fallback")
-        return execution_record['execution_id']
-        
-    except Exception as e:
-        logger.error(f"Error in SQLite fallback save: {e}")
-        return None
-
-def _update_pipeline_execution_sqlite_fallback(execution_id: str, update_data: Dict[str, Any]) -> bool:
-    """Fallback to update pipeline execution in SQLite"""
-    try:
-        history_file = "data/pipeline_history.json"
-        
-        # Load existing history
-        history = []
-        if os.path.exists(history_file):
-            try:
-                with open(history_file, 'r') as f:
-                    history = json.load(f)
-            except:
-                history = []
-        
-        # Find and update execution
-        updated = False
-        for execution in history:
-            if execution.get('execution_id') == execution_id:
-                execution.update(update_data)
-                execution['updated_at'] = datetime.now().isoformat()
-                updated = True
-                break
-        
-        if updated:
-            # Save updated history
-            with open(history_file, 'w') as f:
-                json.dump(history, f, indent=2)
-            logger.info(f"Pipeline execution {execution_id} updated in SQLite fallback")
-            return True
-        else:
-            logger.warning(f"Pipeline execution {execution_id} not found in SQLite fallback")
-            return False
-            
-    except Exception as e:
-        logger.error(f"Error in SQLite fallback update: {e}")
-        return False
-
-def _get_pipeline_execution_history_sqlite_fallback(limit: int = 20) -> List[Dict[str, Any]]:
-    """Fallback to get pipeline execution history from SQLite"""
-    try:
-        history_file = "data/pipeline_history.json"
-        
-        if os.path.exists(history_file):
-            with open(history_file, 'r') as f:
-                history = json.load(f)
-                
-            # Sort by start_time (most recent first) and limit
-            history.sort(key=lambda x: x.get('start_time', ''), reverse=True)
-            return history[:limit]
-        else:
-            return []
-            
-    except Exception as e:
-        logger.error(f"Error in SQLite fallback get history: {e}")
-        return []
-
-def _get_pipeline_execution_by_id_sqlite_fallback(execution_id: str) -> Optional[Dict[str, Any]]:
-    """Fallback to get pipeline execution by ID from SQLite"""
-    try:
-        history_file = "data/pipeline_history.json"
-        
-        if os.path.exists(history_file):
-            with open(history_file, 'r') as f:
-                history = json.load(f)
-                
-            # Find execution by ID
-            for execution in history:
-                if execution.get('execution_id') == execution_id:
-                    return execution
-        
-        return None
-        
-    except Exception as e:
-        logger.error(f"Error in SQLite fallback get by ID: {e}")
+        logger.error(f"Error getting pipeline execution by ID from SQLite: {e}")
         return None
 
 def initialize_database():
     """
     Initializes the database by creating all required tables if they don't exist.
     Includes Phase 4 adaptive feedback system tables and hybrid configuration system.
-    Also initializes PostgreSQL pipeline executions table.
+    Also initializes SQLite pipeline executions table.
     """
     try:
-        # Initialize PostgreSQL pipeline executions table
-        postgresql_success = initialize_postgresql_pipeline_table()
-        if postgresql_success:
-            logger.info("PostgreSQL pipeline executions table initialized successfully")
-        else:
-            logger.warning("PostgreSQL pipeline executions table initialization failed, will use SQLite fallback")
-        
         # Continue with existing SQLite initialization
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -790,6 +495,30 @@ def initialize_database():
                 )
             """)
 
+            # Pipeline Executions Table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pipeline_executions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    execution_id TEXT UNIQUE NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'starting',
+                    start_time TEXT NOT NULL,
+                    end_time TEXT,
+                    trigger_type TEXT NOT NULL,
+                    trigger_source TEXT NOT NULL,
+                    current_step TEXT,
+                    steps_completed INTEGER DEFAULT 0,
+                    total_steps INTEGER DEFAULT 7,
+                    num_predictions INTEGER DEFAULT 100,
+                    error_message TEXT,
+                    execution_details TEXT,
+                    subprocess_success BOOLEAN DEFAULT FALSE,
+                    stdout_output TEXT,
+                    stderr_output TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
             # Create performance indexes for frequently queried columns
             try:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_log_created_at ON predictions_log (created_at DESC)")
@@ -797,6 +526,13 @@ def initialize_database():
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_tracking_prediction_id ON performance_tracking (prediction_id)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_tracking_draw_date ON performance_tracking (draw_date)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_powerball_draws_date ON powerball_draws (draw_date)")
+                
+                # Pipeline executions indexes
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_status ON pipeline_executions (status)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_start_time ON pipeline_executions (start_time DESC)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_trigger_type ON pipeline_executions (trigger_type)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_execution_id ON pipeline_executions (execution_id)")
+                
                 logger.info("Database performance indexes created successfully")
             except sqlite3.Error as idx_error:
                 logger.warning(f"Error creating indexes (may already exist): {idx_error}")

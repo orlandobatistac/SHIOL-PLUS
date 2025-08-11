@@ -153,11 +153,11 @@ async def _get_detailed_scheduler_jobs() -> List[Dict[str, Any]]:
 
 
 async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
-    """Get recent pipeline execution history from PostgreSQL database"""
+    """Get recent pipeline execution history from SQLite database"""
     try:
         from src.database import get_pipeline_execution_history
         
-        # Get executions from PostgreSQL (with SQLite fallback built-in)
+        # Get executions from SQLite database
         executions = get_pipeline_execution_history(limit=limit)
         
         # Format for API response
@@ -413,11 +413,11 @@ async def trigger_pipeline_execution(
 
 @pipeline_router.get("/history")
 async def get_pipeline_history():
-    """Get recent pipeline execution history from PostgreSQL database"""
+    """Get recent pipeline execution history from SQLite database"""
     try:
         from src.database import get_pipeline_execution_history
 
-        # Get executions from PostgreSQL (with SQLite fallback built-in)
+        # Get executions from SQLite database
         executions = get_pipeline_execution_history(limit=50)  # Get more for detailed history
         
         # Format for API response
@@ -443,7 +443,7 @@ async def get_pipeline_history():
         return {
             "executions": formatted_executions[:30],  # Return last 30 executions
             "total_executions": len(formatted_executions),
-            "database_source": "postgresql_with_sqlite_fallback",
+            "database_source": "sqlite",
             "timestamp": datetime.now().isoformat()
         }
 

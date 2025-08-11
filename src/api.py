@@ -124,10 +124,21 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
     import os
 
     try:
-        # Update execution status
-        if execution_id in pipeline_executions:
-            pipeline_executions[execution_id]["status"] = "running"
-            pipeline_executions[execution_id]["current_step"] = "subprocess_execution"
+        # Save execution to database
+        from src.database import save_pipeline_execution, update_pipeline_execution
+
+        # Save initial execution record
+        save_pipeline_execution(pipeline_executions[execution_id])
+
+        # Update execution status to running
+        pipeline_executions[execution_id]["status"] = "running"
+        pipeline_executions[execution_id]["current_step"] = "subprocess_execution"
+
+        # Update database
+        update_pipeline_execution(execution_id, {
+            "status": "running",
+            "current_step": "subprocess_execution"
+        })
 
         logger.info(f"Starting robust pipeline execution {execution_id} with subprocess: python main.py")
 
@@ -172,6 +183,14 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
                 pipeline_executions[execution_id]["stdout"] = result.stdout[-2000:] if result.stdout else ""  # Last 2000 chars
                 pipeline_executions[execution_id]["subprocess_success"] = True
 
+                update_pipeline_execution(execution_id, {
+                    "status": "completed",
+                    "end_time": datetime.now().isoformat(),
+                    "predictions_generated": num_predictions,
+                    "stdout": result.stdout[-2000:] if result.stdout else "",
+                    "subprocess_success": True
+                })
+
                 logger.info(f"Pipeline execution {execution_id} completed successfully via subprocess")
                 logger.info(f"Subprocess output (last 500 chars): {result.stdout[-500:] if result.stdout else 'No output'}")
             else:
@@ -179,6 +198,13 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
                 pipeline_executions[execution_id]["error"] = f"Subprocess failed with exit code {result.returncode}"
                 pipeline_executions[execution_id]["stderr"] = result.stderr[-1000:] if result.stderr else ""
                 pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
+
+                update_pipeline_execution(execution_id, {
+                    "status": "failed",
+                    "error": f"Subprocess failed with exit code {result.returncode}",
+                    "stderr": result.stderr[-1000:] if result.stderr else "",
+                    "end_time": datetime.now().isoformat()
+                })
 
                 logger.error(f"Pipeline execution {execution_id} failed with exit code {result.returncode}")
                 logger.error(f"Subprocess stderr: {result.stderr[-500:] if result.stderr else 'No error output'}")
@@ -192,6 +218,12 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
             pipeline_executions[execution_id]["error"] = error_msg
             pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
 
+            update_pipeline_execution(execution_id, {
+                "status": "failed",
+                "error": error_msg,
+                "end_time": datetime.now().isoformat()
+            })
+
             logger.error(f"Pipeline execution {execution_id} failed: {error_msg}")
 
     except Exception as e:
@@ -200,7 +232,11 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
             pipeline_executions[execution_id]["status"] = "failed"
             pipeline_executions[execution_id]["error"] = f"Subprocess execution error: {str(e)}"
             pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-
+            update_pipeline_execution(execution_id, {
+                "status": "failed",
+                "error": f"Subprocess execution error: {str(e)}",
+                "end_time": datetime.now().isoformat()
+            })
 
 
 @asynccontextmanager
