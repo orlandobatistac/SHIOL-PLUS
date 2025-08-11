@@ -128,6 +128,29 @@ async def _get_scheduler_status() -> Dict[str, Any]:
         logger.error(f"Error getting scheduler status: {e}")
         return {"active": False, "job_count": 0, "next_run": None}
 
+async def _get_detailed_scheduler_jobs() -> List[Dict[str, Any]]:
+    """Get detailed information about all scheduled jobs"""
+    try:
+        from src.api import scheduler
+        jobs_info = []
+        if scheduler and scheduler.running:
+            for job in scheduler.get_jobs():
+                jobs_info.append({
+                    "id": job.id,
+                    "name": job.name,
+                    "trigger": str(job.trigger),
+                    "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+                    "previous_run_time": job.previous_run_time.isoformat() if job.previous_run_time else None,
+                    "func": job.func.__name__,
+                    "args": job.args,
+                    "kwargs": job.kwargs
+                })
+        return jobs_info
+    except Exception as e:
+        logger.error(f"Error getting detailed scheduler jobs: {e}")
+        return []
+
+
 async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent pipeline execution history"""
     try:
@@ -172,6 +195,26 @@ def _determine_health_status(cpu: float, memory: float, disk: float) -> str:
         return "degraded"
     else:
         return "healthy"
+
+@pipeline_router.get("/scheduler/status")
+async def get_scheduler_status():
+    """Get detailed scheduler status"""
+    try:
+        status = await _get_scheduler_status()
+        return status
+    except Exception as e:
+        logger.error(f"Error getting scheduler status: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving scheduler status")
+
+@pipeline_router.get("/scheduler/jobs")
+async def get_scheduler_jobs():
+    """Get detailed information about all scheduled jobs"""
+    try:
+        jobs_info = await _get_detailed_scheduler_jobs()
+        return {"jobs": jobs_info, "total_count": len(jobs_info)}
+    except Exception as e:
+        logger.error(f"Error getting scheduler jobs: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving scheduler jobs")
 
 @pipeline_router.get("/history")
 async def get_pipeline_history():

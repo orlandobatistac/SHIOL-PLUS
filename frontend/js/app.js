@@ -134,18 +134,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Cache-Control': 'no-cache'
                 }
             });
-            
+
             if (response.status === 401) {
                 showPipelineError('Authentication required. Please login.');
                 setTimeout(() => window.location.href = '/login', 2000);
                 return null;
             }
-            
+
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
-            
+
             const data = await response.json();
             updatePipelineStatus(data);
             return data;
@@ -360,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sanitizedNum = parseInt(num, 10);
                 const ballSpan = document.createElement('span');
                 ballSpan.className = 'number-ball';
-                
+
                 if (isNaN(sanitizedNum) || sanitizedNum < 1 || sanitizedNum > 69) {
                     ballSpan.textContent = '?';
                 } else {
@@ -379,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create right side container (score)
             const rightContainer = document.createElement('div');
             rightContainer.className = 'text-xs text-gray-500 dark:text-gray-400';
-            
+
             const scoreText = document.createElement('span');
             if (lastRun.scores && lastRun.scores[index]) {
                 const score = Math.round(parseFloat(lastRun.scores[index]) * 100);
@@ -492,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create a simple modal to display logs safely
             const logsModal = document.createElement('div');
             logsModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-            
+
             const modalContent = document.createElement('div');
             modalContent.className = 'bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-96 overflow-hidden';
 
@@ -621,13 +621,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Accept': 'application/json'
                 }
             });
-            
+
             if (response.status === 401 || response.status === 403) {
                 console.log('Authentication failed, redirecting to login...');
                 window.location.href = '/login.html';
                 return false;
             }
-            
+
             if (response.ok) {
                 const data = await response.json();
                 if (data.valid && data.authenticated) {
@@ -635,15 +635,190 @@ document.addEventListener('DOMContentLoaded', () => {
                     return true;
                 }
             }
-            
+
             console.log('Authentication check failed, redirecting to login...');
             window.location.href = '/login.html';
             return false;
-            
+
         } catch (error) {
             console.error('Auth check failed:', error);
             window.location.href = '/login.html';
             return false;
+        }
+    }
+
+    // --- Helper functions for scheduler ---
+    function getTimeUntilNext(targetDate) {
+        const now = new Date();
+        const diff = targetDate - now;
+
+        if (diff <= 0) {
+            return 'Due now';
+        }
+
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        if (hours > 0) {
+            return `in ${hours}h ${minutes}m`;
+        } else if (minutes > 0) {
+            return `in ${minutes}m ${seconds}s`;
+        } else {
+            return `in ${seconds}s`;
+        }
+    }
+
+    // Load pipeline status
+    async function loadPipelineStatus() {
+        try {
+            showSpinner('pipeline-status');
+            const response = await fetch(`${API_BASE_URL}/pipeline/status`);
+            const data = await response.json();
+
+            updateStatusDisplay(data);
+            updateSchedulerDisplay(data.scheduler);
+            updateExecutionHistory(data.recent_executions || []);
+
+            // Load detailed scheduler jobs
+            await loadDetailedSchedulerJobs();
+
+        } catch (error) {
+            console.error('Error loading pipeline status:', error);
+            showError('Failed to load pipeline status');
+        } finally {
+            hideSpinner('pipeline-status');
+        }
+    }
+
+    // Load detailed scheduler jobs information
+    async function loadDetailedSchedulerJobs() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/pipeline/scheduler/jobs`);
+            const data = await response.json();
+
+            if (data.jobs && data.jobs.length > 0) {
+                displayDetailedSchedulerJobs(data.jobs);
+            }
+        } catch (error) {
+            console.error('Error loading detailed scheduler jobs:', error);
+        }
+    }
+
+    // Update scheduler information
+    function updateSchedulerDisplay(scheduler) {
+        const statusEl = document.getElementById('scheduler-status');
+        const jobsEl = document.getElementById('scheduler-jobs');
+
+        if (scheduler && scheduler.active) {
+            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Active';
+            statusEl.className = 'text-lg font-bold text-green-600';
+
+            const jobText = scheduler.job_count === 1 ? '1 job scheduled' : `${scheduler.job_count} jobs scheduled`;
+            jobsEl.textContent = jobText;
+
+            if (scheduler.next_run) {
+                const nextRun = new Date(scheduler.next_run);
+                const timeUntil = getTimeUntilNext(nextRun);
+                jobsEl.textContent += ` • Next: ${timeUntil}`;
+            }
+        } else {
+            statusEl.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Inactive';
+            statusEl.className = 'text-lg font-bold text-red-600';
+            jobsEl.textContent = 'No jobs scheduled';
+        }
+    }
+
+    // Display detailed scheduler jobs information
+    function displayDetailedSchedulerJobs(jobs) {
+        console.log('Detailed scheduler jobs:', jobs);
+
+        // Find the scheduler section and add detailed info
+        const schedulerSection = document.querySelector('.bg-white.dark\\:bg-gray-800.rounded-xl.shadow-lg.border.border-gray-200.dark\\:border-gray-700');
+
+        if (schedulerSection) {
+            // Remove existing detailed jobs section
+            const existingDetails = schedulerSection.querySelector('#scheduler-jobs-details');
+            if (existingDetails) {
+                existingDetails.remove();
+            }
+
+            // Create new detailed jobs section
+            const detailsDiv = document.createElement('div');
+            detailsDiv.id = 'scheduler-jobs-details';
+            detailsDiv.className = 'mt-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700';
+
+            const title = document.createElement('h4');
+            title.className = 'text-md font-semibold text-gray-900 dark:text-white mb-4 flex items-center';
+            title.innerHTML = '<i class="fas fa-list mr-2 text-blue-600"></i>Scheduled Jobs Details';
+            detailsDiv.appendChild(title);
+
+            // Create jobs list
+            const jobsList = document.createElement('div');
+            jobsList.className = 'space-y-3';
+
+            jobs.forEach((job, index) => {
+                const jobDiv = document.createElement('div');
+                jobDiv.className = 'bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600';
+
+                const nextRunDate = job.next_run_time ? new Date(job.next_run_time) : null;
+                const timeUntil = nextRunDate ? getTimeUntilNext(nextRunDate) : 'Not scheduled';
+
+                // Determine job description based on ID
+                let jobDescription = '';
+                let jobIcon = 'fas fa-cog';
+                let jobColor = 'text-blue-600';
+
+                if (job.id === 'post_drawing_pipeline') {
+                    jobDescription = 'Full Pipeline Execution (30 min after Powerball drawing)';
+                    jobIcon = 'fas fa-rocket';
+                    jobColor = 'text-green-600';
+                } else if (job.id === 'maintenance_data_update') {
+                    jobDescription = 'Maintenance Data Update (non-drawing days)';
+                    jobIcon = 'fas fa-database';
+                    jobColor = 'text-orange-600';
+                }
+
+                jobDiv.innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-start space-x-3">
+                            <i class="${jobIcon} ${jobColor} mt-1"></i>
+                            <div>
+                                <h5 class="font-semibold text-gray-900 dark:text-white">${job.name}</h5>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">${jobDescription}</p>
+                                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                    <span class="inline-block mr-4"><strong>ID:</strong> ${job.id}</span>
+                                    <span class="inline-block mr-4"><strong>Function:</strong> ${job.func_name}</span>
+                                </div>
+                                ${job.trigger.type === 'cron' ? `
+                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    <span class="inline-block mr-4"><strong>Schedule:</strong> ${job.trigger.day_of_week} at ${job.trigger.hour}:${job.trigger.minute}</span>
+                                    <span class="inline-block"><strong>Timezone:</strong> ${job.trigger.timezone}</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                ${job.next_run_time_display || 'Not scheduled'}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                ${timeUntil}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                jobsList.appendChild(jobDiv);
+            });
+
+            detailsDiv.appendChild(jobsList);
+
+            // Add to scheduler section
+            const schedulerContent = schedulerSection.querySelector('.p-6:last-child');
+            if (schedulerContent) {
+                schedulerContent.appendChild(detailsDiv);
+            }
         }
     }
 
@@ -1259,13 +1434,13 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.className = `fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-xl opacity-100 transition-opacity duration-300 z-50 ${typeClasses[type] || typeClasses.info}`;
         // Create content safely without innerHTML
         toast.textContent = ''; // Clear existing content
-        
+
         const icon = document.createElement('i');
         icon.className = 'fas fa-info mr-2';
-        
+
         const messageSpan = document.createElement('span');
         messageSpan.textContent = message; // Safe text content, prevents XSS
-        
+
         toast.appendChild(icon);
         toast.appendChild(messageSpan);
 
