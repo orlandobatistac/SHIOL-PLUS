@@ -126,17 +126,11 @@
                     <div>
                         <h2 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
                             <i class="fas fa-robot text-blue-600 mr-3"></i>
-                            Latest AI Predictions
+                            AI Predictions for Next Drawing <span id="next-drawing-date" class="text-lg font-normal text-gray-600 dark:text-gray-400 ml-2"></span>
                         </h2>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Top 100 predictions from the latest Smart AI Pipeline execution</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Complete set of 100 AI-generated predictions | Generated: <span id="generated-timestamp">Loading...</span></p>
                     </div>
                     <div class="flex items-center space-x-4">
-                        <div class="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                            <div class="flex items-center justify-center mb-1">
-                                <div class="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
-                                <div class="text-sm font-bold text-green-600">Operational</div>
-                            </div>
-                        </div>
                         <div class="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                             <div class="text-lg font-bold text-blue-600" id="total-predictions">0</div>
                             <div class="text-xs text-gray-600 dark:text-gray-400">Active Predictions</div>
@@ -158,32 +152,16 @@
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-900">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rank</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Numbers</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Powerball</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">AI Score</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Generated</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rank</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Numbers</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Powerball</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">AI Score</th>
                                 </tr>
                             </thead>
                             <tbody id="predictions-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 <!-- Predictions will be loaded here -->
                             </tbody>
                         </table>
-                    </div>
-
-                    <!-- Pagination -->
-                    <div class="flex items-center justify-between px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-                        <div class="text-sm text-gray-700 dark:text-gray-300">
-                            Showing <span id="showing-from">1</span> to <span id="showing-to">25</span> of <span id="total-count">100</span> predictions
-                        </div>
-                        <div class="flex space-x-2">
-                            <button id="prev-page" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors">
-                                <i class="fas fa-chevron-left mr-1"></i>Previous
-                            </button>
-                            <button id="next-page" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors">
-                                Next<i class="fas fa-chevron-right ml-1"></i>
-                            </button>
-                        </div>
                     </div>
                 </div>
 
@@ -363,6 +341,20 @@
                     
                     document.getElementById('next-drawing-info').textContent = data.exact_drawing_time;
                     
+                    // Format and display next drawing date
+                    if (data.datetime_iso) {
+                        const drawingDate = new Date(data.datetime_iso);
+                        const formattedDate = drawingDate.toLocaleString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+                        document.getElementById('next-drawing-date').textContent = `(${formattedDate})`;
+                    }
+                    
                     // Start countdown
                     if (data.countdown_seconds > 0) {
                         startCountdown(data.countdown_seconds);
@@ -427,75 +419,56 @@
                 setInterval(updateCountdown, 1000);
             }
 
-            // Render predictions with pagination
-            let currentPage = 1;
-            const itemsPerPage = 25;
-            let allPredictions = [];
-
+            // Render predictions without pagination
             function renderPredictions(predictions) {
-                allPredictions = predictions;
-                renderPage(currentPage);
-            }
-
-            function renderPage(page) {
-                const startIndex = (page - 1) * itemsPerPage;
-                const endIndex = Math.min(startIndex + itemsPerPage, allPredictions.length);
-                const pageData = allPredictions.slice(startIndex, endIndex);
-
                 const tbody = document.getElementById('predictions-tbody');
                 tbody.innerHTML = '';
 
-                pageData.forEach((pred, index) => {
-                    const row = document.createElement('tr');
-                    row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
-
-                    const actualRank = startIndex + index + 1;
-                    const generatedAt = pred.generated_at ? new Date(pred.generated_at).toLocaleString('en-US', {
+                // Update generated timestamp
+                if (predictions.length > 0 && predictions[0].generated_at) {
+                    const generatedAt = new Date(predictions[0].generated_at).toLocaleString('en-US', {
+                        weekday: 'short',
                         month: 'short',
                         day: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit'
-                    }) : 'N/A';
+                    });
+                    document.getElementById('generated-timestamp').textContent = generatedAt;
+                }
+
+                predictions.forEach((pred, index) => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
+
+                    const rank = index + 1;
 
                     row.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full ${actualRank <= 10 ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' : 'bg-gray-100 text-gray-800'} text-sm font-bold">
-                                ${actualRank}
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full ${rank <= 10 ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' : 'bg-gray-100 text-gray-800'} text-xs font-bold">
+                                ${rank}
                             </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-4 py-3 whitespace-nowrap">
                             <div class="flex space-x-1">
                                 ${(pred.numbers || []).map(num => 
-                                    `<span class="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-bold">${num}</span>`
+                                    `<span class="inline-flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded-full text-xs font-bold">${num}</span>`
                                 ).join('')}
                             </div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center justify-center w-8 h-8 bg-red-600 text-white rounded-full text-sm font-bold">
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center justify-center w-7 h-7 bg-red-600 text-white rounded-full text-xs font-bold">
                                 ${pred.powerball || pred.pb || 1}
                             </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-4 py-3 whitespace-nowrap">
                             <div class="text-sm font-medium text-gray-900 dark:text-white">
                                 ${((pred.total_score || 0) * 100).toFixed(1)}%
                             </div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            ${generatedAt}
                         </td>
                     `;
 
                     tbody.appendChild(row);
                 });
-
-                // Update pagination info
-                document.getElementById('showing-from').textContent = startIndex + 1;
-                document.getElementById('showing-to').textContent = endIndex;
-                document.getElementById('total-count').textContent = allPredictions.length;
-
-                // Update pagination buttons
-                document.getElementById('prev-page').disabled = page === 1;
-                document.getElementById('next-page').disabled = endIndex >= allPredictions.length;
             }
 
             // Render prediction history
@@ -559,20 +532,7 @@
                 });
             }
 
-            // Pagination event listeners
-            document.getElementById('prev-page').addEventListener('click', () => {
-                if (currentPage > 1) {
-                    currentPage--;
-                    renderPage(currentPage);
-                }
-            });
-
-            document.getElementById('next-page').addEventListener('click', () => {
-                if (currentPage * itemsPerPage < allPredictions.length) {
-                    currentPage++;
-                    renderPage(currentPage);
-                }
-            });
+            
 
             // Initialize
             await Promise.all([
