@@ -110,6 +110,9 @@
                     <i class="fas fa-clock mr-2"></i>
                     Next Powerball Drawing
                 </h2>
+                <div class="text-lg font-medium text-blue-700 dark:text-blue-300 mb-2" id="next-drawing-date">
+                    Loading date...
+                </div>
                 <div class="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2" id="countdown-display">
                     Loading...
                 </div>
@@ -155,7 +158,6 @@
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rank</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Numbers</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Powerball</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">AI Score</th>
                                 </tr>
                             </thead>
                             <tbody id="predictions-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -336,26 +338,42 @@
                     if (!response.ok) throw new Error('Failed to fetch drawing info');
                     
                     const data = await response.json();
+                    console.log('Next drawing data:', data); // Debug log
                     
-                    document.getElementById('next-drawing-info').textContent = data.exact_drawing_time;
+                    // Update drawing info section
+                    const nextDrawingInfo = document.getElementById('next-drawing-info');
+                    if (nextDrawingInfo) {
+                        nextDrawingInfo.textContent = data.next_drawing?.exact_drawing_time || data.exact_drawing_time || 'Loading...';
+                    }
                     
-                    // Format and display next drawing date
-                    if (data.datetime_iso) {
-                        const drawingDate = new Date(data.datetime_iso);
-                        const formattedDate = drawingDate.toLocaleString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
-                        });
-                        document.getElementById('next-drawing-date').textContent = `(${formattedDate})`;
+                    // Format and display next drawing date  
+                    const nextDrawingDate = document.getElementById('next-drawing-date');
+                    if (nextDrawingDate) {
+                        const drawingData = data.next_drawing || data;
+                        if (drawingData.date && drawingData.time) {
+                            const formattedDate = `${drawingData.date} at ${drawingData.time} ${drawingData.timezone || 'ET'}`;
+                            nextDrawingDate.textContent = formattedDate;
+                        } else if (drawingData.datetime_iso) {
+                            const drawingDate = new Date(drawingData.datetime_iso);
+                            const formattedDate = drawingDate.toLocaleString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true,
+                                timeZone: 'America/New_York'
+                            });
+                            nextDrawingDate.textContent = `${formattedDate} ET`;
+                        } else {
+                            nextDrawingDate.textContent = 'Next Powerball Drawing';
+                        }
                     }
                     
                     // Start countdown
-                    if (data.countdown_seconds > 0) {
-                        startCountdown(data.countdown_seconds);
+                    const countdownSeconds = data.next_drawing?.countdown_seconds || data.countdown_seconds;
+                    if (countdownSeconds && countdownSeconds > 0) {
+                        startCountdown(countdownSeconds);
                     } else {
                         document.getElementById('countdown-display').textContent = 'Drawing Complete';
                     }
@@ -363,6 +381,7 @@
                 } catch (error) {
                     console.error('Error loading drawing info:', error);
                     document.getElementById('countdown-display').textContent = 'Check Official Site';
+                    document.getElementById('next-drawing-info').textContent = 'Error loading drawing information';
                 }
             }
 
@@ -442,9 +461,12 @@
 
                     row.innerHTML = `
                         <td class="px-4 py-3 whitespace-nowrap">
-                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full ${rank <= 10 ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' : 'bg-gray-100 text-gray-800'} text-xs font-bold">
-                                ${rank}
-                            </span>
+                            <div class="flex items-center">
+                                <span class="inline-flex items-center justify-center w-8 h-6 rounded-md ${rank <= 10 ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white' : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white'} text-sm font-bold shadow-md">
+                                    #${rank}
+                                </span>
+                                ${rank <= 5 ? '<span class="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">TOP</span>' : ''}
+                            </div>
                         </td>
                         <td class="px-4 py-3 whitespace-nowrap">
                             <div class="flex space-x-1">
@@ -457,11 +479,6 @@
                             <span class="inline-flex items-center justify-center w-7 h-7 bg-red-600 text-white rounded-full text-xs font-bold">
                                 ${pred.powerball || pred.pb || 1}
                             </span>
-                        </td>
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                ${((pred.total_score || 0) * 100).toFixed(1)}%
-                            </div>
                         </td>
                     `;
 
