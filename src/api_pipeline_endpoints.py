@@ -114,11 +114,11 @@ async def _get_scheduler_status() -> Dict[str, Any]:
         if scheduler and scheduler.running:
             all_jobs = scheduler.get_jobs()
             logger.info(f"Total scheduler jobs found: {len(all_jobs)}")
-            
+
             # Filter: Only count pipeline jobs for dashboard display
             pipeline_jobs = [job for job in all_jobs if "pipeline" in job.id.lower() or "pipeline" in job.name.lower()]
             logger.info(f"Filtered pipeline jobs: {len(pipeline_jobs)} (showing only these in dashboard)")
-            
+
             # Find next pipeline job execution
             next_pipeline_job = None
             for job in pipeline_jobs:
@@ -174,17 +174,17 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
         formatted_executions = []
         for execution in executions:
             from src.date_utils import DateManager
-            
+
             # Pre-format dates for frontend display
             start_time_formatted = 'N/A'
             end_time_formatted = 'N/A'
-            
+
             if execution.get('start_time'):
                 start_time_formatted = DateManager.format_datetime_for_display(execution.get('start_time'))
-            
+
             if execution.get('end_time'):
                 end_time_formatted = DateManager.format_datetime_for_display(execution.get('end_time'))
-            
+
             formatted_execution = {
                 'execution_id': execution.get('execution_id'),
                 'status': execution.get('status'),
@@ -196,7 +196,7 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
                 'trigger_source': execution.get('trigger_source', 'unknown'),
                 'current_step': execution.get('current_step'),
                 'steps_completed': execution.get('steps_completed', 0),
-                'total_steps': 6,  # CORRECTED: Pipeline has 6 steps, not 7
+                'total_steps': 7,  # CORRECTED: Pipeline has 7 steps
                 'num_predictions': execution.get('num_predictions', 100),
                 'error': execution.get('error'),
                 'subprocess_success': execution.get('subprocess_success', False),
@@ -394,7 +394,7 @@ async def trigger_pipeline_execution(
             "start_time": current_time.isoformat(),
             "current_step": "manual_trigger",
             "steps_completed": 0,
-            "total_steps": 6,  # CORRECTED: Pipeline has 6 steps
+            "total_steps": 7,  # CORRECTED: Pipeline has 7 steps
             "num_predictions": num_predictions,
             "error": None,
             "trigger_type": "manual_dashboard",
@@ -431,60 +431,60 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
     """Get detailed information for a specific pipeline execution"""
     try:
         from src.database import get_pipeline_execution_by_id
-        
+
         execution = get_pipeline_execution_by_id(execution_id)
-        
+
         if not execution:
             raise HTTPException(status_code=404, detail=f"Execution {execution_id} not found")
-        
+
         # Enhance execution data with additional computed fields and pre-formatted dates
         enhanced_execution = execution.copy()
-        
+
         # Ensure proper defaults for missing fields
         if not enhanced_execution.get('status'):
             enhanced_execution['status'] = 'unknown'
-        
+
         if not enhanced_execution.get('start_time'):
             enhanced_execution['start_time'] = enhanced_execution.get('created_at')
-        
+
         if not enhanced_execution.get('end_time') and enhanced_execution.get('status') in ['completed', 'failed']:
             enhanced_execution['end_time'] = enhanced_execution.get('updated_at')
-        
+
         if not enhanced_execution.get('trigger_type'):
             enhanced_execution['trigger_type'] = 'manual'
-        
+
         if not enhanced_execution.get('trigger_source'):
             enhanced_execution['trigger_source'] = 'dashboard'
-        
+
         # Fix steps information
         if enhanced_execution.get('status') == 'completed' and not enhanced_execution.get('steps_completed'):
-            enhanced_execution['steps_completed'] = enhanced_execution.get('total_steps', 6)
-        
+            enhanced_execution['steps_completed'] = enhanced_execution.get('total_steps', 7)
+
         # Ensure total_steps is set to correct value
-        enhanced_execution['total_steps'] = 6  # CORRECTED: Always set to 6 steps
-        
+        enhanced_execution['total_steps'] = 7  # CORRECTED: Always set to 7 steps
+
         # Pre-format dates for frontend display
         from src.date_utils import DateManager
-        
+
         start_time_formatted = 'N/A'
         end_time_formatted = 'N/A'
-        
+
         if enhanced_execution.get('start_time'):
             start_time_formatted = DateManager.format_datetime_for_display(enhanced_execution.get('start_time'))
-        
+
         if enhanced_execution.get('end_time'):
             end_time_formatted = DateManager.format_datetime_for_display(enhanced_execution.get('end_time'))
-        
+
         enhanced_execution['start_time_formatted'] = start_time_formatted
         enhanced_execution['end_time_formatted'] = end_time_formatted
-        
+
         # Calculate duration if both start and end times exist
         if enhanced_execution.get('start_time') and enhanced_execution.get('end_time'):
             try:
                 start_dt = datetime.fromisoformat(enhanced_execution['start_time'].replace('Z', '+00:00'))
                 end_dt = datetime.fromisoformat(enhanced_execution['end_time'].replace('Z', '+00:00'))
                 duration_seconds = (end_dt - start_dt).total_seconds()
-                
+
                 if duration_seconds >= 60:
                     minutes = int(duration_seconds // 60)
                     seconds = int(duration_seconds % 60)
@@ -494,12 +494,12 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
             except Exception as duration_error:
                 logger.warning(f"Could not calculate duration: {duration_error}")
                 enhanced_execution['duration'] = 'Unknown'
-        
+
         return {
             "execution": enhanced_execution,
             "timestamp": datetime.now().isoformat()
         }
-        
+
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -526,12 +526,12 @@ async def get_pipeline_history():
                 "trigger_type": execution.get('trigger_type', 'unknown'),
                 "trigger_source": execution.get('trigger_source', 'unknown'),
                 "steps_completed": execution.get('steps_completed', 0),
-                "total_steps": 6,  # CORRECTED: Pipeline has 6 steps
+                "total_steps": 7,  # CORRECTED: Pipeline has 7 steps
                 "num_predictions": execution.get('num_predictions', 0),
                 "error": execution.get('error'),
                 "subprocess_success": execution.get('subprocess_success', False),
                 "duration": execution.get('duration'),
-                "progress_percentage": (execution.get('steps_completed', 0) / 6) * 100  # Use 6 steps
+                "progress_percentage": (execution.get('steps_completed', 0) / 7) * 100  # Use 7 steps
             }
             formatted_executions.append(formatted_execution)
 

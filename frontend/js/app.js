@@ -440,9 +440,9 @@ document.addEventListener('DOMContentLoaded', () => {
             stepsCell.className = 'px-4 py-3';
 
             const stepsContainer = document.createElement('div');
-            // Use actual steps data with proper defaults - FIXED: 6 steps total
+            // Use actual steps data with proper defaults - FIXED: 7 steps total
             let stepsCompleted = execution.steps_completed || 0;
-            let totalSteps = 6; // CORRECTED: Pipeline has 6 steps, not 7
+            let totalSteps = 7; // CORRECTED: Pipeline has 7 steps
 
             // Fix: If execution is completed but steps_completed is 0, set to total steps
             if (status === 'completed' && stepsCompleted === 0) {
@@ -704,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!triggerPipelineBtn) return;
 
         const stepsCompleted = execution.steps_completed || 0;
-        const totalSteps = 6; // CORRECTED: Pipeline has 6 steps
+        const totalSteps = 7; // CORRECTED: Pipeline has 7 steps
         const currentStep = execution.current_step || 'processing';
 
         // Update button text with progress
