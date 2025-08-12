@@ -653,7 +653,7 @@ class PublicInterface {
                     No Smart AI Predictions Available
                 </h3>
                 <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    The database contains no real predictions from the AI pipeline yet.
+                    No AI predictions available. System is configured for pipeline-only prediction generation.
                 </p>
                 <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border-l-4 border-blue-500">
                     <div class="text-sm text-blue-700 dark:text-blue-300 space-y-2">

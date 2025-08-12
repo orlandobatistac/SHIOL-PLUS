@@ -675,7 +675,7 @@ def get_all_draws() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool = False) -> Optional[int]:
+def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool = False, execution_source: str = None) -> Optional[int]:
     """
     Guarda una predicción en la tabla predictions_log.
 
@@ -687,6 +687,24 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
     """
     logger.debug(f"Received prediction data: {prediction_data}")
 
+    # PIPELINE-ONLY VALIDATION: Only accept predictions from authorized sources
+    authorized_sources = ["manual_dashboard", "automatic_scheduler", "pipeline_execution"]
+    
+    if execution_source and execution_source not in authorized_sources:
+        logger.error(f"UNAUTHORIZED: Rejected prediction from source: {execution_source}")
+        return None
+    
+    # Check if prediction comes from pipeline execution (has proper metadata)
+    model_version = str(prediction_data.get("model_version", ""))
+    dataset_hash = str(prediction_data.get("dataset_hash", ""))
+    
+    # Reject non-pipeline predictions (fallback, test, simulated data)
+    if (model_version in ["fallback", "test", "simulated", "1.0.0-test"] or
+        dataset_hash in ["simulated", "test", "fallback"] or
+        len(dataset_hash) < 10):
+        logger.warning(f"REJECTED: Non-pipeline prediction - model={model_version}, hash={dataset_hash}")
+        return None
+    
     # Sanitizar y validar los datos de la predicción
     sanitized_data = _sanitize_prediction_data(prediction_data)
     if sanitized_data is None:

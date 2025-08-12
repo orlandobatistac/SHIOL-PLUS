@@ -353,6 +353,13 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],  # Restricted headers for security
 )
 
+# --- Pipeline-Only Configuration ---
+PIPELINE_ONLY_MODE = True
+ALLOW_INDIVIDUAL_PREDICTIONS = False
+MIN_PREDICTIONS_PER_EXECUTION = 100
+
+logger.info(f"System Configuration: PIPELINE_ONLY_MODE={PIPELINE_ONLY_MODE}")
+
 # --- Global Components ---
 try:
     logger.info("Loading model and generator instances...")

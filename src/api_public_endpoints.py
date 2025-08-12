@@ -53,23 +53,18 @@ async def serve_public(request: Request):
 
 @public_frontend_router.get("/api/v1/public/predictions/smart")
 async def get_public_smart_predictions(limit: int = 100):
-    """Get Smart AI predictions for public access"""
-    try:
-        if not predictor or not intelligent_generator:
-            raise HTTPException(status_code=503, detail="Service not available")
-            
-        predictions = []
-        for i in range(min(limit, 100)):  # Limit to 100 for public access
-            prediction_data = intelligent_generator.generate_smart_numbers()
-            formatted_prediction = format_prediction_response(prediction_data, "smart_ai_pipeline")
-            formatted_prediction["rank"] = i + 1
-            predictions.append(formatted_prediction)
-            
-        return {"predictions": predictions}
-        
-    except Exception as e:
-        logger.error(f"Error getting public smart predictions: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting predictions: {str(e)}")
+    """DISABLED: Public smart prediction generation is no longer supported.
+    Use database queries for existing pipeline predictions only."""
+    logger.warning("Attempt to use disabled public smart prediction generation")
+    raise HTTPException(
+        status_code=410, 
+        detail={
+            "error": "Public prediction generation disabled",
+            "message": "This endpoint no longer generates new predictions.",
+            "alternative": "GET /api/v1/predict/smart (for existing predictions)",
+            "reason": "System now only supports pipeline-generated predictions from database"
+        }
+    )
 
 @public_frontend_router.get("/api/v1/public/history/grouped")
 async def get_public_grouped_history():

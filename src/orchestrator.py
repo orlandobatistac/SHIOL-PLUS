@@ -241,7 +241,9 @@ class PipelineOrchestrator:
                     "method": "smart_ai_pipeline",
                     "prediction_id": start_index + i + 1,
                     "generated_at": DateManager.get_current_et_time().isoformat(),
-                    "rank": start_index + i + 1
+                    "rank": start_index + i + 1,
+                    "execution_source": "pipeline_execution",
+                    "authorized": True
                 }
                 
                 batch_predictions.append(prediction_data)
@@ -271,7 +273,7 @@ class PipelineOrchestrator:
             for prediction in predictions:
                 try:
                     await asyncio.get_event_loop().run_in_executor(
-                        None, save_prediction_log, prediction
+                        None, save_prediction_log, prediction, False, "pipeline_execution"
                     )
                     saved_count += 1
                 except Exception as e:

@@ -57,99 +57,55 @@ def set_prediction_components(pred, intel_gen, det_gen):
 @prediction_router.get("/predict")
 async def get_prediction(deterministic: bool = Query(False, description="Use deterministic method")):
     """
-    Generates and returns a single Powerball prediction.
+    DISABLED: Individual prediction generation is no longer supported.
+    Use pipeline execution instead for generating predictions.
     """
-    if not predictor or not intelligent_generator:
-        raise HTTPException(status_code=500, detail="Model is not available.")
-
-    if deterministic and not deterministic_generator:
-        raise HTTPException(status_code=500, detail="Deterministic generator is not available.")
-
-    try:
-        logger.info(f"Received request for {'deterministic' if deterministic else 'traditional'} prediction.")
-        wb_probs, pb_probs = predictor.predict_probabilities()
-
-        if deterministic:
-            result = deterministic_generator.generate_top_prediction(wb_probs, pb_probs)
-            prediction = result['numbers'] + [result['powerball']]
-            save_prediction_log(result)
-
-            return {
-                "prediction": convert_numpy_types(prediction),
-                "method": "deterministic",
-                "score_total": convert_numpy_types(result['score_total']),
-                "dataset_hash": result['dataset_hash']
-            }
-        else:
-            play_df = intelligent_generator.generate_plays(wb_probs, pb_probs, num_plays=1)
-            prediction = play_df.iloc[0].astype(int).tolist()
-
-            return {
-                "prediction": convert_numpy_types(prediction),
-                "method": "traditional"
-            }
-
-    except Exception as e:
-        logger.error(f"Error during prediction: {e}")
-        raise HTTPException(status_code=500, detail="Model prediction failed.")
+    logger.warning("Attempt to use disabled individual prediction endpoint")
+    raise HTTPException(
+        status_code=410, 
+        detail={
+            "error": "Individual prediction generation disabled",
+            "message": "This endpoint has been disabled. Use pipeline execution instead.",
+            "alternative": "POST /api/v1/pipeline/trigger",
+            "reason": "System now only supports full pipeline execution for prediction generation"
+        }
+    )
 
 
 @prediction_router.get("/predict-multiple")
 async def get_multiple_predictions(count: int = Query(1, ge=1, le=10)):
     """
-    Generates and returns a specified number of Powerball predictions.
+    DISABLED: Multiple prediction generation is no longer supported.
+    Use pipeline execution instead for generating predictions.
     """
-    if not predictor or not intelligent_generator:
-        raise HTTPException(status_code=500, detail="Model is not available.")
-
-    try:
-        logger.info(f"Received request for {count} predictions.")
-        wb_probs, pb_probs = predictor.predict_probabilities()
-        plays_df = intelligent_generator.generate_plays(wb_probs, pb_probs, num_plays=count)
-        predictions = plays_df.astype(int).values.tolist()
-
-        return {"predictions": convert_numpy_types(predictions)}
-
-    except Exception as e:
-        logger.error(f"Error during multiple prediction generation: {e}")
-        raise HTTPException(status_code=500, detail="Model prediction failed.")
+    logger.warning("Attempt to use disabled multiple prediction endpoint")
+    raise HTTPException(
+        status_code=410, 
+        detail={
+            "error": "Multiple prediction generation disabled",
+            "message": "This endpoint has been disabled. Use pipeline execution instead.",
+            "alternative": "POST /api/v1/pipeline/trigger?num_predictions=100",
+            "reason": "System now only supports full pipeline execution for prediction generation"
+        }
+    )
 
 
 @prediction_router.get("/predict-deterministic")
 async def get_deterministic_prediction():
     """
-    Generates and returns a deterministic Powerball prediction with detailed scoring.
+    DISABLED: Deterministic prediction generation is no longer supported.
+    Use pipeline execution instead for generating predictions.
     """
-    if not predictor or not deterministic_generator:
-        raise HTTPException(status_code=500, detail="Deterministic prediction components are not available.")
-
-    try:
-        logger.info("Received request for deterministic prediction.")
-        wb_probs, pb_probs = predictor.predict_probabilities()
-        result = deterministic_generator.generate_top_prediction(wb_probs, pb_probs)
-
-        save_prediction_log(result)
-
-        prediction_list = convert_numpy_types(result['numbers'] + [result['powerball']])
-        return {
-            "prediction": prediction_list,
-            "score_total": convert_numpy_types(result['score_total']),
-            "score_details": convert_numpy_types(result['score_details']),
-            "model_version": result['model_version'],
-            "dataset_hash": result['dataset_hash'],
-            "timestamp": result['timestamp'],
-            "method": "deterministic",
-            "traceability": {
-                "dataset_hash": result['dataset_hash'],
-                "model_version": result['model_version'],
-                "timestamp": result['timestamp'],
-                "candidates_evaluated": convert_numpy_types(result['num_candidates_evaluated'])
-            }
+    logger.warning("Attempt to use disabled deterministic prediction endpoint")
+    raise HTTPException(
+        status_code=410, 
+        detail={
+            "error": "Deterministic prediction generation disabled",
+            "message": "This endpoint has been disabled. Use pipeline execution instead.",
+            "alternative": "POST /api/v1/pipeline/trigger?num_predictions=100",
+            "reason": "System now only supports full pipeline execution for prediction generation"
         }
-
-    except Exception as e:
-        logger.error(f"Error during deterministic prediction: {e}")
-        raise HTTPException(status_code=500, detail="Deterministic prediction failed.")
+    )
 
 
 @prediction_router.get("/predict/smart")
@@ -250,37 +206,16 @@ async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, descriptio
 @prediction_router.get("/predict-diverse")
 async def get_diverse_predictions(num_plays: int = Query(5, ge=1, le=10)):
     """
-    Generates multiple diverse high-quality predictions.
+    DISABLED: Diverse prediction generation is no longer supported.
+    Use pipeline execution instead for generating predictions.
     """
-    if not predictor or not deterministic_generator:
-        raise HTTPException(status_code=500, detail="Diverse prediction components are not available.")
-
-    try:
-        logger.info(f"Received request for {num_plays} diverse predictions.")
-        diverse_predictions = predictor.predict_diverse_plays(num_plays=num_plays, save_to_log=True)
-
-        plays = []
-        for prediction in diverse_predictions:
-            play = {
-                "numbers": convert_numpy_types(prediction['numbers']),
-                "powerball": convert_numpy_types(prediction['powerball']),
-                "prediction": convert_numpy_types(prediction['numbers'] + [prediction['powerball']]),
-                "score_total": convert_numpy_types(prediction['score_total']),
-                "score_details": convert_numpy_types(prediction['score_details']),
-                "play_rank": prediction.get('play_rank', 0),
-                "diversity_method": prediction.get('diversity_method', 'intelligent_selection')
-            }
-            plays.append(play)
-
-        return {
-            "plays": plays,
-            "num_plays": len(plays),
-            "method": "diverse_deterministic",
-            "model_version": diverse_predictions[0]['model_version'],
-            "dataset_hash": diverse_predictions[0]['dataset_hash'],
-            "timestamp": diverse_predictions[0]['timestamp']
+    logger.warning("Attempt to use disabled diverse prediction endpoint")
+    raise HTTPException(
+        status_code=410, 
+        detail={
+            "error": "Diverse prediction generation disabled",
+            "message": "This endpoint has been disabled. Use pipeline execution instead.",
+            "alternative": "POST /api/v1/pipeline/trigger?num_predictions=100",
+            "reason": "System now only supports full pipeline execution for prediction generation"
         }
-
-    except Exception as e:
-        logger.error(f"Error during diverse prediction generation: {e}")
-        raise HTTPException(status_code=500, detail="Diverse prediction generation failed.")
+    )

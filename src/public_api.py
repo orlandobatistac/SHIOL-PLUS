@@ -162,14 +162,15 @@ async def get_next_drawing_info():
 
         except Exception as e:
             logger.error(f"Error generating featured prediction: {e}")
-            # Fallback prediction if generation fails
+            # NO FALLBACK: System configured for pipeline-only predictions
             featured_prediction = {
-                "numbers": [7, 14, 21, 35, 42],
-                "powerball": 18,
-                "confidence_score": 0.75,
-                "method": "fallback",
+                "predictions": [],
+                "total_predictions": 0,
+                "method": "no_predictions_available",
                 "generated_at": datetime.now().isoformat(),
-                "note": "Fallback prediction - system temporarily unavailable"
+                "message": "No AI predictions available. Execute Full Pipeline to generate real predictions.",
+                "call_to_action": "Use Dashboard to execute pipeline",
+                "reason": "System configured for pipeline-only prediction generation"
             }
 
         return {
