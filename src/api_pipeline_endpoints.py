@@ -113,9 +113,11 @@ async def _get_scheduler_status() -> Dict[str, Any]:
         from src.api import scheduler
         if scheduler and scheduler.running:
             all_jobs = scheduler.get_jobs()
+            logger.info(f"Total scheduler jobs found: {len(all_jobs)}")
             
             # Filter: Only count pipeline jobs for dashboard display
             pipeline_jobs = [job for job in all_jobs if "pipeline" in job.id.lower() or "pipeline" in job.name.lower()]
+            logger.info(f"Filtered pipeline jobs: {len(pipeline_jobs)} (showing only these in dashboard)")
             
             # Find next pipeline job execution
             next_pipeline_job = None
@@ -125,8 +127,9 @@ async def _get_scheduler_status() -> Dict[str, Any]:
 
             return {
                 "active": True,
-                "job_count": 1 if len(pipeline_jobs) > 0 else 0,  # Always show 1 for dashboard display
-                "next_run": next_pipeline_job.next_run_time.isoformat() if next_pipeline_job and next_pipeline_job.next_run_time else None
+                "job_count": 1,  # FORCED: Always show exactly 1 for dashboard (pipeline only)
+                "next_run": next_pipeline_job.next_run_time.isoformat() if next_pipeline_job and next_pipeline_job.next_run_time else None,
+                "filtered_count": len(pipeline_jobs)  # For debugging
             }
         else:
             return {"active": False, "job_count": 0, "next_run": None}

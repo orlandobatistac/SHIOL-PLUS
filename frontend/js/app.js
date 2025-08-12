@@ -1194,7 +1194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Active';
             statusEl.className = 'text-lg font-bold text-green-600';
 
-            // Force display as "1 job scheduled" since we only show pipeline jobs
+            // FORCED: Always display "1 job scheduled" for dashboard (pipeline only)
             jobsEl.textContent = '1 job scheduled';
 
             if (scheduler.next_run) {
