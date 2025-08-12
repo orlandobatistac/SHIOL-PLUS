@@ -86,28 +86,24 @@ class PipelineOrchestrator:
         
         try:
             # Step 1: Data Update
-            logger.info("Pipeline Step 1/7: Data Update")
+            logger.info("Pipeline Step 1/6: Data Update")
             data_update_result = await self._update_data()
             
             # Step 2: Adaptive Analysis
-            logger.info("Pipeline Step 2/7: Adaptive Analysis")
+            logger.info("Pipeline Step 2/6: Adaptive Analysis")
             adaptive_result = await self._run_adaptive_analysis()
             
             # Step 3: Weight Optimization
-            logger.info("Pipeline Step 3/7: Weight Optimization")
+            logger.info("Pipeline Step 3/6: Weight Optimization")
             optimization_result = await self._optimize_weights()
             
             # Step 4: Historical Validation
-            logger.info("Pipeline Step 4/7: Historical Validation")
+            logger.info("Pipeline Step 4/6: Historical Validation")
             validation_result = await self._validate_historical()
             
             # Step 5: Prediction Generation
-            logger.info("Pipeline Step 5/7: Prediction Generation")
+            logger.info("Pipeline Step 5/6: Prediction Generation")
             predictions = await self._generate_predictions(num_predictions)
-            
-            # Step 6: Performance Analysis
-            logger.info("Pipeline Step 6/7: Performance Analysis")
-            performance_result = await self._analyze_performance()
             
             # Step 6: Save Results
             logger.info("Pipeline Step 6/6: Save Results")

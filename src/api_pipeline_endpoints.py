@@ -172,7 +172,7 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
                 'trigger_source': execution.get('trigger_source', 'unknown'),
                 'current_step': execution.get('current_step'),
                 'steps_completed': execution.get('steps_completed', 0),
-                'total_steps': execution.get('total_steps', 7),
+                'total_steps': 6,  # CORRECTED: Pipeline has 6 steps, not 7
                 'num_predictions': execution.get('num_predictions', 100),
                 'error': execution.get('error'),
                 'subprocess_success': execution.get('subprocess_success', False),
@@ -370,7 +370,7 @@ async def trigger_pipeline_execution(
             "start_time": current_time.isoformat(),
             "current_step": "manual_trigger",
             "steps_completed": 0,
-            "total_steps": 7,
+            "total_steps": 6,  # CORRECTED: Pipeline has 6 steps
             "num_predictions": num_predictions,
             "error": None,
             "trigger_type": "manual_dashboard",
@@ -436,9 +436,8 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
         if enhanced_execution.get('status') == 'completed' and not enhanced_execution.get('steps_completed'):
             enhanced_execution['steps_completed'] = enhanced_execution.get('total_steps', 6)
         
-        # Ensure total_steps is set
-        if not enhanced_execution.get('total_steps'):
-            enhanced_execution['total_steps'] = 6
+        # Ensure total_steps is set to correct value
+        enhanced_execution['total_steps'] = 6  # CORRECTED: Always set to 6 steps
         
         # Calculate duration if both start and end times exist
         if enhanced_execution.get('start_time') and enhanced_execution.get('end_time'):
@@ -488,12 +487,12 @@ async def get_pipeline_history():
                 "trigger_type": execution.get('trigger_type', 'unknown'),
                 "trigger_source": execution.get('trigger_source', 'unknown'),
                 "steps_completed": execution.get('steps_completed', 0),
-                "total_steps": execution.get('total_steps', 7),
+                "total_steps": 6,  # CORRECTED: Pipeline has 6 steps
                 "num_predictions": execution.get('num_predictions', 0),
                 "error": execution.get('error'),
                 "subprocess_success": execution.get('subprocess_success', False),
                 "duration": execution.get('duration'),
-                "progress_percentage": (execution.get('steps_completed', 0) / max(execution.get('total_steps', 7), 1)) * 100
+                "progress_percentage": (execution.get('steps_completed', 0) / 6) * 100  # Use 6 steps
             }
             formatted_executions.append(formatted_execution)
 

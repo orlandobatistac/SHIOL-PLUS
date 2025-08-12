@@ -72,6 +72,48 @@ document.addEventListener('DOMContentLoaded', () => {
         return baseUrl;
     }
 
+    // --- Timezone Conversion Functions ---
+    function convertToETTimezone(dateString) {
+        if (!dateString || dateString === 'N/A') return 'N/A';
+        
+        try {
+            // Parse the date string (handle both ISO and other formats)
+            let date;
+            if (dateString.includes('T')) {
+                // ISO format
+                date = new Date(dateString);
+            } else if (dateString.includes('-')) {
+                // YYYY-MM-DD HH:MM:SS format
+                date = new Date(dateString + 'Z'); // Assume UTC if no timezone
+            } else {
+                return dateString; // Return as-is if can't parse
+            }
+            
+            // Convert to Eastern Time
+            const etDate = new Date(date.toLocaleString("en-US", {timeZone: "America/New_York"}));
+            
+            // Format for display: MM/DD/YYYY HH:MM ET
+            const options = {
+                timeZone: 'America/New_York',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            };
+            
+            const formatter = new Intl.DateTimeFormat('en-US', options);
+            const formattedDate = formatter.format(date);
+            
+            return formattedDate + ' ET';
+            
+        } catch (error) {
+            console.warn('Error converting date to ET:', dateString, error);
+            return dateString; // Return original if conversion fails
+        }
+    }
+
     const API_BASE_URL = getApiBaseUrl();
 
     let lastPredictions = [];
@@ -220,11 +262,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Update trigger button state based on current execution status
         if (triggerPipelineBtn) {
-            const canTrigger = status !== 'running';
+            // FIXED: Only enable button when pipeline is not running/starting/processing
+            const canTrigger = status !== 'running' && status !== 'starting' && status !== 'processing';
             triggerPipelineBtn.disabled = !canTrigger;
             
             // Update button text based on status
-            if (status === 'running') {
+            if (status === 'running' || status === 'starting' || status === 'processing') {
                 triggerPipelineBtn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i>Pipeline Running...';
                 triggerPipelineBtn.className = triggerPipelineBtn.className.replace(/bg-\w+-\d+/g, 'bg-blue-600');
             } else {
@@ -288,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         sortedExecutions.forEach((execution, index) => {
-            const startTime = execution.start_time ? new Date(execution.start_time).toLocaleString('en-US') : 'N/A';
+            const startTime = execution.start_time ? convertToETTimezone(execution.start_time) : 'N/A';
             const endTime = execution.end_time ? new Date(execution.end_time) : null;
             const startTimeObj = execution.start_time ? new Date(execution.start_time) : null;
 
@@ -360,9 +403,9 @@ document.addEventListener('DOMContentLoaded', () => {
             stepsCell.className = 'px-4 py-3';
             
             const stepsContainer = document.createElement('div');
-            // Use actual steps data with proper defaults
+            // Use actual steps data with proper defaults - FIXED: 6 steps total
             let stepsCompleted = execution.steps_completed || 0;
-            let totalSteps = execution.total_steps || 6;
+            let totalSteps = 6; // CORRECTED: Pipeline has 6 steps, not 7
             
             // Fix: If execution is completed but steps_completed is 0, set to total steps
             if (status === 'completed' && stepsCompleted === 0) {
@@ -624,7 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!triggerPipelineBtn) return;
         
         const stepsCompleted = execution.steps_completed || 0;
-        const totalSteps = execution.total_steps || 7;
+        const totalSteps = 6; // CORRECTED: Pipeline has 6 steps
         const currentStep = execution.current_step || 'processing';
         
         // Update button text with progress
@@ -890,14 +933,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const formatDateTime = (dateStr) => {
                 if (!dateStr) return 'Not available';
                 try {
-                    return new Date(dateStr).toLocaleString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                    });
+                    return convertToETTimezone(dateStr);
                 } catch (e) {
                     return dateStr;
                 }
