@@ -167,7 +167,7 @@ async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, descriptio
         days_until_drawing = (next_date - current_date).days
         is_drawing_day = current_date.weekday() in [0, 2, 5]
 
-        # Get predictions from database
+        # Get ONLY real pipeline predictions from database (no simulated data)
         predictions_df = db.get_prediction_history(limit=limit)
 
         smart_predictions = []
@@ -200,9 +200,19 @@ async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, descriptio
                     logger.warning(f"Error converting prediction record {i}: {e}")
                     continue
 
-        # No fallback - only show real pipeline-generated predictions
+        # STRICT VALIDATION: Only show real pipeline-generated predictions
         if not smart_predictions:
             logger.info("No Smart AI predictions available - pipeline must be executed first")
+            
+        # Additional validation to ensure no simulated data leaks through
+        real_predictions = []
+        for pred in smart_predictions:
+            if (pred.get("method") == "smart_ai_pipeline" and 
+                pred.get("dataset_hash", "") != "simulated" and
+                pred.get("model_version", "") not in ["fallback", "test", "simulated"]):
+                real_predictions.append(pred)
+        
+        smart_predictions = real_predictions
 
         # Calculate statistics
         avg_score = sum(p["total_score"] for p in smart_predictions) / len(smart_predictions) if smart_predictions else 0.0

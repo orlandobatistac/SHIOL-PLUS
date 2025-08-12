@@ -1270,8 +1270,8 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # Solo obtener fechas donde existen predicciones reales del pipeline
-            # Excluir predicciones simuladas o de prueba
+            # STRICT FILTER: Solo obtener fechas donde existen predicciones REALES del pipeline
+            # Excluir TODAS las predicciones simuladas, de prueba o fallback
             cursor.execute("""
                 SELECT DISTINCT
                     pd.draw_date as target_date,
@@ -1279,9 +1279,10 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 FROM powerball_draws pd
                 INNER JOIN predictions_log pl ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
                 WHERE pl.created_at IS NOT NULL 
-                    AND pl.model_version != 'fallback'
-                    AND pl.model_version != 'test'
-                    AND pl.dataset_hash != 'simulated'
+                    AND pl.model_version NOT IN ('fallback', 'test', 'simulated', '1.0.0-test')
+                    AND pl.dataset_hash NOT IN ('simulated', 'test', 'fallback')
+                    AND pl.score_total > 0
+                    AND LENGTH(pl.dataset_hash) >= 10
                 GROUP BY pd.draw_date
                 HAVING COUNT(pl.id) > 0
                 ORDER BY pd.draw_date DESC
