@@ -71,11 +71,15 @@ def get_next_powerball_drawing() -> Dict[str, Any]:
             display_text = f"Drawing in {days_until} days"
             status = "future"
 
+        # Pre-format the drawing time for display
+        formatted_drawing_time = DateManager.format_datetime_for_display(next_drawing)
+        
         return {
             "date": next_drawing_date_str,
             "time": next_drawing.strftime("%H:%M:%S"),
             "timezone": "ET",
             "datetime_iso": next_drawing.isoformat(),
+            "datetime_formatted": formatted_drawing_time,  # Pre-formatted for display
             "countdown_seconds": countdown_seconds,
             "days_until": days_until,
             "hours_until": hours_until,

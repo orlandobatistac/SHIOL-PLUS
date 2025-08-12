@@ -371,6 +371,47 @@ class DateManager:
         return drawing_dates
     
     @classmethod
+    def format_datetime_for_display(cls, dt: Union[datetime, str]) -> str:
+        """
+        Formatea una fecha/hora para mostrar en la interfaz web.
+        Retorna formato: MM/DD/YYYY H:MM AM/PM ET
+        
+        Args:
+            dt: Fecha como datetime o string ISO
+            
+        Returns:
+            str: Fecha formateada para display web
+        """
+        try:
+            if dt is None or dt == 'N/A':
+                return 'N/A'
+            
+            # Convert to ET datetime if needed
+            if isinstance(dt, str):
+                et_time = cls.convert_to_et(dt)
+            else:
+                et_time = cls.convert_to_et(dt)
+            
+            # Format: MM/DD/YYYY H:MM AM/PM ET
+            month = et_time.strftime('%m')
+            day = et_time.strftime('%d')
+            year = et_time.strftime('%Y')
+            
+            # 12-hour format with AM/PM
+            hour_12 = et_time.strftime('%I').lstrip('0')  # Remove leading zero
+            minute = et_time.strftime('%M')
+            ampm = et_time.strftime('%p')
+            
+            formatted_date = f"{month}/{day}/{year} {hour_12}:{minute} {ampm} ET"
+            
+            logger.debug(f"Formatted datetime for display: {dt} -> {formatted_date}")
+            return formatted_date
+            
+        except Exception as e:
+            logger.error(f"Error formatting datetime for display: {dt} - {e}")
+            return str(dt) if dt else 'N/A'
+    
+    @classmethod
     def get_current_date_info(cls) -> Dict[str, Any]:
         """
         Obtiene información completa de la fecha actual en ET.

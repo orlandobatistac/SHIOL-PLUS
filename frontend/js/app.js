@@ -75,12 +75,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Timezone Conversion Functions ---
     function convertToETTimezone(dateString) {
         if (!dateString || dateString === 'N/A') return 'N/A';
-        
+
         try {
             // The backend already provides dates in ET timezone
             // We just need to format them for display without additional conversion
             let date;
-            
+
             if (dateString.includes('T')) {
                 // ISO format - parse directly
                 date = new Date(dateString);
@@ -90,32 +90,32 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 return dateString; // Return as-is if can't parse
             }
-            
+
             // Check if the date parsed correctly
             if (isNaN(date.getTime())) {
                 console.warn('Invalid date parsed:', dateString);
                 return dateString;
             }
-            
+
             // Format for display: MM/DD/YYYY H:MM AM/PM ET
             // Use local browser formatting but display the time as-is from backend
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
             const year = date.getFullYear();
-            
+
             let hours = date.getHours();
             let minutes = String(date.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'PM' : 'AM';
-            
+
             // Convert to 12-hour format
             hours = hours % 12;
             hours = hours ? hours : 12; // 0 should be 12
-            
+
             const formattedTime = `${hours}:${minutes} ${ampm}`;
             const formattedDate = `${month}/${day}/${year} ${formattedTime} ET`;
-            
+
             return formattedDate;
-            
+
         } catch (error) {
             console.warn('Error formatting date for ET display:', dateString, error);
             return dateString; // Return original if conversion fails
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // FIXED: Only enable button when pipeline is not running/starting/processing
             const canTrigger = status !== 'running' && status !== 'starting' && status !== 'processing';
             triggerPipelineBtn.disabled = !canTrigger;
-            
+
             // Update button text based on status
             if (status === 'running' || status === 'starting' || status === 'processing') {
                 triggerPipelineBtn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i>Pipeline Running...';
@@ -357,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const executionId = execution.execution_id || 'unknown';
 
             const row = document.createElement('tr');
-            
+
             // Highlight the most recent execution
             if (index === 0) {
                 row.className = 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500';
@@ -373,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const statusCell = document.createElement('td');
             statusCell.className = 'px-4 py-3';
             const statusSpan = document.createElement('span');
-            
+
             // Enhanced status styling
             const statusStyles = {
                 'running': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 animate-pulse',
@@ -381,9 +381,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 'failed': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
                 'starting': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
             };
-            
+
             statusSpan.className = `px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`;
-            
+
             // Add icon based on status
             const statusIcons = {
                 'running': 'fas fa-spinner fa-spin',
@@ -391,10 +391,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 'failed': 'fas fa-exclamation-circle',
                 'starting': 'fas fa-play-circle'
             };
-            
+
             const statusIcon = document.createElement('i');
             statusIcon.className = `${statusIcons[status] || 'fas fa-question-circle'} mr-1`;
-            
+
             statusSpan.appendChild(statusIcon);
             statusSpan.appendChild(document.createTextNode(status.charAt(0).toUpperCase() + status.slice(1)));
             statusCell.appendChild(statusSpan);
@@ -409,35 +409,35 @@ document.addEventListener('DOMContentLoaded', () => {
             // Steps cell with progress bar for running executions
             const stepsCell = document.createElement('td');
             stepsCell.className = 'px-4 py-3';
-            
+
             const stepsContainer = document.createElement('div');
             // Use actual steps data with proper defaults - FIXED: 6 steps total
             let stepsCompleted = execution.steps_completed || 0;
             let totalSteps = 6; // CORRECTED: Pipeline has 6 steps, not 7
-            
+
             // Fix: If execution is completed but steps_completed is 0, set to total steps
             if (status === 'completed' && stepsCompleted === 0) {
                 stepsCompleted = totalSteps;
             }
-            
+
             // Fix: If execution failed, show actual progress or at least 1 step
             if (status === 'failed' && stepsCompleted === 0) {
                 stepsCompleted = 1; // At least started
             }
-            
+
             const stepsText = document.createElement('div');
             stepsText.className = 'text-sm text-gray-900 dark:text-gray-100';
             stepsText.textContent = `${stepsCompleted}/${totalSteps}`;
-            
+
             if (status === 'running' && totalSteps > 0) {
                 const progressBar = document.createElement('div');
                 progressBar.className = 'w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1';
-                
+
                 const progressFill = document.createElement('div');
                 const progressPercent = (stepsCompleted / totalSteps) * 100;
                 progressFill.className = 'bg-blue-600 h-1.5 rounded-full transition-all duration-300';
                 progressFill.style.width = `${progressPercent}%`;
-                
+
                 progressBar.appendChild(progressFill);
                 stepsContainer.appendChild(stepsText);
                 stepsContainer.appendChild(progressBar);
@@ -445,11 +445,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Show completed progress bar for completed executions
                 const progressBar = document.createElement('div');
                 progressBar.className = 'w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1';
-                
+
                 const progressFill = document.createElement('div');
                 progressFill.className = 'bg-green-600 h-1.5 rounded-full';
                 progressFill.style.width = '100%';
-                
+
                 progressBar.appendChild(progressFill);
                 stepsContainer.appendChild(stepsText);
                 stepsContainer.appendChild(progressBar);
@@ -457,19 +457,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Show partial progress bar for failed executions
                 const progressBar = document.createElement('div');
                 progressBar.className = 'w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1';
-                
+
                 const progressFill = document.createElement('div');
                 const progressPercent = (stepsCompleted / totalSteps) * 100;
                 progressFill.className = 'bg-red-600 h-1.5 rounded-full';
                 progressFill.style.width = `${Math.max(progressPercent, 10)}%`; // Minimum 10% to show something
-                
+
                 progressBar.appendChild(progressFill);
                 stepsContainer.appendChild(stepsText);
                 stepsContainer.appendChild(progressBar);
             } else {
                 stepsContainer.appendChild(stepsText);
             }
-            
+
             stepsCell.appendChild(stepsContainer);
             row.appendChild(stepsCell);
 
@@ -599,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update button to show execution in progress
             triggerPipelineBtn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i>Pipeline Running...';
             triggerPipelineBtn.className = triggerPipelineBtn.className.replace('bg-orange-500', 'bg-blue-600');
-            
+
             // Start monitoring pipeline status with execution ID
             startPipelineMonitoring(data.execution_id);
 
@@ -614,24 +614,24 @@ document.addEventListener('DOMContentLoaded', () => {
         let monitoringAttempts = 0;
         const maxAttempts = 120; // 10 minutos máximo
         const checkInterval = 5000; // Check every 5 seconds
-        
+
         // Update status immediately and continue monitoring
         const monitoringInterval = setInterval(async () => {
             monitoringAttempts++;
-            
+
             try {
                 const status = await fetchPipelineStatus();
-                
+
                 if (status && status.pipeline_status) {
                     const currentStatus = status.pipeline_status.current_status;
                     const recentHistory = status.pipeline_status.recent_execution_history || [];
-                    
+
                     // Find our specific execution
                     const ourExecution = recentHistory.find(ex => ex.execution_id === executionId);
-                    
+
                     if (ourExecution) {
                         updatePipelineButtonForExecution(ourExecution);
-                        
+
                         if (ourExecution.status === 'completed') {
                             clearInterval(monitoringInterval);
                             showPipelineNotification('Pipeline completed successfully!', 'success');
@@ -646,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             return;
                         }
                     }
-                    
+
                     // Check if pipeline is no longer running (generic check)
                     if (currentStatus !== 'running' && monitoringAttempts > 3) {
                         clearInterval(monitoringInterval);
@@ -655,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                 }
-                
+
                 // Timeout check
                 if (monitoringAttempts >= maxAttempts) {
                     clearInterval(monitoringInterval);
@@ -663,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     resetPipelineButton();
                     return;
                 }
-                
+
             } catch (error) {
                 console.warn('Error during pipeline monitoring:', error);
                 // Continue monitoring despite errors
@@ -673,14 +673,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updatePipelineButtonForExecution(execution) {
         if (!triggerPipelineBtn) return;
-        
+
         const stepsCompleted = execution.steps_completed || 0;
         const totalSteps = 6; // CORRECTED: Pipeline has 6 steps
         const currentStep = execution.current_step || 'processing';
-        
+
         // Update button text with progress
         triggerPipelineBtn.innerHTML = `<i class="fas fa-cog fa-spin mr-2"></i>Step ${stepsCompleted}/${totalSteps} - ${currentStep}`;
-        
+
         // Keep blue color while running
         if (!triggerPipelineBtn.className.includes('bg-blue-600')) {
             triggerPipelineBtn.className = triggerPipelineBtn.className.replace(/bg-\w+-\d+/g, 'bg-blue-600');
@@ -689,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function resetPipelineButton() {
         if (!triggerPipelineBtn) return;
-        
+
         triggerPipelineBtn.disabled = false;
         triggerPipelineBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Run Pipeline Now';
         triggerPipelineBtn.className = triggerPipelineBtn.className.replace(/bg-\w+-\d+/g, 'bg-green-600 hover:bg-green-700');
@@ -717,13 +717,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             if (response.status === 401) {
                 showPipelineNotification('Authentication required. Please login.', 'error');
                 setTimeout(() => window.location.href = '/login', 2000);
                 return;
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
@@ -849,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.viewExecutionDetails = async function(executionId) {
         try {
             showPipelineNotification('Loading execution details...', 'info');
-            
+
             const response = await fetch(`${API_BASE_URL}/pipeline/execution/${executionId}`, {
                 method: 'GET',
                 credentials: 'include',
@@ -858,12 +858,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             if (response.status === 401) {
                 showPipelineNotification('Authentication required. Please login.', 'error');
                 return;
             }
-            
+
             let executionDetails;
             if (response.ok) {
                 const responseData = await response.json();
@@ -878,7 +878,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     );
                 }
             }
-            
+
             if (!executionDetails) {
                 showPipelineNotification('Execution details not found', 'warning');
                 return;
@@ -895,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         'Content-Type': 'application/json'
                     }
                 });
-                
+
                 if (predictionsResponse.ok) {
                     const predictionsData = await predictionsResponse.json();
                     predictions = predictionsData.smart_predictions || predictionsData.predictions || [];
@@ -905,39 +905,39 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (predError) {
                 console.warn('Could not load predictions for execution:', predError);
             }
-            
+
             // Create detailed modal
             const modal = document.createElement('div');
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-            
+
             const modalContent = document.createElement('div');
             modalContent.className = 'bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden';
-            
+
             // Header
             const header = document.createElement('div');
             header.className = 'flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-4';
-            
+
             const title = document.createElement('h3');
             title.className = 'text-lg font-semibold text-gray-800 dark:text-white';
             title.textContent = `Execution ${executionId} - Generated Predictions`;
-            
+
             const closeBtn = document.createElement('button');
             closeBtn.className = 'text-gray-500 hover:text-gray-700';
             closeBtn.innerHTML = '<i class="fas fa-times"></i>';
             closeBtn.onclick = () => modal.remove();
-            
+
             header.appendChild(title);
             header.appendChild(closeBtn);
-            
+
             // Content
             const content = document.createElement('div');
             content.className = 'overflow-y-auto max-h-[70vh]';
-            
+
             // Execution summary section
             const summarySection = document.createElement('div');
             summarySection.className = 'mb-6 bg-gray-50 dark:bg-gray-900 rounded-lg p-4';
-            
+
             const formatDateTime = (dateStr) => {
                 if (!dateStr) return 'Not available';
                 try {
@@ -974,11 +974,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">Start Time:</span><br>
-                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.start_time)}</span>
+                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.start_time_formatted || execution.start_time || 'N/A'}</span>
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">End Time:</span><br>
-                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.end_time)}</span>
+                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.end_time_formatted || execution.end_time || 'N/A'}</span>
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">Trigger:</span><br>
@@ -1008,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Predictions table section
             const predictionsSection = document.createElement('div');
             predictionsSection.className = 'bg-white dark:bg-gray-800';
-            
+
             if (predictions.length > 0) {
                 predictionsSection.innerHTML = `
                     <h4 class="text-md font-semibold text-gray-900 dark:text-white mb-3">
@@ -1069,15 +1069,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
             }
-            
+
             content.appendChild(summarySection);
             content.appendChild(predictionsSection);
-            
+
             modalContent.appendChild(header);
             modalContent.appendChild(content);
             modal.appendChild(modalContent);
             document.body.appendChild(modal);
-            
+
         } catch (error) {
             console.error('Error loading execution details:', error);
             showPipelineNotification('Error loading execution details: ' + error.message, 'error');
@@ -1926,7 +1926,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize UI state
     initializePipelineDashboard();
-    
+
     // Enable auto-refresh by default
     if (autoRefreshCheckbox) {
         autoRefreshCheckbox.checked = true;

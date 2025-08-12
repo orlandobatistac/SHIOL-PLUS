@@ -160,14 +160,28 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
         # Get executions from SQLite database
         executions = get_pipeline_execution_history(limit=limit)
 
-        # Format for API response
+        # Format for API response with pre-formatted dates
         formatted_executions = []
         for execution in executions:
+            from src.date_utils import DateManager
+            
+            # Pre-format dates for frontend display
+            start_time_formatted = 'N/A'
+            end_time_formatted = 'N/A'
+            
+            if execution.get('start_time'):
+                start_time_formatted = DateManager.format_datetime_for_display(execution.get('start_time'))
+            
+            if execution.get('end_time'):
+                end_time_formatted = DateManager.format_datetime_for_display(execution.get('end_time'))
+            
             formatted_execution = {
                 'execution_id': execution.get('execution_id'),
                 'status': execution.get('status'),
-                'start_time': execution.get('start_time'),
-                'end_time': execution.get('end_time'),
+                'start_time': execution.get('start_time'),  # Original ISO format
+                'start_time_formatted': start_time_formatted,  # Pre-formatted for display
+                'end_time': execution.get('end_time'),  # Original ISO format
+                'end_time_formatted': end_time_formatted,  # Pre-formatted for display
                 'trigger_type': execution.get('trigger_type', 'unknown'),
                 'trigger_source': execution.get('trigger_source', 'unknown'),
                 'current_step': execution.get('current_step'),
@@ -413,7 +427,7 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
         if not execution:
             raise HTTPException(status_code=404, detail=f"Execution {execution_id} not found")
         
-        # Enhance execution data with additional computed fields
+        # Enhance execution data with additional computed fields and pre-formatted dates
         enhanced_execution = execution.copy()
         
         # Ensure proper defaults for missing fields
@@ -438,6 +452,21 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
         
         # Ensure total_steps is set to correct value
         enhanced_execution['total_steps'] = 6  # CORRECTED: Always set to 6 steps
+        
+        # Pre-format dates for frontend display
+        from src.date_utils import DateManager
+        
+        start_time_formatted = 'N/A'
+        end_time_formatted = 'N/A'
+        
+        if enhanced_execution.get('start_time'):
+            start_time_formatted = DateManager.format_datetime_for_display(enhanced_execution.get('start_time'))
+        
+        if enhanced_execution.get('end_time'):
+            end_time_formatted = DateManager.format_datetime_for_display(enhanced_execution.get('end_time'))
+        
+        enhanced_execution['start_time_formatted'] = start_time_formatted
+        enhanced_execution['end_time_formatted'] = end_time_formatted
         
         # Calculate duration if both start and end times exist
         if enhanced_execution.get('start_time') and enhanced_execution.get('end_time'):
