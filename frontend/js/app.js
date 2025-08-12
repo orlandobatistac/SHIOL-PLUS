@@ -73,32 +73,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Timezone Conversion Functions ---
-    function convertToETTimezone(dateString) {
+    // Assuming this function correctly formats dates for display in ET
+    function displayFormattedDate(dateString) {
         if (!dateString || dateString === 'N/A') return 'N/A';
 
         try {
-            // The backend already provides dates in ET timezone
-            // We just need to format them for display without additional conversion
             let date;
-
+            // Attempt to parse ISO format
             if (dateString.includes('T')) {
-                // ISO format - parse directly
                 date = new Date(dateString);
-            } else if (dateString.includes('-')) {
-                // YYYY-MM-DD HH:MM:SS format
+            }
+            // Attempt to parse YYYY-MM-DD HH:MM:SS format
+            else if (dateString.includes('-') && dateString.includes(':')) {
+                // Replace space with T for better parsing, or handle format directly
+                date = new Date(dateString.replace(' ', 'T'));
+            }
+            // Fallback for other formats or if parsing fails
+            else {
                 date = new Date(dateString);
-            } else {
-                return dateString; // Return as-is if can't parse
             }
 
             // Check if the date parsed correctly
             if (isNaN(date.getTime())) {
                 console.warn('Invalid date parsed:', dateString);
-                return dateString;
+                return dateString; // Return original if parsing failed
             }
 
             // Format for display: MM/DD/YYYY H:MM AM/PM ET
-            // Use local browser formatting but display the time as-is from backend
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
             const year = date.getFullYear();
@@ -121,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return dateString; // Return original if conversion fails
         }
     }
+
 
     const API_BASE_URL = getApiBaseUrl();
 
@@ -339,15 +341,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         sortedExecutions.forEach((execution, index) => {
-            const startTime = execution.start_time ? convertToETTimezone(execution.start_time) : 'N/A';
-            const endTime = execution.end_time ? new Date(execution.end_time) : null;
+            const startTimeDisplay = displayFormattedDate(execution.start_time);
+            const endTimeDisplay = execution.end_time ? displayFormattedDate(execution.end_time) : 'N/A';
             const startTimeObj = execution.start_time ? new Date(execution.start_time) : null;
 
             let duration = 'N/A';
             if (execution.status === 'running') {
                 duration = 'In progress...';
-            } else if (startTimeObj && endTime) {
-                const durationMs = endTime - startTimeObj;
+            } else if (startTimeObj && execution.end_time) {
+                const endTimeObj = new Date(execution.end_time);
+                const durationMs = endTimeObj - startTimeObj;
                 const minutes = Math.floor(durationMs / 60000);
                 const seconds = Math.floor((durationMs % 60000) / 1000);
                 duration = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
@@ -366,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Start time cell
             const startTimeCell = document.createElement('td');
             startTimeCell.className = 'px-4 py-3 text-sm text-gray-900 dark:text-gray-100';
-            startTimeCell.textContent = startTime;
+            startTimeCell.textContent = startTimeDisplay;
             row.appendChild(startTimeCell);
 
             // Status cell with enhanced styling
@@ -941,7 +944,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const formatDateTime = (dateStr) => {
                 if (!dateStr) return 'Not available';
                 try {
-                    return convertToETTimezone(dateStr);
+                    return displayFormattedDate(dateStr);
                 } catch (e) {
                     return dateStr;
                 }
@@ -974,11 +977,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">Start Time:</span><br>
-                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.start_time_formatted || execution.start_time || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.start_time)}</span>
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">End Time:</span><br>
-                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.end_time_formatted || execution.end_time || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.end_time)}</span>
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">Trigger:</span><br>
@@ -1033,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         </td>
                                         <td class="px-4 py-3">
                                             <div class="flex space-x-1">
-                                                ${(pred.numbers || []).map(num => 
+                                                ${(pred.numbers || []).map(num =>
                                                     `<span class="inline-flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded-full text-xs font-bold">${num}</span>`
                                                 ).join('')}
                                             </div>

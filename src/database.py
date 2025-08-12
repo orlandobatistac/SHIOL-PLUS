@@ -2096,11 +2096,13 @@ def _sanitize_prediction_data(prediction_data: Dict[str, Any]) -> Dict[str, Any]
     Returns:
         Datos de predicción sanitizados y validados
     """
+    from src.date_utils import DateManager
+    
     sanitized_data = prediction_data.copy()
 
-    # Validar y corregir timestamp
+    # Validar y corregir timestamp usando DateManager consistente
     if 'timestamp' not in sanitized_data or not sanitized_data['timestamp']:
-        sanitized_data['timestamp'] = datetime.now().isoformat()
+        sanitized_data['timestamp'] = DateManager.get_current_et_time().isoformat()
 
     # Validar números principales (deben estar entre 1-69)
     if 'numbers' in sanitized_data:

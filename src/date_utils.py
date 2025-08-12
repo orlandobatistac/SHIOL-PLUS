@@ -376,8 +376,10 @@ class DateManager:
         Formatea una fecha/hora para mostrar en la interfaz web.
         Retorna formato: MM/DD/YYYY H:MM AM/PM ET
         
+        OPTIMIZADO: Asume que las fechas ya están en ET timezone correcto
+        
         Args:
-            dt: Fecha como datetime o string ISO
+            dt: Fecha como datetime o string ISO (ya en ET)
             
         Returns:
             str: Fecha formateada para display web
@@ -386,11 +388,30 @@ class DateManager:
             if dt is None or dt == 'N/A':
                 return 'N/A'
             
-            # Convert to ET datetime if needed
+            # Parse the datetime if it's a string, assuming it's already in ET
             if isinstance(dt, str):
-                et_time = cls.convert_to_et(dt)
+                try:
+                    # Try ISO format first
+                    if 'T' in dt:
+                        parsed_dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+                        # If it has timezone info, convert to ET, otherwise assume it's already ET
+                        if parsed_dt.tzinfo is not None:
+                            et_time = parsed_dt.astimezone(cls.POWERBALL_TIMEZONE)
+                        else:
+                            et_time = cls.POWERBALL_TIMEZONE.localize(parsed_dt)
+                    else:
+                        # Simple datetime string, assume ET
+                        parsed_dt = datetime.strptime(dt[:19], '%Y-%m-%d %H:%M:%S')
+                        et_time = cls.POWERBALL_TIMEZONE.localize(parsed_dt)
+                except ValueError:
+                    # Fallback: use existing convert_to_et method
+                    et_time = cls.convert_to_et(dt)
             else:
-                et_time = cls.convert_to_et(dt)
+                # datetime object
+                if dt.tzinfo is None:
+                    et_time = cls.POWERBALL_TIMEZONE.localize(dt)
+                else:
+                    et_time = dt.astimezone(cls.POWERBALL_TIMEZONE)
             
             # Format: MM/DD/YYYY H:MM AM/PM ET
             month = et_time.strftime('%m')
@@ -410,6 +431,20 @@ class DateManager:
         except Exception as e:
             logger.error(f"Error formatting datetime for display: {dt} - {e}")
             return str(dt) if dt else 'N/A'
+    
+    @classmethod
+    def format_datetime_for_api(cls, dt: Union[datetime, str]) -> str:
+        """
+        Formatea fechas específicamente para respuestas de API.
+        Garantiza consistencia en todos los endpoints.
+        
+        Args:
+            dt: Fecha como datetime o string ISO
+            
+        Returns:
+            str: Fecha formateada lista para frontend
+        """
+        return cls.format_datetime_for_display(dt)
     
     @classmethod
     def get_current_date_info(cls) -> Dict[str, Any]:

@@ -81,7 +81,9 @@ class PipelineOrchestrator:
         self._is_running = True
         self._current_execution_id = execution_id
         
-        start_time = datetime.now()
+        # Use centralized DateManager for consistent ET timestamps
+        from src.date_utils import DateManager
+        start_time = DateManager.get_current_et_time()
         logger.info(f"Starting full pipeline execution {execution_id} with {num_predictions} predictions")
         
         try:
@@ -109,7 +111,7 @@ class PipelineOrchestrator:
             logger.info("Pipeline Step 6/6: Save Results")
             save_result = await self._save_results(predictions)
             
-            end_time = datetime.now()
+            end_time = DateManager.get_current_et_time()
             execution_time = end_time - start_time
             
             results = {
@@ -135,12 +137,13 @@ class PipelineOrchestrator:
             
         except Exception as e:
             logger.error(f"Pipeline execution failed: {e}")
+            error_time = DateManager.get_current_et_time()
             return {
                 "status": "failed",
                 "error": str(e),
-                "execution_time": str(datetime.now() - start_time),
+                "execution_time": str(error_time - start_time),
                 "start_time": start_time.isoformat(),
-                "end_time": datetime.now().isoformat()
+                "end_time": error_time.isoformat()
             }
         finally:
             # Reset execution state
@@ -229,14 +232,15 @@ class PipelineOrchestrator:
                 # Use intelligent generator to create prediction
                 prediction = self.intelligent_generator.generate_play()
                 
-                # Add metadata
+                # Add metadata with consistent DateManager timestamp
+                from src.date_utils import DateManager
                 prediction_data = {
                     "numbers": prediction.get("numbers", []),
                     "powerball": prediction.get("powerball", 1),
                     "score_total": prediction.get("score", 0.0),
                     "method": "smart_ai_pipeline",
                     "prediction_id": start_index + i + 1,
-                    "generated_at": datetime.now().isoformat(),
+                    "generated_at": DateManager.get_current_et_time().isoformat(),
                     "rank": start_index + i + 1
                 }
                 
