@@ -752,7 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const closeIcon = document.createElement('i');
             closeIcon.className = 'fas fa-times';
-            closeButton.appendChild(closeIcon);
+            closeButton.appendChild(icon);
 
             headerDiv.appendChild(title);
             headerDiv.appendChild(closeButton);
@@ -1146,23 +1146,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Load pipeline status
-    async function loadPipelineStatus() {
+    function loadPipelineStatus() {
         try {
             showSpinner('pipeline-status');
-            const response = await fetch(`${API_BASE_URL}/pipeline/status`);
-            const data = await response.json();
+            const response = fetch(`${API_BASE_URL}/pipeline/status`);
+            response.then(res => res.json()).then(data => {
+                updateStatusDisplay(data);
+                updateSchedulerDisplay(data.scheduler);
+                updateExecutionHistory(data.recent_executions || []);
 
-            updateStatusDisplay(data);
-            updateSchedulerDisplay(data.scheduler);
-            updateExecutionHistory(data.recent_executions || []);
+                // Load detailed scheduler jobs
+                loadDetailedSchedulerJobs();
 
-            // Load detailed scheduler jobs
-            await loadDetailedSchedulerJobs();
-
+            }).catch(error => {
+                console.error('Error loading pipeline status:', error);
+                showError('Failed to load pipeline status');
+            }).finally(() => {
+                hideSpinner('pipeline-status');
+            });
         } catch (error) {
-            console.error('Error loading pipeline status:', error);
+            console.error('Error during pipeline status fetch:', error);
             showError('Failed to load pipeline status');
-        } finally {
             hideSpinner('pipeline-status');
         }
     }
@@ -1924,6 +1928,38 @@ document.addEventListener('DOMContentLoaded', () => {
             toast.classList.remove('opacity-100');
             toast.classList.add('opacity-0');
         }, 3000);
+    }
+
+    // Helper function to show an empty state for predictions
+    function showEmptyPredictionsState() {
+        const currentPredictionsContainer = document.getElementById('current-predictions-container'); // Assuming this exists
+        if (!currentPredictionsContainer) {
+            console.warn('Could not find #current-predictions-container to display empty state.');
+            return;
+        }
+
+        // Clear existing content safely
+        currentPredictionsContainer.textContent = '';
+
+        const emptyStateDiv = document.createElement('div');
+        emptyStateDiv.className = 'text-center py-10 px-4 sm:px-6 lg:px-8';
+
+        const emptyIcon = document.createElement('i');
+        emptyIcon.className = 'fas fa-info-circle text-4xl text-gray-400 mb-4';
+
+        const emptyTitle = document.createElement('h3');
+        emptyTitle.className = 'mt-2 text-lg font-medium text-gray-900 dark:text-gray-100';
+        emptyTitle.textContent = 'No Predictions Available';
+
+        const emptyDescription = document.createElement('p');
+        emptyDescription.className = 'mt-1 text-sm text-gray-500 dark:text-gray-400';
+        emptyDescription.textContent = 'No new predictions have been generated or found for the current selection.';
+
+        emptyStateDiv.appendChild(emptyIcon);
+        emptyStateDiv.appendChild(emptyTitle);
+        emptyStateDiv.appendChild(emptyDescription);
+
+        currentPredictionsContainer.appendChild(emptyStateDiv);
     }
 
 

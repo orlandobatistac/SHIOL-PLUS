@@ -119,14 +119,15 @@ async def get_next_drawing_info():
             predictions_df = get_prediction_history(limit=100)
 
             if predictions_df.empty:
-                logger.warning("No predictions found in database")
-                # Return empty state if no predictions exist
+                logger.warning("No real predictions found in database")
+                # Return proper empty state - no fallback to simulated data
                 featured_prediction = {
                     "predictions": [],
                     "total_predictions": 0,
-                    "method": "no_predictions_available",
+                    "method": "no_real_predictions",
                     "generated_at": datetime.now().isoformat(),
-                    "message": "No predictions available. Please check back later."
+                    "message": "No AI predictions available yet. Run the Full Pipeline to generate real predictions.",
+                    "call_to_action": "Execute Full Pipeline from Dashboard"
                 }
             else:
                 # Convert database predictions to the expected format

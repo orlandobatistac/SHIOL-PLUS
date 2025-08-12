@@ -201,7 +201,7 @@ class PublicInterface {
         // Update the main drawing date display with countdown format
         if (drawingDateElement) {
             const formattedCountdown = PowerballUtils.formatCountdown(seconds);
-            
+
             if (seconds <= 60) {
                 drawingDateElement.textContent = `Drawing in ${seconds} second${seconds === 1 ? '' : 's'}`;
             } else {
@@ -525,16 +525,16 @@ class PublicInterface {
 
         // Display the predictions using safe DOM methods
         container.textContent = ''; // Clear existing content safely
-        
+
         // Create a temporary container to parse the HTML safely
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = predictionsHtml;
-        
+
         // Move all child nodes to the actual container
         while (tempDiv.firstChild) {
             container.appendChild(tempDiv.firstChild);
         }
-        
+
         container.classList.remove('hidden');
         container.style.display = 'block';
 
@@ -591,9 +591,6 @@ class PublicInterface {
     }
 
     /**
-    }
-
-    /**
      * Show loading state
      */
     showLoadingState() {
@@ -632,15 +629,15 @@ class PublicInterface {
                 historyContainer.textContent = '';
                 const loadingDiv = document.createElement('div');
                 loadingDiv.className = 'loading';
-                
+
                 const spinner = document.createElement('div');
                 spinner.className = 'loading-spinner';
                 loadingDiv.appendChild(spinner);
-                
+
                 const loadingText = document.createElement('span');
                 loadingText.textContent = 'Loading prediction history...';
                 loadingDiv.appendChild(loadingText);
-                
+
                 historyContainer.appendChild(loadingDiv);
             }
 
@@ -664,21 +661,21 @@ class PublicInterface {
                 historyContainer.textContent = '';
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'error-message';
-                
+
                 const errorIcon = document.createElement('i');
                 errorIcon.className = 'fas fa-exclamation-triangle';
                 errorDiv.appendChild(errorIcon);
-                
+
                 const errorText = document.createElement('span');
                 errorText.textContent = 'Error loading prediction history. Please try again later.';
                 errorDiv.appendChild(errorText);
-                
+
                 const retryButton = document.createElement('button');
                 retryButton.className = 'retry-button';
                 retryButton.textContent = 'Retry';
                 retryButton.onclick = () => publicInterface.loadPredictionHistory();
                 errorDiv.appendChild(retryButton);
-                
+
                 historyContainer.appendChild(errorDiv);
             }
         }
@@ -694,16 +691,16 @@ class PublicInterface {
         if (!data.history || data.history.length === 0) {
             // Create elements safely without innerHTML
         historyContainer.textContent = '';
-        
+
         const noDataDiv = document.createElement('div');
         noDataDiv.className = 'no-data';
-        
+
         const icon = document.createElement('i');
         icon.className = 'fas fa-info-circle';
-        
+
         const span = document.createElement('span');
         span.textContent = 'No prediction history available yet.';
-        
+
         noDataDiv.appendChild(icon);
         noDataDiv.appendChild(span);
         historyContainer.appendChild(noDataDiv);
@@ -813,21 +810,21 @@ class PublicInterface {
         container.textContent = '';
         const emptyDiv = document.createElement('div');
         emptyDiv.className = 'bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center';
-        
+
         const clockIcon = document.createElement('i');
         clockIcon.className = 'fas fa-clock text-4xl text-gray-400 mb-4';
         emptyDiv.appendChild(clockIcon);
-        
+
         const title = document.createElement('h3');
         title.className = 'text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2';
         title.textContent = 'No History Available';
         emptyDiv.appendChild(title);
-        
+
         const description = document.createElement('p');
         description.className = 'text-sm text-gray-500 dark:text-gray-500';
         description.textContent = 'No previous predictions found in the database.';
         emptyDiv.appendChild(description);
-        
+
         container.appendChild(emptyDiv);
         container.classList.remove('hidden');
         this.hideHistoryLoadingState();
@@ -1128,16 +1125,16 @@ class PublicInterface {
 
         // Use safe DOM methods to display grouped history
         container.textContent = ''; // Clear existing content safely
-        
+
         // Create a temporary container to parse the HTML safely
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = historyHTML;
-        
+
         // Move all child nodes to the actual container
         while (tempDiv.firstChild) {
             container.appendChild(tempDiv.firstChild);
         }
-        
+
         container.classList.remove('hidden');
     }
 
@@ -1273,11 +1270,11 @@ class PublicInterface {
 
         // Use safe DOM methods to display date details
         modalContent.textContent = ''; // Clear existing content safely
-        
+
         // Create a temporary container to parse the HTML safely
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = detailsHTML;
-        
+
         // Move all child nodes to the actual container
         while (tempDiv.firstChild) {
             modalContent.appendChild(tempDiv.firstChild);
@@ -1336,14 +1333,21 @@ class PublicInterface {
         if (!container) return;
 
         container.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
-                <i class="fas fa-calendar-times text-4xl text-gray-400 mb-4"></i>
-                <h3 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">No History Available</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-500">No previous predictions found grouped by date.</p>
+            <div class="text-center py-12 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-lg">
+                <i class="fas fa-chart-line text-4xl text-blue-500 mb-4"></i>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    No Real Predictions Yet
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    The AI system hasn't generated real predictions for official drawings yet.
+                </p>
+                <div class="text-sm text-gray-500 dark:text-gray-500 space-y-1">
+                    <p><i class="fas fa-robot mr-2"></i>Real AI predictions are generated by the pipeline</p>
+                    <p><i class="fas fa-shield-alt mr-2"></i>No simulated or fake data shown</p>
+                    <p><i class="fas fa-clock mr-2"></i>Check back after pipeline execution</p>
+                </div>
             </div>
         `;
-        container.classList.remove('hidden');
-        this.hideGroupedHistoryLoadingState();
     }
 
     /**

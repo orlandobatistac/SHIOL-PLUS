@@ -675,7 +675,7 @@ def get_all_draws() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def save_prediction_log(prediction_data: Dict[str, Any]) -> Optional[int]:
+def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool = False) -> Optional[int]:
     """
     Guarda una predicción en la tabla predictions_log.
 
@@ -1270,16 +1270,20 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # Solo obtener fechas de sorteos que YA TIENEN resultados oficiales
-            # Esto significa que solo mostramos historical data, no predicciones futuras
+            # Solo obtener fechas donde existen predicciones reales del pipeline
+            # Excluir predicciones simuladas o de prueba
             cursor.execute("""
                 SELECT DISTINCT
                     pd.draw_date as target_date,
                     COUNT(pl.id) as total_predictions
                 FROM powerball_draws pd
                 INNER JOIN predictions_log pl ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
-                WHERE pl.created_at IS NOT NULL
+                WHERE pl.created_at IS NOT NULL 
+                    AND pl.model_version != 'fallback'
+                    AND pl.model_version != 'test'
+                    AND pl.dataset_hash != 'simulated'
                 GROUP BY pd.draw_date
+                HAVING COUNT(pl.id) > 0
                 ORDER BY pd.draw_date DESC
                 LIMIT ?
             """, (limit_dates,))
@@ -1584,24 +1588,7 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
 
             grouped_comparisons = []
 
-            # Obtener algunas predicciones reales para usar como base para simulaciones
-            cursor.execute("""
-                SELECT n1, n2, n3, n4, n5, powerball, score_total
-                FROM predictions_log
-                ORDER BY created_at DESC
-                LIMIT 20
-            """)
-            base_predictions = cursor.fetchall()
-
-            # Si no hay predicciones base, crear algunas por defecto
-            if not base_predictions:
-                base_predictions = [
-                    (7, 14, 21, 35, 42, 18, 0.75),
-                    (3, 16, 27, 44, 58, 9, 0.72),
-                    (12, 23, 34, 45, 56, 15, 0.68),
-                    (5, 19, 28, 37, 49, 22, 0.71),
-                    (11, 25, 33, 41, 52, 8, 0.69)
-                ]
+            # No usar predicciones simuladas - solo datos reales del pipeline
 
             for result_row in official_results:
                 draw_date = result_row[0]
@@ -1622,23 +1609,10 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
 
                 predictions_data = cursor.fetchall()
 
-                # Si no hay predicciones reales, generar predicciones simuladas
+                # Si no hay predicciones reales, omitir este grupo completamente
                 if not predictions_data:
-                    predictions_data = []
-                    for i in range(5):
-                        # Usar una predicción base y modificarla ligeramente
-                        base_idx = i % len(base_predictions)
-                        base_pred = base_predictions[base_idx]
-
-                        # Crear predicción simulada con ID negativo para distinguir
-                        sim_pred = (
-                            -(i + 1),  # ID negativo para simuladas
-                            draw_date,  # timestamp como fecha del sorteo
-                            base_pred[0], base_pred[1], base_pred[2], base_pred[3], base_pred[4],  # números
-                            base_pred[5],  # powerball
-                            0, 0, "simulated"  # matches_main, matches_pb, prize_tier (se calculará después)
-                        )
-                        predictions_data.append(sim_pred)
+                    logger.debug(f"No real predictions found for draw date {draw_date}, skipping group")
+                    continue
 
                 # Procesar cada predicción del grupo
                 predictions = []
@@ -2148,9 +2122,16 @@ def _sanitize_prediction_data(prediction_data: Dict[str, Any]) -> Dict[str, Any]
             logger.error(f"Invalid score format: {sanitized_data['score_total']}")
             return None
 
-    # Validar model_version
+    # Validar model_version y rechazar datos simulados
     if 'model_version' not in sanitized_data or not sanitized_data['model_version']:
         sanitized_data['model_version'] = '1.0.0'  # Default version
+    
+    # Rechazar datos simulados a menos que se permita explícitamente
+    if not allow_simulated:
+        if (sanitized_data['model_version'] in ['fallback', 'test', 'simulated'] or
+            sanitized_data.get('dataset_hash') == 'simulated'):
+            logger.warning("Rejecting simulated prediction data")
+            return None
 
     # Validar dataset_hash
     if 'dataset_hash' not in sanitized_data or not sanitized_data['dataset_hash']:

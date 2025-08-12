@@ -200,13 +200,9 @@ async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, descriptio
                     logger.warning(f"Error converting prediction record {i}: {e}")
                     continue
 
-        # Fallback to real-time generation if no predictions
-        if not smart_predictions and predictor:
-            predictions = predictor.predict_diverse_plays(num_plays=min(limit, 10), save_to_log=True)
-            for i, pred in enumerate(predictions):
-                smart_pred = format_prediction_response(pred, "smart_ai_realtime")
-                smart_pred["rank"] = i + 1
-                smart_predictions.append(smart_pred)
+        # No fallback - only show real pipeline-generated predictions
+        if not smart_predictions:
+            logger.info("No Smart AI predictions available - pipeline must be executed first")
 
         # Calculate statistics
         avg_score = sum(p["total_score"] for p in smart_predictions) / len(smart_predictions) if smart_predictions else 0.0
