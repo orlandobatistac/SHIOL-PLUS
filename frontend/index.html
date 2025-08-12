@@ -350,14 +350,14 @@
                     const nextDrawingDate = document.getElementById('next-drawing-date');
                     if (nextDrawingDate) {
                         const drawingData = data.next_drawing || data;
-                        if (drawingData.date && drawingData.time) {
-                            const formattedDate = `${drawingData.date} at ${drawingData.time} ${drawingData.timezone || 'ET'}`;
-                            nextDrawingDate.textContent = formattedDate;
+                        if (drawingData.exact_drawing_time) {
+                            // Use the pre-formatted readable time from backend
+                            nextDrawingDate.textContent = drawingData.exact_drawing_time;
                         } else if (drawingData.datetime_iso) {
                             const drawingDate = new Date(drawingData.datetime_iso);
                             const formattedDate = drawingDate.toLocaleString('en-US', {
-                                weekday: 'short',
-                                month: 'short',
+                                weekday: 'long',
+                                month: 'long',
                                 day: 'numeric',
                                 hour: '2-digit',
                                 minute: '2-digit',
