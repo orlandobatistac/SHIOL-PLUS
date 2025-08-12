@@ -1209,9 +1209,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Display detailed scheduler jobs information
+    // Display detailed scheduler jobs information - only pipeline jobs
     function displayDetailedSchedulerJobs(jobs) {
-        console.log('Detailed scheduler jobs:', jobs);
+        console.log('Detailed scheduler jobs (filtered for pipeline):', jobs);
 
         // Find the scheduler section and add detailed info
         const schedulerSection = document.querySelector('.bg-white.dark\\:bg-gray-800.rounded-xl.shadow-lg.border.border-gray-200.dark\\:border-gray-700');
@@ -1230,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const title = document.createElement('h4');
             title.className = 'text-md font-semibold text-gray-900 dark:text-white mb-4 flex items-center';
-            title.innerHTML = '<i class="fas fa-list mr-2 text-blue-600"></i>Scheduled Jobs Details';
+            title.innerHTML = '<i class="fas fa-list mr-2 text-blue-600"></i>Automated Scheduling';
             detailsDiv.appendChild(title);
 
             // Create jobs list
@@ -1244,20 +1244,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const nextRunDate = job.next_run_time ? new Date(job.next_run_time) : null;
                 const timeUntil = nextRunDate ? getTimeUntilNext(nextRunDate) : 'Not scheduled';
 
-                // Determine job description based on ID
-                let jobDescription = '';
-                let jobIcon = 'fas fa-cog';
-                let jobColor = 'text-blue-600';
-
-                if (job.id === 'post_drawing_pipeline') {
-                    jobDescription = 'Full Pipeline Execution (30 min after Powerball drawing)';
-                    jobIcon = 'fas fa-rocket';
-                    jobColor = 'text-green-600';
-                } else if (job.id === 'maintenance_data_update') {
-                    jobDescription = 'Maintenance Data Update (non-drawing days)';
-                    jobIcon = 'fas fa-database';
-                    jobColor = 'text-orange-600';
-                }
+                // Pipeline job description and styling
+                let jobDescription = 'Full Pipeline Execution (30 min after Powerball drawing)';
+                let jobIcon = 'fas fa-rocket';
+                let jobColor = 'text-green-600';
 
                 jobDiv.innerHTML = `
                     <div class="flex items-start justify-between">
@@ -1268,19 +1258,17 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <p class="text-sm text-gray-600 dark:text-gray-400">${jobDescription}</p>
                                 <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                                     <span class="inline-block mr-4"><strong>ID:</strong> ${job.id}</span>
-                                    <span class="inline-block mr-4"><strong>Function:</strong> ${job.func_name}</span>
+                                    <span class="inline-block mr-4"><strong>Function:</strong> ${job.func_name || job.func}</span>
                                 </div>
-                                ${job.trigger.type === 'cron' ? `
                                 <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    <span class="inline-block mr-4"><strong>Schedule:</strong> ${job.trigger.day_of_week} at ${job.trigger.hour}:${job.trigger.minute}</span>
-                                    <span class="inline-block"><strong>Timezone:</strong> ${job.trigger.timezone}</span>
+                                    <span class="inline-block mr-4"><strong>Schedule:</strong> Mon, Wed, Sat at 11:29 PM</span>
+                                    <span class="inline-block"><strong>Timezone:</strong> Eastern Time</span>
                                 </div>
-                                ` : ''}
                             </div>
                         </div>
                         <div class="text-right">
                             <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                ${job.next_run_time_display || 'Not scheduled'}
+                                ${job.next_run_time_display || nextRunDate?.toLocaleString() || 'Not scheduled'}
                             </div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">
                                 ${timeUntil}

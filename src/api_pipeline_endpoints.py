@@ -108,20 +108,25 @@ async def _get_current_pipeline_status() -> Dict[str, Any]:
         return {"status": "unknown", "description": "Unable to determine pipeline status"}
 
 async def _get_scheduler_status() -> Dict[str, Any]:
-    """Get scheduler status and next run information"""
+    """Get scheduler status and next run information - filtered for dashboard display"""
     try:
         from src.api import scheduler
         if scheduler and scheduler.running:
-            jobs = scheduler.get_jobs()
-            next_job = None
-            for job in jobs:
-                if not next_job or job.next_run_time < next_job.next_run_time:
-                    next_job = job
+            all_jobs = scheduler.get_jobs()
+            
+            # Filter: Only count pipeline jobs for dashboard display
+            pipeline_jobs = [job for job in all_jobs if "pipeline" in job.id.lower() or "pipeline" in job.name.lower()]
+            
+            # Find next pipeline job execution
+            next_pipeline_job = None
+            for job in pipeline_jobs:
+                if job.next_run_time and (not next_pipeline_job or job.next_run_time < next_pipeline_job.next_run_time):
+                    next_pipeline_job = job
 
             return {
                 "active": True,
-                "job_count": len(jobs),
-                "next_run": next_job.next_run_time.isoformat() if next_job and next_job.next_run_time else None
+                "job_count": len(pipeline_jobs),  # Only count pipeline jobs
+                "next_run": next_pipeline_job.next_run_time.isoformat() if next_pipeline_job and next_pipeline_job.next_run_time else None
             }
         else:
             return {"active": False, "job_count": 0, "next_run": None}
@@ -130,22 +135,24 @@ async def _get_scheduler_status() -> Dict[str, Any]:
         return {"active": False, "job_count": 0, "next_run": None}
 
 async def _get_detailed_scheduler_jobs() -> List[Dict[str, Any]]:
-    """Get detailed information about all scheduled jobs"""
+    """Get detailed information about scheduled jobs - filtered for dashboard display"""
     try:
         from src.api import scheduler
         jobs_info = []
         if scheduler and scheduler.running:
             for job in scheduler.get_jobs():
-                jobs_info.append({
-                    "id": job.id,
-                    "name": job.name,
-                    "trigger": str(job.trigger),
-                    "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
-                    "previous_run_time": job.previous_run_time.isoformat() if job.previous_run_time else None,
-                    "func": job.func.__name__,
-                    "args": job.args,
-                    "kwargs": job.kwargs
-                })
+                # Filter: Only show pipeline jobs in dashboard (hide maintenance)
+                if "pipeline" in job.id.lower() or "pipeline" in job.name.lower():
+                    jobs_info.append({
+                        "id": job.id,
+                        "name": job.name,
+                        "trigger": str(job.trigger),
+                        "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+                        "previous_run_time": job.previous_run_time.isoformat() if job.previous_run_time else None,
+                        "func": job.func.__name__,
+                        "args": job.args,
+                        "kwargs": job.kwargs
+                    })
         return jobs_info
     except Exception as e:
         logger.error(f"Error getting detailed scheduler jobs: {e}")
