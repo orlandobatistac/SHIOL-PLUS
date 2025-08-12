@@ -172,11 +172,28 @@ async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, descriptio
 
         smart_predictions = []
         if not predictions_df.empty:
+            # STRICT FILTER: Only process real pipeline predictions
             for i, pred in enumerate(predictions_df.to_dict('records')):
                 try:
+                    # Validate this is a real prediction from pipeline
+                    model_version = str(pred.get("model_version", ""))
+                    dataset_hash = str(pred.get("dataset_hash", ""))
+                    
+                    # REJECT simulated, test, or fallback data completely
+                    if (model_version in ["fallback", "test", "simulated", "1.0.0-test"] or
+                        dataset_hash in ["simulated", "test", "fallback"] or
+                        len(dataset_hash) < 10):  # Reject short/invalid hashes
+                        logger.debug(f"Rejecting non-pipeline prediction: model={model_version}, hash={dataset_hash}")
+                        continue
+                    
                     numbers = [int(pred.get(f"n{j}", 0)) for j in range(1, 6)]
                     powerball = int(pred.get("powerball", 0))
                     total_score = float(pred.get("score_total", 0.0))
+                    
+                    # Validate number ranges
+                    if not all(1 <= num <= 69 for num in numbers) or not (1 <= powerball <= 26):
+                        logger.debug(f"Rejecting prediction with invalid number ranges")
+                        continue
 
                     smart_pred = {
                         "rank": i + 1,
@@ -189,8 +206,8 @@ async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, descriptio
                             "historical": total_score * 0.2,
                             "risk_adjusted": total_score * 0.15
                         },
-                        "model_version": str(pred.get("model_version", "pipeline_v1.0")),
-                        "dataset_hash": str(pred.get("dataset_hash", "pipeline_generated")),
+                        "model_version": model_version,
+                        "dataset_hash": dataset_hash,
                         "prediction_id": int(pred.get("id", 0)),
                         "generated_at": str(pred.get("timestamp", "")),
                         "method": "smart_ai_pipeline"
@@ -200,19 +217,9 @@ async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, descriptio
                     logger.warning(f"Error converting prediction record {i}: {e}")
                     continue
 
-        # STRICT VALIDATION: Only show real pipeline-generated predictions
+        # NO FALLBACK DATA: If no real predictions exist, return empty
         if not smart_predictions:
-            logger.info("No Smart AI predictions available - pipeline must be executed first")
-            
-        # Additional validation to ensure no simulated data leaks through
-        real_predictions = []
-        for pred in smart_predictions:
-            if (pred.get("method") == "smart_ai_pipeline" and 
-                pred.get("dataset_hash", "") != "simulated" and
-                pred.get("model_version", "") not in ["fallback", "test", "simulated"]):
-                real_predictions.append(pred)
-        
-        smart_predictions = real_predictions
+            logger.info("No real Smart AI predictions available - pipeline must be executed first")
 
         # Calculate statistics
         avg_score = sum(p["total_score"] for p in smart_predictions) / len(smart_predictions) if smart_predictions else 0.0

@@ -266,21 +266,34 @@ class PublicInterface {
                 footerLastUpdated.textContent = updateTime;
             }
 
-            // Display Smart AI predictions
+            // Display Smart AI predictions ONLY if real data exists
             if (data.smart_predictions && data.smart_predictions.length > 0) {
-                // Debug: Log first prediction structure to see available fields
-                console.log('First prediction structure:', data.smart_predictions[0]);
-                console.log('Available score fields:', Object.keys(data.smart_predictions[0]).filter(key =>
-                    key.toLowerCase().includes('score') ||
-                    key.toLowerCase().includes('confidence') ||
-                    key.toLowerCase().includes('probability')
-                ));
+                // Validate predictions are real (not simulated/fallback)
+                const realPredictions = data.smart_predictions.filter(pred => {
+                    return pred.method === "smart_ai_pipeline" &&
+                           pred.dataset_hash !== "simulated" &&
+                           pred.model_version !== "fallback" &&
+                           pred.prediction_id > 0;
+                });
 
-                // Use the nextDrawingInfo from the API call or this.nextDrawingInfo
-                const nextDrawingData = data.next_drawing || this.nextDrawingInfo;
-                this.displaySmartPredictions(data.smart_predictions, nextDrawingData);
+                if (realPredictions.length > 0) {
+                    console.log('First real prediction structure:', realPredictions[0]);
+                    console.log('Available score fields:', Object.keys(realPredictions[0]).filter(key =>
+                        key.toLowerCase().includes('score') ||
+                        key.toLowerCase().includes('confidence') ||
+                        key.toLowerCase().includes('probability')
+                    ));
+
+                    // Use the nextDrawingInfo from the API call or this.nextDrawingInfo
+                    const nextDrawingData = data.next_drawing || this.nextDrawingInfo;
+                    this.displaySmartPredictions(realPredictions, nextDrawingData);
+                } else {
+                    console.log('No real predictions found, showing empty state');
+                    this.showNoPredictionsState();
+                }
             } else {
-                this.showPredictionError();
+                console.log('No predictions data received, showing empty state');
+                this.showNoPredictionsState();
             }
 
             console.log('Smart AI predictions loaded successfully');
@@ -614,6 +627,62 @@ class PublicInterface {
         if (loading) loading.classList.add('hidden');
         if (container) container.classList.add('hidden');
         if (error) error.classList.remove('hidden');
+    }
+
+    /**
+     * Show no predictions state - when database is empty
+     */
+    showNoPredictionsState() {
+        const loading = document.getElementById('predictions-loading');
+        const container = document.getElementById('predictions-container');
+        const error = document.getElementById('predictions-error');
+
+        // Hide loading and error states
+        if (loading) loading.classList.add('hidden');
+        if (error) error.classList.add('hidden');
+
+        if (!container) return;
+
+        // Show empty state message
+        const emptyStateHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center">
+                <div class="mx-auto w-16 h-16 text-gray-400 mb-4">
+                    <i class="fas fa-database text-4xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    No Smart AI Predictions Available
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    The database contains no real predictions from the AI pipeline yet.
+                </p>
+                <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border-l-4 border-blue-500">
+                    <div class="text-sm text-blue-700 dark:text-blue-300 space-y-2">
+                        <p><i class="fas fa-info-circle mr-2"></i><strong>To generate predictions:</strong></p>
+                        <p>1. Access the Dashboard (Admin Login)</p>
+                        <p>2. Execute the "Full Pipeline" to generate real AI predictions</p>
+                        <p>3. Return here to view the predictions</p>
+                    </div>
+                </div>
+                <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    Only real pipeline-generated predictions are displayed - no simulated data
+                </div>
+            </div>
+        `;
+
+        // Use safe DOM methods to display empty state
+        container.textContent = ''; // Clear existing content safely
+
+        // Create a temporary container to parse the HTML safely
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = emptyStateHTML;
+
+        // Move all child nodes to the actual container
+        while (tempDiv.firstChild) {
+            container.appendChild(tempDiv.firstChild);
+        }
+
+        container.classList.remove('hidden');
+        container.style.display = 'block';
     }
 
     /**
@@ -1332,28 +1401,42 @@ class PublicInterface {
         const container = document.getElementById('grouped-history-container');
         if (!container) return;
 
-        container.innerHTML = `
+        const emptyStateHTML = `
             <div class="text-center py-12 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-lg">
                 <i class="fas fa-database text-4xl text-blue-500 mb-4"></i>
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    No Historical Performance Data
+                    No Historical Performance Data Available
                 </h3>
                 <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    No real predictions with official results comparison available yet.
+                    No real predictions with official results comparison found in database.
                 </p>
                 <div class="text-sm text-gray-500 dark:text-gray-500 space-y-2">
-                    <p><i class="fas fa-shield-alt mr-2"></i>Only real pipeline-generated predictions shown</p>
-                    <p><i class="fas fa-chart-bar mr-2"></i>Performance tracking requires official draw results</p>
-                    <p><i class="fas fa-clock mr-2"></i>Run Full Pipeline to generate trackable predictions</p>
+                    <p><i class="fas fa-shield-alt mr-2"></i>Only real pipeline-generated predictions displayed</p>
+                    <p><i class="fas fa-chart-bar mr-2"></i>Performance tracking requires predictions + official results</p>
+                    <p><i class="fas fa-cogs mr-2"></i>Execute Full Pipeline to generate trackable predictions</p>
                 </div>
                 <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-l-4 border-blue-500">
                     <p class="text-sm text-blue-700 dark:text-blue-300">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Database has been cleaned - no simulated data is displayed
+                        System configured to show REAL DATA ONLY - no simulated content
                     </p>
                 </div>
             </div>
         `;
+
+        // Use safe DOM methods to display empty state
+        container.textContent = ''; // Clear existing content safely
+
+        // Create a temporary container to parse the HTML safely
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = emptyStateHTML;
+
+        // Move all child nodes to the actual container
+        while (tempDiv.firstChild) {
+            container.appendChild(tempDiv.firstChild);
+        }
+
+        container.classList.remove('hidden');
     }
 
     /**

@@ -1251,27 +1251,27 @@ def get_predictions_by_dataset_hash(dataset_hash: str) -> pd.DataFrame:
 def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
     """
     Obtiene predicciones agrupadas por fecha de sorteos que YA OCURRIERON.
-    Solo muestra predicciones para sorteos con resultados oficiales.
+    Solo muestra predicciones REALES del pipeline para sorteos con resultados oficiales.
+    NO genera datos simulados o de respaldo.
 
     Args:
         limit_dates: Número máximo de fechas a retornar (default: 25)
 
     Returns:
-        Lista de diccionarios con estructura:
+        Lista de diccionarios SOLO con predicciones reales del pipeline:
         - date: fecha del sorteo que ya ocurrió
         - formatted_date: fecha formateada en español
-        - total_plays: total de predicciones para ese sorteo
+        - total_plays: total de predicciones REALES para ese sorteo
         - winning_plays: número de predicciones que ganaron algún premio
         - best_prize: mejor premio obtenido
         - total_prize_amount: suma total de premios
-        - predictions: lista de predicciones detalladas
+        - predictions: lista de predicciones REALES detalladas
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # STRICT FILTER: Solo obtener fechas donde existen predicciones REALES del pipeline
-            # Excluir TODAS las predicciones simuladas, de prueba o fallback
+            # ULTRA STRICT FILTER: Solo predicciones REALES del pipeline con validación exhaustiva
             cursor.execute("""
                 SELECT DISTINCT
                     pd.draw_date as target_date,
@@ -1279,10 +1279,12 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 FROM powerball_draws pd
                 INNER JOIN predictions_log pl ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
                 WHERE pl.created_at IS NOT NULL 
-                    AND pl.model_version NOT IN ('fallback', 'test', 'simulated', '1.0.0-test')
-                    AND pl.dataset_hash NOT IN ('simulated', 'test', 'fallback')
+                    AND pl.model_version NOT IN ('fallback', 'test', 'simulated', '1.0.0-test', 'default')
+                    AND pl.dataset_hash NOT IN ('simulated', 'test', 'fallback', 'default')
                     AND pl.score_total > 0
-                    AND LENGTH(pl.dataset_hash) >= 10
+                    AND LENGTH(pl.dataset_hash) >= 16
+                    AND pl.json_details_path IS NOT NULL
+                    AND pl.target_draw_date IS NOT NULL
                 GROUP BY pd.draw_date
                 HAVING COUNT(pl.id) > 0
                 ORDER BY pd.draw_date DESC
