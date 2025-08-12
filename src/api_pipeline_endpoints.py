@@ -412,9 +412,53 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
         
         if not execution:
             raise HTTPException(status_code=404, detail=f"Execution {execution_id} not found")
-            
+        
+        # Enhance execution data with additional computed fields
+        enhanced_execution = execution.copy()
+        
+        # Ensure proper defaults for missing fields
+        if not enhanced_execution.get('status'):
+            enhanced_execution['status'] = 'unknown'
+        
+        if not enhanced_execution.get('start_time'):
+            enhanced_execution['start_time'] = enhanced_execution.get('created_at')
+        
+        if not enhanced_execution.get('end_time') and enhanced_execution.get('status') in ['completed', 'failed']:
+            enhanced_execution['end_time'] = enhanced_execution.get('updated_at')
+        
+        if not enhanced_execution.get('trigger_type'):
+            enhanced_execution['trigger_type'] = 'manual'
+        
+        if not enhanced_execution.get('trigger_source'):
+            enhanced_execution['trigger_source'] = 'dashboard'
+        
+        # Fix steps information
+        if enhanced_execution.get('status') == 'completed' and not enhanced_execution.get('steps_completed'):
+            enhanced_execution['steps_completed'] = enhanced_execution.get('total_steps', 6)
+        
+        # Ensure total_steps is set
+        if not enhanced_execution.get('total_steps'):
+            enhanced_execution['total_steps'] = 6
+        
+        # Calculate duration if both start and end times exist
+        if enhanced_execution.get('start_time') and enhanced_execution.get('end_time'):
+            try:
+                start_dt = datetime.fromisoformat(enhanced_execution['start_time'].replace('Z', '+00:00'))
+                end_dt = datetime.fromisoformat(enhanced_execution['end_time'].replace('Z', '+00:00'))
+                duration_seconds = (end_dt - start_dt).total_seconds()
+                
+                if duration_seconds >= 60:
+                    minutes = int(duration_seconds // 60)
+                    seconds = int(duration_seconds % 60)
+                    enhanced_execution['duration'] = f"{minutes}m {seconds}s"
+                else:
+                    enhanced_execution['duration'] = f"{int(duration_seconds)}s"
+            except Exception as duration_error:
+                logger.warning(f"Could not calculate duration: {duration_error}")
+                enhanced_execution['duration'] = 'Unknown'
+        
         return {
-            "execution": execution,
+            "execution": enhanced_execution,
             "timestamp": datetime.now().isoformat()
         }
         

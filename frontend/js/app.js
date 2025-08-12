@@ -360,13 +360,18 @@ document.addEventListener('DOMContentLoaded', () => {
             stepsCell.className = 'px-4 py-3';
             
             const stepsContainer = document.createElement('div');
-            // Fix: Use actual steps data or default to 6 if completed
+            // Use actual steps data with proper defaults
             let stepsCompleted = execution.steps_completed || 0;
             let totalSteps = execution.total_steps || 6;
             
             // Fix: If execution is completed but steps_completed is 0, set to total steps
             if (status === 'completed' && stepsCompleted === 0) {
                 stepsCompleted = totalSteps;
+            }
+            
+            // Fix: If execution failed, show actual progress or at least 1 step
+            if (status === 'failed' && stepsCompleted === 0) {
+                stepsCompleted = 1; // At least started
             }
             
             const stepsText = document.createElement('div');
@@ -393,6 +398,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const progressFill = document.createElement('div');
                 progressFill.className = 'bg-green-600 h-1.5 rounded-full';
                 progressFill.style.width = '100%';
+                
+                progressBar.appendChild(progressFill);
+                stepsContainer.appendChild(stepsText);
+                stepsContainer.appendChild(progressBar);
+            } else if (status === 'failed') {
+                // Show partial progress bar for failed executions
+                const progressBar = document.createElement('div');
+                progressBar.className = 'w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1';
+                
+                const progressFill = document.createElement('div');
+                const progressPercent = (stepsCompleted / totalSteps) * 100;
+                progressFill.className = 'bg-red-600 h-1.5 rounded-full';
+                progressFill.style.width = `${Math.max(progressPercent, 10)}%`; // Minimum 10% to show something
                 
                 progressBar.appendChild(progressFill);
                 stepsContainer.appendChild(stepsText);
@@ -797,7 +815,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let executionDetails;
             if (response.ok) {
-                executionDetails = await response.json();
+                const responseData = await response.json();
+                executionDetails = responseData.execution || responseData;
             } else {
                 // Fallback: find execution in current status data
                 const statusResponse = await fetch(`${API_BASE_URL}/pipeline/status`);
@@ -813,6 +832,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 showPipelineNotification('Execution details not found', 'warning');
                 return;
             }
+
+            // Get predictions for this execution
+            let predictions = [];
+            try {
+                const predictionsResponse = await fetch(`${API_BASE_URL}/predict/smart?limit=100`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (predictionsResponse.ok) {
+                    const predictionsData = await predictionsResponse.json();
+                    predictions = predictionsData.smart_predictions || predictionsData.predictions || [];
+                    // Limit to top 10 for the modal
+                    predictions = predictions.slice(0, 10);
+                }
+            } catch (predError) {
+                console.warn('Could not load predictions for execution:', predError);
+            }
             
             // Create detailed modal
             const modal = document.createElement('div');
@@ -820,7 +861,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             
             const modalContent = document.createElement('div');
-            modalContent.className = 'bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-hidden';
+            modalContent.className = 'bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden';
             
             // Header
             const header = document.createElement('div');
@@ -828,7 +869,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const title = document.createElement('h3');
             title.className = 'text-lg font-semibold text-gray-800 dark:text-white';
-            title.textContent = `Execution Details: ${executionId}`;
+            title.textContent = `Execution ${executionId} - Generated Predictions`;
             
             const closeBtn = document.createElement('button');
             closeBtn.className = 'text-gray-500 hover:text-gray-700';
@@ -840,87 +881,153 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Content
             const content = document.createElement('div');
-            content.className = 'overflow-y-auto max-h-80';
+            content.className = 'overflow-y-auto max-h-[70vh]';
             
-            const details = `
-                <div class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                executionDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                executionDetails.status === 'running' ? 'bg-blue-100 text-blue-800' :
-                                executionDetails.status === 'failed' ? 'bg-red-100 text-red-800' :
-                                'bg-gray-100 text-gray-800'
-                            }">
-                                ${executionDetails.status?.charAt(0).toUpperCase() + executionDetails.status?.slice(1) || 'Unknown'}
-                            </span>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Steps</label>
-                            <p class="text-sm text-gray-900 dark:text-gray-100">
-                                ${executionDetails.steps_completed || (executionDetails.status === 'completed' ? 6 : 0)}/6 completed
-                            </p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Time</label>
-                            <p class="text-sm text-gray-900 dark:text-gray-100">
-                                ${executionDetails.start_time ? new Date(executionDetails.start_time).toLocaleString() : 'N/A'}
-                            </p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Time</label>
-                            <p class="text-sm text-gray-900 dark:text-gray-100">
-                                ${executionDetails.end_time ? new Date(executionDetails.end_time).toLocaleString() : 'N/A'}
-                            </p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Trigger Type</label>
-                            <p class="text-sm text-gray-900 dark:text-gray-100">
-                                ${executionDetails.trigger_type || executionDetails.trigger_source || 'Manual'}
-                            </p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Predictions</label>
-                            <p class="text-sm text-gray-900 dark:text-gray-100">
-                                ${executionDetails.num_predictions || 100} generated
-                            </p>
-                        </div>
-                    </div>
-                    ${executionDetails.error ? `
-                        <div>
-                            <label class="block text-sm font-medium text-red-700 dark:text-red-300">Error</label>
-                            <p class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
-                                ${executionDetails.error}
-                            </p>
-                        </div>
-                    ` : ''}
-                    ${executionDetails.current_step ? `
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Current Step</label>
-                            <p class="text-sm text-gray-900 dark:text-gray-100">
-                                ${executionDetails.current_step}
-                            </p>
-                        </div>
-                    ` : ''}
+            // Execution summary section
+            const summarySection = document.createElement('div');
+            summarySection.className = 'mb-6 bg-gray-50 dark:bg-gray-900 rounded-lg p-4';
+            
+            const formatDateTime = (dateStr) => {
+                if (!dateStr) return 'Not available';
+                try {
+                    return new Date(dateStr).toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                } catch (e) {
+                    return dateStr;
+                }
+            };
+
+            const getStatusBadge = (status) => {
+                const statusColors = {
+                    'completed': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                    'running': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                    'failed': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                    'starting': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                };
+                const colorClass = statusColors[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+                const statusText = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
+                return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}">${statusText}</span>`;
+            };
+
+            summarySection.innerHTML = `
+                <h4 class="text-md font-semibold text-gray-900 dark:text-white mb-3">
+                    <i class="fas fa-info-circle mr-2 text-blue-600"></i>Execution Summary
+                </h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Execution Progress</label>
-                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
-                            <div class="h-2 rounded-full ${
-                                executionDetails.status === 'completed' ? 'bg-green-600' :
-                                executionDetails.status === 'running' ? 'bg-blue-600' :
-                                executionDetails.status === 'failed' ? 'bg-red-600' :
-                                'bg-gray-400'
-                            }" style="width: ${
-                                executionDetails.status === 'completed' ? '100' :
-                                ((executionDetails.steps_completed || 0) / 6) * 100
-                            }%"></div>
-                        </div>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">Status:</span><br>
+                        ${getStatusBadge(executionDetails.status)}
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">Progress:</span><br>
+                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.steps_completed || (executionDetails.status === 'completed' ? 6 : 0)}/6 steps</span>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">Start Time:</span><br>
+                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.start_time)}</span>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">End Time:</span><br>
+                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.end_time)}</span>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">Trigger:</span><br>
+                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.trigger_type || executionDetails.trigger_source || 'Manual'}</span>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">Predictions:</span><br>
+                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.num_predictions || 100} generated</span>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">Success:</span><br>
+                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.subprocess_success ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700 dark:text-gray-300">Method:</span><br>
+                        <span class="text-gray-900 dark:text-gray-100">Smart AI Pipeline</span>
                     </div>
                 </div>
+                ${executionDetails.error ? `
+                    <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                        <span class="font-medium text-red-700 dark:text-red-300">Error:</span><br>
+                        <span class="text-red-600 dark:text-red-400 text-sm">${executionDetails.error}</span>
+                    </div>
+                ` : ''}
             `;
+
+            // Predictions table section
+            const predictionsSection = document.createElement('div');
+            predictionsSection.className = 'bg-white dark:bg-gray-800';
             
-            content.innerHTML = details;
+            if (predictions.length > 0) {
+                predictionsSection.innerHTML = `
+                    <h4 class="text-md font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-dice mr-2 text-green-600"></i>Top 10 Generated Predictions
+                    </h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-900">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Rank</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Numbers</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Powerball</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">AI Score</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Method</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                ${predictions.map((pred, index) => `
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                            ${pred.rank || index + 1}
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="flex space-x-1">
+                                                ${(pred.numbers || []).map(num => 
+                                                    `<span class="inline-flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded-full text-xs font-bold">${num}</span>`
+                                                ).join('')}
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span class="inline-flex items-center justify-center w-7 h-7 bg-red-600 text-white rounded-full text-xs font-bold">
+                                                ${pred.powerball || pred.pb || 1}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                                            ${((pred.total_score || pred.score_total || 0) * 100).toFixed(1)}%
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                                ${pred.method || 'Smart AI'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                predictionsSection.innerHTML = `
+                    <h4 class="text-md font-semibold text-gray-900 dark:text-white mb-3">
+                        <i class="fas fa-dice mr-2 text-green-600"></i>Generated Predictions
+                    </h4>
+                    <div class="text-center py-8 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <i class="fas fa-exclamation-triangle text-3xl text-yellow-500 mb-3"></i>
+                        <p class="text-gray-600 dark:text-gray-400">No predictions available for this execution</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">Predictions may have been generated in a separate run</p>
+                    </div>
+                `;
+            }
+            
+            content.appendChild(summarySection);
+            content.appendChild(predictionsSection);
             
             modalContent.appendChild(header);
             modalContent.appendChild(content);
