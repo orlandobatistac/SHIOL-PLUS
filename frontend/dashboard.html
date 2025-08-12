@@ -119,20 +119,16 @@
                     </button>
                 </div>
 
-                <!-- Auto Refresh Toggle -->
-                <div class="mt-4 flex items-center">
-                    <input type="checkbox" id="auto-refresh-checkbox" class="mr-2" checked>
-                    <label for="auto-refresh-checkbox" class="text-sm text-gray-600 dark:text-gray-400">
-                        Auto-refresh status every 60 seconds
-                    </label>
-                </div>
-
                 <!-- Automated Scheduling Legend -->
                 <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
                     <div class="flex items-center text-sm text-blue-800 dark:text-blue-200">
                         <i class="fas fa-calendar-check mr-2"></i>
                         <strong>Automated Scheduling:</strong>
                         <span class="ml-2">Mon, Wed, Sat at 11:30 PM ET (30 min after drawing)</span>
+                    </div>
+                    <div class="flex items-center text-xs text-blue-600 dark:text-blue-300 mt-2">
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        <span>Auto-refresh status every 60 seconds</span>
                     </div>
                 </div>
             </div>
@@ -245,23 +241,23 @@
             </div>
             <div class="p-6">
                 <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    Esta acción eliminará todas las predicciones, ejecuciones del pipeline y datos de performance.
+                    This action will delete all predictions, pipeline executions, and performance data.
                 </p>
                 <div class="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 mb-4">
                     <p class="text-xs text-red-800 dark:text-red-200">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Los datos históricos de draws se mantendrán. <strong>Esta acción no se puede deshacer.</strong>
+                        Historical draw data will be preserved. <strong>This action cannot be undone.</strong>
                     </p>
                 </div>
             </div>
             <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
                 <button id="confirmClearDatabaseBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium">
                     <i class="fas fa-trash-alt mr-2"></i>
-                    Confirmar Limpieza
+                    Confirm Cleanup
                 </button>
                 <button id="cancelClearDatabaseBtn" class="flex-1 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg font-medium">
                     <i class="fas fa-times mr-2"></i>
-                    Cancelar
+                    Cancel
                 </button>
             </div>
         </div>

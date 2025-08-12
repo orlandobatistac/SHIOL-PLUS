@@ -148,9 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (refreshPipelineBtn) {
         refreshPipelineBtn.addEventListener('click', showClearDatabaseModal); // Changed from refreshPipelineStatus
     }
-    if (autoRefreshCheckbox) {
-        autoRefreshCheckbox.addEventListener('change', handleAutoRefreshToggle);
-    }
+    // Auto-refresh is now enabled by default without checkbox
     if (cancelTriggerBtn) {
         cancelTriggerBtn.addEventListener('click', hideTriggerModal);
     }
@@ -247,7 +245,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (nextExecutionTime && nextExecutionCountdown) {
             if (pipelineStatus.next_scheduled_execution) {
                 const nextTime = new Date(pipelineStatus.next_scheduled_execution);
-                nextExecutionTime.textContent = nextTime.toLocaleTimeString();
+                // Format time without seconds and add ET
+                const timeOptions = { 
+                    hour: 'numeric', 
+                    minute: '2-digit', 
+                    hour12: true, 
+                    timeZone: 'America/New_York' 
+                };
+                nextExecutionTime.textContent = nextTime.toLocaleTimeString('en-US', timeOptions) + ' ET';
                 updateCountdown(nextTime);
             } else {
                 nextExecutionTime.textContent = 'Not scheduled';
@@ -674,7 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Check if pipeline is no longer running (generic check)
                     if (currentStatus !== 'running' && monitoringAttempts > 3) {
                         clearInterval(monitoringInterval);
-                        showPipelineNotification('Pipeline completado', 'info');
+                        showPipelineNotification('Pipeline completed', 'info');
                         resetPipelineButton();
                         return;
                     }
@@ -826,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const button = event.target;
         const originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Limpiando...';
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cleaning...';
         button.disabled = true;
 
         try {
@@ -853,13 +858,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 hideClearDatabaseModal();
 
                 // Show success message
-                showNotification('Database limpiada exitosamente', 'success');
+                showNotification('Database cleaned successfully', 'success');
 
                 // Refresh dashboard data
                 // updateDashboard(); // This function is not defined in the original scope. Replaced with fetchPipelineStatus.
                 fetchPipelineStatus(); 
             } else {
-                let errorDetail = 'Error desconocido';
+                let errorDetail = 'Unknown error';
                 try {
                     const error = await response.json();
                     errorDetail = error.detail || JSON.stringify(error);
@@ -867,12 +872,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     errorDetail = await response.text(); // Fallback to text if JSON parsing fails
                 }
                 console.error('Database cleanup failed:', errorDetail);
-                showNotification('Error al limpiar la database: ' + errorDetail, 'error');
+                showNotification('Error cleaning database: ' + errorDetail, 'error');
             }
 
         } catch (error) {
             console.error('Network error during database cleanup:', error);
-            showNotification('Error de conexión al limpiar la database', 'error');
+            showNotification('Connection error while cleaning database', 'error');
         } finally {
             if (button) { // Ensure button exists before modifying
                 button.innerHTML = originalText;
@@ -928,20 +933,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function handleAutoRefreshToggle() {
-        if (!autoRefreshCheckbox) return;
-
-        if (autoRefreshCheckbox.checked) {
-            // Start auto-refresh every 60 seconds
-            autoRefreshInterval = setInterval(fetchPipelineStatus, 60000);
-            showPipelineNotification('Auto-refresh enabled', 'info');
-        } else {
-            // Stop auto-refresh
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-            }
-            showPipelineNotification('Auto-refresh disabled', 'info');
+        // Auto-refresh is always enabled - start every 60 seconds
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
         }
+        autoRefreshInterval = setInterval(fetchPipelineStatus, 60000);
     }
 
     function showPipelineNotification(message, type = 'info') {
@@ -2076,10 +2072,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize UI state
     initializePipelineDashboard();
 
-    // Enable auto-refresh by default
-    if (autoRefreshCheckbox) {
-        autoRefreshCheckbox.checked = true;
-        handleAutoRefreshToggle();
-    }
+    // Enable auto-refresh by default (no checkbox needed)
+    handleAutoRefreshToggle();
 
 });
