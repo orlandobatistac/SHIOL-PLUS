@@ -77,36 +77,47 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dateString || dateString === 'N/A') return 'N/A';
         
         try {
-            // Parse the date string (handle both ISO and other formats)
+            // The backend already provides dates in ET timezone
+            // We just need to format them for display without additional conversion
             let date;
+            
             if (dateString.includes('T')) {
-                // ISO format
+                // ISO format - parse directly
                 date = new Date(dateString);
             } else if (dateString.includes('-')) {
                 // YYYY-MM-DD HH:MM:SS format
-                date = new Date(dateString + 'Z'); // Assume UTC if no timezone
+                date = new Date(dateString);
             } else {
                 return dateString; // Return as-is if can't parse
             }
             
+            // Check if the date parsed correctly
+            if (isNaN(date.getTime())) {
+                console.warn('Invalid date parsed:', dateString);
+                return dateString;
+            }
+            
             // Format for display: MM/DD/YYYY H:MM AM/PM ET
-            const options = {
-                timeZone: 'America/New_York',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true  // FIXED: Enable 12-hour format with AM/PM
-            };
+            // Use local browser formatting but display the time as-is from backend
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const year = date.getFullYear();
             
-            const formatter = new Intl.DateTimeFormat('en-US', options);
-            const formattedDate = formatter.format(date);
+            let hours = date.getHours();
+            let minutes = String(date.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
             
-            return formattedDate + ' ET';
+            // Convert to 12-hour format
+            hours = hours % 12;
+            hours = hours ? hours : 12; // 0 should be 12
+            
+            const formattedTime = `${hours}:${minutes} ${ampm}`;
+            const formattedDate = `${month}/${day}/${year} ${formattedTime} ET`;
+            
+            return formattedDate;
             
         } catch (error) {
-            console.warn('Error converting date to ET:', dateString, error);
+            console.warn('Error formatting date for ET display:', dateString, error);
             return dateString; // Return original if conversion fails
         }
     }
