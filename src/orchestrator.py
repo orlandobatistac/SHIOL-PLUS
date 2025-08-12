@@ -72,6 +72,7 @@ class PipelineOrchestrator:
         Run the complete ML pipeline asynchronously
         
         Args:
+            execution_id: Unique execution identifier
             num_predictions: Number of predictions to generate
             
         Returns:
@@ -81,6 +82,10 @@ class PipelineOrchestrator:
         self._is_running = True
         self._current_execution_id = execution_id
         
+        # Initialize step tracking
+        from src.database import update_pipeline_execution
+        steps_completed = 0
+        
         # Use centralized DateManager for consistent ET timestamps
         from src.date_utils import DateManager
         start_time = DateManager.get_current_et_time()
@@ -88,35 +93,57 @@ class PipelineOrchestrator:
         
         try:
             # Step 1: Data Update
-            logger.info("Pipeline Step 1/6: Data Update")
+            logger.info("Pipeline Step 1/7: Data Update")
             data_update_result = await self._update_data()
+            steps_completed = 1
+            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "data_update"})
             
             # Step 2: Adaptive Analysis
-            logger.info("Pipeline Step 2/6: Adaptive Analysis")
+            logger.info("Pipeline Step 2/7: Adaptive Analysis")
             adaptive_result = await self._run_adaptive_analysis()
+            steps_completed = 2
+            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "adaptive_analysis"})
             
             # Step 3: Weight Optimization
-            logger.info("Pipeline Step 3/6: Weight Optimization")
+            logger.info("Pipeline Step 3/7: Weight Optimization")
             optimization_result = await self._optimize_weights()
+            steps_completed = 3
+            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "weight_optimization"})
             
             # Step 4: Historical Validation
-            logger.info("Pipeline Step 4/6: Historical Validation")
+            logger.info("Pipeline Step 4/7: Historical Validation")
             validation_result = await self._validate_historical()
+            steps_completed = 4
+            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "historical_validation"})
             
             # Step 5: Prediction Generation
-            logger.info("Pipeline Step 5/6: Prediction Generation")
+            logger.info("Pipeline Step 5/7: Prediction Generation")
             predictions = await self._generate_predictions(num_predictions)
+            steps_completed = 5
+            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "prediction_generation"})
             
             # Step 6: Performance Analysis
-            logger.info("Pipeline Step 6/6: Performance Analysis")
+            logger.info("Pipeline Step 6/7: Performance Analysis")
             performance_result = await self._analyze_performance()
+            steps_completed = 6
+            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "performance_analysis"})
             
             # Step 7: Save Results
             logger.info("Pipeline Step 7/7: Save Results")
             save_result = await self._save_results(predictions)
+            steps_completed = 7
+            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "save_results"})
             
             end_time = DateManager.get_current_et_time()
             execution_time = end_time - start_time
+            
+            # Update final status in database
+            update_pipeline_execution(execution_id, {
+                "status": "completed",
+                "steps_completed": 7,
+                "end_time": end_time.isoformat(),
+                "current_step": "completed"
+            })
             
             results = {
                 "status": "completed",
@@ -125,6 +152,7 @@ class PipelineOrchestrator:
                 "end_time": end_time.isoformat(),
                 "num_predictions_generated": len(predictions),
                 "steps_completed": 7,
+                "total_steps": 7,
                 "results": {
                     "data_update": data_update_result,
                     "adaptive_analysis": adaptive_result,
@@ -140,11 +168,22 @@ class PipelineOrchestrator:
             return results
             
         except Exception as e:
-            logger.error(f"Pipeline execution failed: {e}")
+            logger.error(f"Pipeline execution failed at step {steps_completed}: {e}")
             error_time = DateManager.get_current_et_time()
+            
+            # Update database with failure state
+            update_pipeline_execution(execution_id, {
+                "status": "failed",
+                "steps_completed": steps_completed,
+                "error_message": str(e),
+                "end_time": error_time.isoformat()
+            })
+            
             return {
                 "status": "failed",
                 "error": str(e),
+                "steps_completed": steps_completed,
+                "total_steps": 7,
                 "execution_time": str(error_time - start_time),
                 "start_time": start_time.isoformat(),
                 "end_time": error_time.isoformat()

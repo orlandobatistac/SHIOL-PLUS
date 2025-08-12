@@ -456,9 +456,9 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
         if not enhanced_execution.get('trigger_source'):
             enhanced_execution['trigger_source'] = 'dashboard'
 
-        # Fix steps information
-        if enhanced_execution.get('status') == 'completed' and not enhanced_execution.get('steps_completed'):
-            enhanced_execution['steps_completed'] = enhanced_execution.get('total_steps', 7)
+        # Only set steps_completed if explicitly provided, don't auto-complete
+        if not enhanced_execution.get('steps_completed'):
+            enhanced_execution['steps_completed'] = 0
 
         # Ensure total_steps is set to correct value
         enhanced_execution['total_steps'] = 7  # CORRECTED: Always set to 7 steps
