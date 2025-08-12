@@ -53,6 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const pipelineNotification = document.getElementById('pipeline-notification');
     const pipelineNotificationIcon = document.getElementById('pipeline-notification-icon');
     const pipelineNotificationText = document.getElementById('pipeline-notification-text');
+    const clearDatabaseModal = document.getElementById('clearDatabaseModal'); // New: Modal for clearing database
+    const cancelClearDatabaseBtn = document.getElementById('cancelClearDatabaseBtn'); // New: Cancel button for modal
+    const confirmClearDatabaseBtn = document.getElementById('confirmClearDatabaseBtn'); // New: Confirm button for modal
+
 
     // --- API Configuration ---
     // Enhanced dynamic API URL configuration with automatic detection
@@ -142,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         viewLogsBtn.addEventListener('click', viewPipelineLogs);
     }
     if (refreshPipelineBtn) {
-        refreshPipelineBtn.addEventListener('click', refreshPipelineStatus);
+        refreshPipelineBtn.addEventListener('click', showClearDatabaseModal); // Changed from refreshPipelineStatus
     }
     if (autoRefreshCheckbox) {
         autoRefreshCheckbox.addEventListener('change', handleAutoRefreshToggle);
@@ -153,6 +157,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirmTriggerBtn) {
         confirmTriggerBtn.addEventListener('click', triggerPipeline);
     }
+    // New event listeners for the clear database modal
+    if (cancelClearDatabaseBtn) {
+        cancelClearDatabaseBtn.addEventListener('click', hideClearDatabaseModal);
+    }
+    if (confirmClearDatabaseBtn) {
+        confirmClearDatabaseBtn.addEventListener('click', confirmClearDatabase);
+    }
+
 
     // Close modal when clicking outside
     if (pipelineTriggerModal) {
@@ -162,6 +174,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+     // Close clear database modal when clicking outside
+    if (clearDatabaseModal) {
+        clearDatabaseModal.addEventListener('click', (e) => {
+            if (e.target === clearDatabaseModal) {
+                hideClearDatabaseModal();
+            }
+        });
+    }
+
 
     // Syndicate predictions event listeners
     const generateSyndicateBtn = document.getElementById('generate-syndicate-btn');
@@ -786,18 +807,125 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function refreshPipelineStatus() {
-        if (refreshPipelineBtn) {
-            const originalHTML = refreshPipelineBtn.innerHTML;
-            refreshPipelineBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Refreshing...';
-            refreshPipelineBtn.disabled = true;
-
-            fetchPipelineStatus().finally(() => {
-                refreshPipelineBtn.innerHTML = originalHTML;
-                refreshPipelineBtn.disabled = false;
-            });
+    // Replaced original refreshPipelineStatus with new clear database functions
+    function showClearDatabaseModal() {
+        console.log('Clear database modal requested');
+        if (clearDatabaseModal) { // Check if modal element exists
+            clearDatabaseModal.classList.remove('hidden');
         }
     }
+
+    function hideClearDatabaseModal() {
+        if (clearDatabaseModal) { // Check if modal element exists
+             clearDatabaseModal.classList.add('hidden');
+        }
+    }
+
+    async function confirmClearDatabase() {
+        console.log('Clear database confirmed');
+
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Limpiando...';
+        button.disabled = true;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/database/cleanup`, { // Corrected endpoint
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    predictions: true,
+                    validations: true, // Assuming 'validations' maps to 'execution_history' or similar
+                    pipeline_logs: true,
+                    logs: true, // General logs
+                    models: false, // Explicitly not clearing models
+                    complete_reset: false // Not a complete reset
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Database cleanup successful:', result);
+
+                // Hide modal
+                hideClearDatabaseModal();
+
+                // Show success message
+                showNotification('Database limpiada exitosamente', 'success');
+
+                // Refresh dashboard data
+                // updateDashboard(); // This function is not defined in the original scope. Replaced with fetchPipelineStatus.
+                fetchPipelineStatus(); 
+            } else {
+                let errorDetail = 'Error desconocido';
+                try {
+                    const error = await response.json();
+                    errorDetail = error.detail || JSON.stringify(error);
+                } catch (e) {
+                    errorDetail = await response.text(); // Fallback to text if JSON parsing fails
+                }
+                console.error('Database cleanup failed:', errorDetail);
+                showNotification('Error al limpiar la database: ' + errorDetail, 'error');
+            }
+
+        } catch (error) {
+            console.error('Network error during database cleanup:', error);
+            showNotification('Error de conexión al limpiar la database', 'error');
+        } finally {
+            if (button) { // Ensure button exists before modifying
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+    }
+
+    // Provided showNotification function to be used by confirmClearDatabase
+    function showNotification(message, type = 'info') {
+        // Ensure the notification element exists, if not create it
+        let toast = document.getElementById('toast-notification');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'toast-notification';
+            toast.className = 'fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg text-white font-medium shadow-xl transition-opacity duration-300 opacity-0';
+            document.body.appendChild(toast);
+        }
+
+        const typeClasses = {
+            success: 'bg-green-500',
+            error: 'bg-red-500',
+            warning: 'bg-yellow-500',
+            info: 'bg-blue-500'
+        };
+
+        toast.className = `fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg text-white font-medium shadow-xl transition-opacity duration-300 opacity-100 ${typeClasses[type] || typeClasses.info}`;
+
+        // Clear previous content and add new safely
+        toast.textContent = ''; // Clear previous content
+
+        const icon = document.createElement('i');
+        const iconMap = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-exclamation-circle',
+            warning: 'fas fa-exclamation-triangle',
+            info: 'fas fa-info-circle'
+        };
+        icon.className = iconMap[type] || iconMap.info;
+
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = message; // Safe text content
+
+        toast.appendChild(icon);
+        toast.appendChild(messageSpan);
+
+        // Show the notification
+        setTimeout(() => {
+            toast.classList.remove('opacity-100');
+            toast.classList.add('opacity-0');
+        }, 4000); // Hide after 4 seconds
+    }
+
 
     function handleAutoRefreshToggle() {
         if (!autoRefreshCheckbox) return;
@@ -1076,9 +1204,9 @@ document.addEventListener('DOMContentLoaded', () => {
             content.appendChild(summarySection);
             content.appendChild(predictionsSection);
 
+            modal.appendChild(modalContent);
             modalContent.appendChild(header);
             modalContent.appendChild(content);
-            modal.appendChild(modalContent);
             document.body.appendChild(modal);
 
         } catch (error) {
@@ -1184,9 +1312,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    
 
-    
+
+
 
 
     // Display detailed scheduler jobs information - only pipeline jobs
@@ -1583,7 +1711,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const pbSpan = document.createElement('span');
             pbSpan.className = 'powerball-number small bg-red-600 text-white';
-            pbSpan.textContent = pred.powerball;
+            pbSpan.textContent = pred.powerball || pred.pb || 1;
 
             pbCell.appendChild(pbSpan);
 
@@ -1868,9 +1996,15 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} message - Message to display
      * @param {string} type - Type of notification (success, error, warning, info)
      */
-    function showNotification(message, type = 'info') {
-        const toast = document.getElementById('toast-notification');
-        if (!toast) return;
+    function showToast(message, type = 'info') { // Renamed from showNotification to avoid conflict
+        // Ensure the notification element exists, if not create it
+        let toast = document.getElementById('toast-notification');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'toast-notification';
+            toast.className = 'fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg text-white font-medium shadow-xl transition-opacity duration-300 opacity-0';
+            document.body.appendChild(toast);
+        }
 
         const typeClasses = {
             success: 'bg-green-500',
@@ -1879,19 +2013,27 @@ document.addEventListener('DOMContentLoaded', () => {
             info: 'bg-blue-500'
         };
 
-        toast.className = `fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-xl opacity-100 transition-opacity duration-300 z-50 ${typeClasses[type] || typeClasses.info}`;
-        // Create content safely without innerHTML
-        toast.textContent = ''; // Clear existing content
+        toast.className = `fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg text-white font-medium shadow-xl transition-opacity duration-300 opacity-100 ${typeClasses[type] || typeClasses.info}`;
+
+        // Clear previous content and add new safely
+        toast.textContent = ''; // Clear previous content
 
         const icon = document.createElement('i');
-        icon.className = 'fas fa-info mr-2';
+        const iconMap = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-exclamation-circle',
+            warning: 'fas fa-exclamation-triangle',
+            info: 'fas fa-info-circle'
+        };
+        icon.className = iconMap[type] || iconMap.info;
 
         const messageSpan = document.createElement('span');
-        messageSpan.textContent = message; // Safe text content, prevents XSS
+        messageSpan.textContent = message; // Safe text content
 
         toast.appendChild(icon);
         toast.appendChild(messageSpan);
 
+        // Show the notification
         setTimeout(() => {
             toast.classList.remove('opacity-100');
             toast.classList.add('opacity-0');
