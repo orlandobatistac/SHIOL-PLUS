@@ -256,9 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
             systemHealthDetails.textContent = healthDetails;
         }
 
-        // Update scheduler display with correct data structure
-        updateSchedulerDisplayFromPipelineStatus(pipelineStatus);
-
         // Update scheduler information
         if (pipelineStatus.recent_execution_history) {
             updateExecutionHistory(pipelineStatus.recent_execution_history);
@@ -1155,7 +1152,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = fetch(`${API_BASE_URL}/pipeline/status`);
             response.then(res => res.json()).then(data => {
                 updateStatusDisplay(data);
-                updateSchedulerDisplay(data.scheduler); // This is the old function, will be replaced.
                 updateExecutionHistory(data.recent_executions || []);
 
                 // Load detailed scheduler jobs
@@ -1188,57 +1184,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Update scheduler information (old function, likely to be replaced or removed)
-    function updateSchedulerDisplay(scheduler) {
-        const statusEl = document.getElementById('scheduler-status');
-        const jobsEl = document.getElementById('scheduler-jobs');
+    
 
-        if (scheduler && scheduler.active) {
-            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Active';
-            statusEl.className = 'text-lg font-bold text-green-600';
-
-            // FORCED: Always display "1 job scheduled" for dashboard (pipeline only)
-            jobsEl.textContent = '1 job scheduled';
-
-            if (scheduler.next_run) {
-                const nextRun = new Date(scheduler.next_run);
-                const timeUntil = getTimeUntilNext(nextRun);
-                jobsEl.textContent += ` • Next: ${timeUntil}`;
-            }
-        } else {
-            statusEl.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Inactive';
-            statusEl.className = 'text-lg font-bold text-red-600';
-            jobsEl.textContent = 'No jobs scheduled';
-        }
-    }
-
-    // New function to update scheduler display from pipelineStatus
-    function updateSchedulerDisplayFromPipelineStatus(pipelineStatus) {
-        const statusEl = document.getElementById('scheduler-status');
-        const jobsEl = document.getElementById('scheduler-jobs');
-
-        if (!statusEl || !jobsEl) return;
-
-        // Check if the pipeline is scheduled and active
-        if (pipelineStatus.scheduler_active) { // Assuming 'scheduler_active' is a boolean in pipelineStatus
-            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Active';
-            statusEl.className = 'text-lg font-bold text-green-600';
-
-            // Use the job count from pipeline status
-            const jobCount = pipelineStatus.job_count !== undefined ? pipelineStatus.job_count : 0;
-            jobsEl.textContent = `${jobCount} job${jobCount !== 1 ? 's' : ''} scheduled`;
-
-            if (pipelineStatus.next_scheduled_execution) {
-                const nextRunTime = new Date(pipelineStatus.next_scheduled_execution);
-                const timeUntil = getTimeUntilNext(nextRunTime);
-                jobsEl.textContent += ` • Next: ${timeUntil}`;
-            }
-        } else {
-            statusEl.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Inactive';
-            statusEl.className = 'text-lg font-bold text-red-600';
-            jobsEl.textContent = 'No jobs scheduled';
-        }
-    }
+    
 
 
     // Display detailed scheduler jobs information - only pipeline jobs

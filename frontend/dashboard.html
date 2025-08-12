@@ -125,49 +125,19 @@
                         Auto-refresh status every 60 seconds
                     </label>
                 </div>
-            </div>
-        </div>
 
-        <!-- Scheduler Information -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-6">
-            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                    <i class="fas fa-clock text-orange-600 mr-3"></i>
-                    Automated Scheduling
-                </h3>
-            </div>
-
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Scheduled Days</div>
-                        <div class="text-lg font-bold text-blue-600">
-                            <i class="fas fa-calendar-day mr-1"></i>
-                            Mon, Wed, Sat
-                        </div>
-                        <div class="text-xs text-gray-500 mt-1">After each drawing</div>
-                    </div>
-
-                    <div class="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule Time</div>
-                        <div class="text-lg font-bold text-green-600">
-                            <i class="fas fa-clock mr-1"></i>
-                            11:30 PM ET
-                        </div>
-                        <div class="text-xs text-gray-500 mt-1">30 min after drawing</div>
-                    </div>
-
-                    <div class="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status</div>
-                        <div class="text-lg font-bold text-purple-600" id="scheduler-status">
-                            <i class="fas fa-check-circle mr-1"></i>
-                            Active
-                        </div>
-                        <div class="text-xs text-gray-500 mt-1" id="scheduler-jobs">2 jobs scheduled</div>
+                <!-- Automated Scheduling Legend -->
+                <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <div class="flex items-center text-sm text-blue-800 dark:text-blue-200">
+                        <i class="fas fa-calendar-check mr-2"></i>
+                        <strong>Automated Scheduling:</strong>
+                        <span class="ml-2">Mon, Wed, Sat at 11:30 PM ET (30 min after drawing)</span>
                     </div>
                 </div>
             </div>
         </div>
+
+        
 
         <!-- Execution History -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-6">
