@@ -539,6 +539,27 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
     return user
 
+# Public endpoint for prediction history - reuses dashboard execution history
+@public_router.get("/prediction-history")
+async def get_public_prediction_history():
+    """Get pipeline execution history for public access - same as dashboard"""
+    try:
+        # Reutilizar exactamente la misma función del dashboard
+        from src.api_pipeline_endpoints import _get_execution_history
+        
+        # Llamar la función existente sin modificaciones
+        execution_history = await _get_execution_history(limit=10)
+        
+        return {
+            "executions": execution_history,
+            "total_count": len(execution_history),
+            "source": "pipeline_execution_history",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting public prediction history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get prediction history")
+
 # Protected endpoint example (for dashboard access verification)
 @auth_router.get("/dashboard-access")
 async def verify_dashboard_access(current_user: User = Depends(get_current_user)):

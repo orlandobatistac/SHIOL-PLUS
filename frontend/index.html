@@ -1,285 +1,535 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SHIOL+ - AI-Powered Powerball Predictions</title>
+    <title>SHIOL+ AI Prediction System</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="css/public.css">
     <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/index.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <meta name="description" content="Advanced AI-powered Powerball number predictions with historical analysis and real-time insights.">
-    <meta name="keywords" content="powerball, lottery, predictions, AI, machine learning, numbers">
-</head>
-<body class="bg-gray-100 dark:bg-gray-800 flex flex-col min-h-screen font-sans">
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+    <script>
+        // Suppress Tailwind CSS production warning
+        const originalConsoleWarn = console.warn;
+        console.warn = function(...args) {
+            if (args[0] && args[0].toString().includes('tailwindcss.com should not be used in production')) {
+                return;
+            }
+            originalConsoleWarn.apply(console, args);
+        };
 
-    <!-- Header -->
-    <header class="bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700 mb-8">
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 50;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        .dark .modal-content {
+            background: #1f2937;
+        }
+        
+        .modal-body {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="dark bg-gray-100 dark:bg-gray-900 font-sans">
+    <!-- Header with Login -->
+    <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center">
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
                         <span class="text-red-600">SHIOL+</span>
-                        <span class="text-sm font-normal text-gray-600 dark:text-gray-400 ml-2">AI Predictions</span>
+                        <span class="text-sm font-normal text-gray-600 dark:text-gray-400 ml-2">AI Prediction System</span>
                     </h1>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <button id="admin-login-btn" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-sm font-medium">
-                        <i class="fas fa-user-shield mr-1"></i>
-                        Admin
-                    </button>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        <i class="fas fa-clock mr-1"></i>
+                        <span id="current-time">Loading...</span>
+                    </div>
+                    <a href="login.html" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                        <i class="fas fa-sign-in-alt mr-1"></i>
+                        Admin Login
+                    </a>
                 </div>
             </div>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 flex items-center justify-center px-4">
-        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-4xl w-full">
-            <header class="mb-6 text-center">
-                <h1 class="text-3xl font-bold text-gray-800 dark:text-white">SHIOL+ AI Predictions</h1>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Advanced ML-powered lottery prediction system</p>
-            </header>
-            <main>
-                <!-- AI Predictions Section -->
-                <section id="ai-predictions" class="mb-12">
-                    <div class="text-center mb-8">
-                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-4">
-                            <i class="fas fa-brain mr-2 text-blue-600"></i>
-                            Latest Smart AI Predictions
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Next Drawing Countdown -->
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 p-6 rounded-xl border border-blue-200 dark:border-blue-800 mb-8">
+            <div class="text-center">
+                <h2 class="text-xl font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                    <i class="fas fa-clock mr-2"></i>
+                    Next Powerball Drawing
+                </h2>
+                <div class="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2" id="countdown-display">
+                    Loading...
+                </div>
+                <div class="text-sm text-blue-700 dark:text-blue-300" id="next-drawing-info">
+                    Calculating next drawing time...
+                </div>
+            </div>
+        </div>
+
+        <!-- Latest AI Predictions - MAIN COMPONENT -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                            <i class="fas fa-robot text-blue-600 mr-3"></i>
+                            AI Predictions for Next Drawing <span id="next-drawing-date" class="text-lg font-normal text-gray-600 dark:text-gray-400 ml-2"></span>
                         </h2>
-                        <p class="text-gray-600 dark:text-gray-400">
-                            Top 100 AI-generated predictions from our advanced pipeline system
-                        </p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Complete set of 100 AI-generated predictions | Generated: <span id="generated-timestamp">Loading...</span></p>
                     </div>
-
-                    <!-- Loading State -->
-                    <div id="predictions-loading" class="text-center py-8">
-                        <i class="fas fa-spinner fa-spin text-3xl text-blue-600 mb-4"></i>
-                        <p class="text-gray-600 dark:text-gray-400">Loading predictions...</p>
-                    </div>
-
-                    <!-- Predictions Container -->
-                    <div id="predictions-container" class="hidden">
-                        <!-- Predictions will be loaded here -->
-                    </div>
-
-                    <!-- Explanatory Guide Section (appears after predictions) -->
-                    <div class="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
-                        <div class="flex items-start space-x-3">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-info-circle text-2xl text-blue-600 dark:text-blue-400 mt-1"></i>
-                            </div>
-                            <div class="flex-1">
-                                <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">
-                                    How to Interpret AI Predictions
-                                </h3>
-                                <div class="space-y-3 text-sm text-blue-800 dark:text-blue-200">
-                                    <div class="grid md:grid-cols-2 gap-4">
-                                        <div>
-                                            <h4 class="font-semibold mb-2 flex items-center">
-                                                <i class="fas fa-percentage text-blue-600 mr-2"></i>
-                                                AI Score (Confidence)
-                                            </h4>
-                                            <ul class="space-y-1 text-xs">
-                                                <li><strong>80-100%:</strong> Premium Plays (maximum confidence)</li>
-                                                <li><strong>60-80%:</strong> High Quality Plays</li>
-                                                <li><strong>40-60%:</strong> Medium Quality Plays</li>
-                                                <li><strong>0-40%:</strong> Standard Plays</li>
-                                            </ul>
-                                        </div>
-                                        <div>
-                                            <h4 class="font-semibold mb-2 flex items-center">
-                                                <i class="fas fa-chart-line text-blue-600 mr-2"></i>
-                                                Score Components
-                                            </h4>
-                                            <ul class="space-y-1 text-xs">
-                                                <li><strong>Probability (40%):</strong> AI model predictions</li>
-                                                <li><strong>Diversity (25%):</strong> Number diversity</li>
-                                                <li><strong>Historical (20%):</strong> Historical patterns</li>
-                                                <li><strong>Risk Adjusted (15%):</strong> Avoids obvious patterns</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <div class="bg-green-100 dark:bg-green-800/50 rounded-lg p-3 border-l-4 border-green-500">
-                                        <p class="font-medium mb-1">
-                                            <i class="fas fa-star text-green-600 mr-1"></i>
-                                            TOP 5 Predictions:
-                                        </p>
-                                        <p>
-                                            The first 5 predictions are highlighted as our highest confidence plays, showing the best statistical
-                                            characteristics according to our AI analysis. These are recommended for priority consideration.
-                                        </p>
-                                    </div>
-                                    <div class="bg-blue-100 dark:bg-blue-800/50 rounded-lg p-3 border-l-4 border-blue-500">
-                                        <p class="font-medium mb-1">
-                                            <i class="fas fa-lightbulb text-yellow-500 mr-1"></i>
-                                            Interpretation:
-                                        </p>
-                                        <p>
-                                            A higher score indicates greater statistical probability that the play will succeed in the next drawing.
-                                            All plays are ordered from highest to lowest confidence according to our multi-model AI system.
-                                        </p>
-                                    </div>
-                                    <div class="bg-amber-100 dark:bg-amber-900/30 rounded-lg p-3 border-l-4 border-amber-500">
-                                        <p class="text-amber-800 dark:text-amber-200 text-xs">
-                                            <i class="fas fa-exclamation-triangle mr-1"></i>
-                                            <strong>Important:</strong> A high score doesn't guarantee winning, but indicates better statistical characteristics according to AI analysis.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Error State -->
-                    <div id="predictions-error" class="hidden text-center py-8">
-                        <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-4"></i>
-                        <p class="text-red-600 dark:text-red-400">Unable to load predictions. Please try again later.</p>
-                    </div>
-                </section>
-
-                <!-- Grouped Prediction History Section -->
-                <section id="grouped-prediction-history-section" class="mb-12">
-                    <div class="text-center mb-8">
-                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-4">
-                            <i class="fas fa-calendar-alt mr-2 text-green-600"></i>
-                            Previous Predictions by Date
-                        </h2>
-                        <p class="text-gray-600 dark:text-gray-400">
-                            Historical predictions grouped by date showing wins and statistics
-                        </p>
-                    </div>
-
-                    <!-- Loading State -->
-                    <div id="grouped-history-loading" class="text-center py-8">
-                        <i class="fas fa-spinner fa-spin text-3xl text-green-600 mb-4"></i>
-                        <p class="text-gray-600 dark:text-gray-400">Loading prediction history...</p>
-                    </div>
-
-                    <!-- Grouped History Container -->
-                    <div id="grouped-history-container" class="hidden">
-                        <!-- Grouped history will be loaded here -->
-                    </div>
-
-                    <!-- Error State -->
-                    <div id="grouped-history-error" class="hidden text-center py-8">
-                        <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-4"></i>
-                        <p class="text-red-600 dark:text-red-400">Unable to load prediction history. Please try again later.</p>
-                    </div>
-                </section>
-
-                <!-- Detail Modal -->
-                <div id="date-details-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 shadow-2xl overflow-hidden">
-                        <div class="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-                            <h3 id="modal-title" class="text-lg font-semibold text-gray-900 dark:text-white">Predictions Details</h3>
-                            <button id="close-date-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                <i class="fas fa-times text-xl"></i>
-                            </button>
-                        </div>
-                        <div id="modal-content" class="p-6 overflow-y-auto max-h-[70vh]">
-                            <!-- Modal content will be loaded here -->
-                        </div>
-                        <div class="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700">
-                            <button id="close-modal-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-md transition-colors">
-                                Close
-                            </button>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <div class="text-lg font-bold text-blue-600" id="total-predictions">0</div>
+                            <div class="text-xs text-gray-600 dark:text-gray-400">Active Predictions</div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Footer -->
-                <footer class="footer"
-            </main>
+            <div class="p-6">
+                <!-- Loading State -->
+                <div id="predictions-loading" class="text-center py-12">
+                    <i class="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+                    <p class="text-lg text-gray-600 dark:text-gray-400">Loading latest predictions...</p>
+                </div>
+
+                <!-- Predictions Table -->
+                <div id="predictions-table" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-900">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rank</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Numbers</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Powerball</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">AI Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="predictions-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Predictions will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- No Data State -->
+                <div id="no-predictions" class="hidden text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <i class="fas fa-info-circle text-4xl text-gray-400 mb-4"></i>
+                    <h3 class="text-xl font-medium text-gray-900 dark:text-gray-100 mb-2">No Predictions Available</h3>
+                    <p class="text-gray-500 dark:text-gray-400">No predictions have been generated yet by the Smart AI Pipeline.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Predictions History (usando el nuevo endpoint público) -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
+                    <i class="fas fa-history text-purple-600 mr-3"></i>
+                    AI Predictions History
+                </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Historical pipeline executions with performance results</p>
+            </div>
+
+            <div class="p-6">
+                <!-- History Loading State -->
+                <div id="history-loading" class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-3xl text-purple-500 mb-3"></i>
+                    <p class="text-gray-600 dark:text-gray-400">Loading prediction history...</p>
+                </div>
+
+                <!-- History Table -->
+                <div id="history-table" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-900">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Start Time</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Duration</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Steps</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- History will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- No History Data -->
+                <div id="no-history" class="hidden text-center py-8 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <i class="fas fa-info-circle text-3xl text-gray-400 mb-3"></i>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">No History Available</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">No pipeline executions have been recorded yet.</p>
+                </div>
+            </div>
         </div>
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-900 dark:bg-gray-900 text-white dark:text-gray-300 mt-16">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div class="grid md:grid-cols-3 gap-8">
-                <div>
-                    <h3 class="text-lg font-semibold mb-4">SHIOL+ AI</h3>
-                    <p class="text-gray-400 dark:text-gray-500 text-sm">
-                        Advanced machine learning algorithms for Powerball number prediction and analysis.
-                    </p>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold mb-4">Disclaimer</h3>
-                    <p class="text-gray-400 dark:text-gray-500 text-sm">
-                        Predictions are for entertainment purposes only. Lottery games involve chance and no system can guarantee wins.
-                    </p>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold mb-4">System Info</h3>
-                    <p class="text-gray-400 dark:text-gray-500 text-sm">
-                        <span id="system-status" class="inline-flex items-center">
-                            <span class="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-                            System Operational
-                        </span>
-                    </p>
-                    <p class="text-gray-400 dark:text-gray-500 text-xs mt-2">
-                        Last updated: <span id="footer-last-updated">--</span>
-                    </p>
-                </div>
-            </div>
-            <div class="border-t border-gray-800 dark:border-gray-700 mt-8 pt-8 text-center">
-                <p class="text-gray-400 dark:text-gray-500 text-sm">
-                    © 2024 SHIOL+ AI Prediction System. All rights reserved.
-                </p>
-            </div>
-        </div>
+    <footer class="mt-12 text-center text-sm text-gray-500 dark:text-gray-400 pb-8">
+        <p>© 2024 SHIOL+ AI Prediction System | Last updated: <span id="footer-timestamp">Loading...</span></p>
+        <p class="mt-1">Predictions are for entertainment purposes only and do not guarantee results.</p>
     </footer>
 
-    <!-- Login Modal (Hidden by default) -->
-    <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold text-gray-900">Admin Login</h3>
-                <button id="close-login-modal" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <form id="login-form">
-                <div class="mb-4">
-                    <label for="username" class="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                    <input type="text" id="username" name="username" required
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                </div>
-                <div class="mb-6">
-                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                    <input type="password" id="password" name="password" required
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                </div>
-                <div class="flex justify-end space-x-3">
-                    <button type="button" id="cancel-login" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">
-                        Cancel
-                    </button>
-                    <button type="submit" id="login-submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors">
-                        <span id="login-btn-text">Login</span>
-                        <i id="login-spinner" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+    <!-- Details Modal -->
+    <div id="details-modal" class="modal">
+        <div class="modal-content w-full">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white" id="modal-title">
+                        Execution Details
+                    </h3>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                        <i class="fas fa-times text-xl"></i>
                     </button>
                 </div>
-            </form>
-            <div id="login-error" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                <p class="text-red-600 text-sm"></p>
             </div>
-        </div>
-    </div>
+            
+            <div class="modal-body p-6">
+                <!-- Execution Summary -->
+                <div id="modal-summary" class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <!-- Summary content will be loaded here -->
+                </div>
 
-    <!-- Toast Notification -->
-    <div id="toast-notification" class="fixed bottom-5 right-5 bg-green-500 text-white py-3 px-4 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 z-50">
-        <div class="flex items-center">
-            <i id="toast-icon" class="fas fa-check mr-2"></i>
-            <span id="toast-message">Success!</span>
+                <!-- Predictions Table in Modal -->
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-900">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Rank</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Numbers</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">PB</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Matches</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Prize</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-predictions-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- Modal predictions will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- JavaScript -->
-    <script src="js/powerball-utils.js"></script>
-    <script src="js/countdown.js"></script>
-    <script src="js/public.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Update current time
+            function updateCurrentTime() {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('en-US', {
+                    timeZone: 'America/New_York',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                });
+                document.getElementById('current-time').textContent = `${timeString} ET`;
+            }
+
+            // Initialize time and update every second
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+
+            // API Configuration
+            const API_BASE_URL = window.location.origin + '/api/v1';
+
+            // Load predictions
+            async function loadPredictions() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/predict/smart?limit=100`);
+                    if (!response.ok) throw new Error('Failed to fetch predictions');
+                    
+                    const data = await response.json();
+                    const predictions = data.smart_predictions || data.predictions || [];
+
+                    if (predictions.length === 0) {
+                        document.getElementById('predictions-loading').classList.add('hidden');
+                        document.getElementById('no-predictions').classList.remove('hidden');
+                        return;
+                    }
+
+                    // Update totals
+                    document.getElementById('total-predictions').textContent = predictions.length;
+
+                    // Update last update time
+                    if (predictions[0]?.generated_at) {
+                        const lastUpdate = new Date(predictions[0].generated_at);
+                        document.getElementById('footer-timestamp').textContent = lastUpdate.toLocaleString('en-US');
+                    }
+
+                    // Render predictions table
+                    renderPredictions(predictions);
+                    
+                    document.getElementById('predictions-loading').classList.add('hidden');
+                    document.getElementById('predictions-table').classList.remove('hidden');
+
+                } catch (error) {
+                    console.error('Error loading predictions:', error);
+                    document.getElementById('predictions-loading').classList.add('hidden');
+                    document.getElementById('no-predictions').classList.remove('hidden');
+                }
+            }
+
+            // Load next drawing info
+            async function loadNextDrawing() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/public/next-drawing`);
+                    if (!response.ok) throw new Error('Failed to fetch drawing info');
+                    
+                    const data = await response.json();
+                    
+                    document.getElementById('next-drawing-info').textContent = data.exact_drawing_time;
+                    
+                    // Format and display next drawing date
+                    if (data.datetime_iso) {
+                        const drawingDate = new Date(data.datetime_iso);
+                        const formattedDate = drawingDate.toLocaleString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+                        document.getElementById('next-drawing-date').textContent = `(${formattedDate})`;
+                    }
+                    
+                    // Start countdown
+                    if (data.countdown_seconds > 0) {
+                        startCountdown(data.countdown_seconds);
+                    } else {
+                        document.getElementById('countdown-display').textContent = 'Drawing Complete';
+                    }
+
+                } catch (error) {
+                    console.error('Error loading drawing info:', error);
+                    document.getElementById('countdown-display').textContent = 'Check Official Site';
+                }
+            }
+
+            // Load prediction history usando el nuevo endpoint público
+            async function loadPredictionHistory() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/public/prediction-history`);
+                    if (!response.ok) throw new Error('Failed to fetch history');
+                    
+                    const data = await response.json();
+                    const executions = data.executions || [];
+
+                    if (executions.length === 0) {
+                        document.getElementById('history-loading').classList.add('hidden');
+                        document.getElementById('no-history').classList.remove('hidden');
+                        return;
+                    }
+
+                    renderExecutionHistory(executions);
+                    
+                    document.getElementById('history-loading').classList.add('hidden');
+                    document.getElementById('history-table').classList.remove('hidden');
+
+                } catch (error) {
+                    console.error('Error loading prediction history:', error);
+                    document.getElementById('history-loading').classList.add('hidden');
+                    document.getElementById('no-history').classList.remove('hidden');
+                }
+            }
+
+            // Countdown timer
+            function startCountdown(seconds) {
+                let remainingSeconds = seconds;
+                
+                const updateCountdown = () => {
+                    if (remainingSeconds <= 0) {
+                        document.getElementById('countdown-display').textContent = 'Drawing Time!';
+                        return;
+                    }
+
+                    const hours = Math.floor(remainingSeconds / 3600);
+                    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+                    const secs = remainingSeconds % 60;
+
+                    document.getElementById('countdown-display').textContent = 
+                        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    
+                    remainingSeconds--;
+                };
+
+                updateCountdown();
+                setInterval(updateCountdown, 1000);
+            }
+
+            // Render predictions without pagination
+            function renderPredictions(predictions) {
+                const tbody = document.getElementById('predictions-tbody');
+                tbody.innerHTML = '';
+
+                // Update generated timestamp
+                if (predictions.length > 0 && predictions[0].generated_at) {
+                    const generatedAt = new Date(predictions[0].generated_at).toLocaleString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    document.getElementById('generated-timestamp').textContent = generatedAt;
+                }
+
+                predictions.forEach((pred, index) => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
+
+                    const rank = index + 1;
+
+                    row.innerHTML = `
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full ${rank <= 10 ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' : 'bg-gray-100 text-gray-800'} text-xs font-bold">
+                                ${rank}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="flex space-x-1">
+                                ${(pred.numbers || []).map(num => 
+                                    `<span class="inline-flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded-full text-xs font-bold">${num}</span>`
+                                ).join('')}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center justify-center w-7 h-7 bg-red-600 text-white rounded-full text-xs font-bold">
+                                ${pred.powerball || pred.pb || 1}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                ${((pred.total_score || 0) * 100).toFixed(1)}%
+                            </div>
+                        </td>
+                    `;
+
+                    tbody.appendChild(row);
+                });
+            }
+
+            // Render execution history (igual que en el dashboard)
+            function renderExecutionHistory(executions) {
+                const tbody = document.getElementById('history-tbody');
+                tbody.innerHTML = '';
+
+                executions.forEach((execution, index) => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors';
+
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            ${execution.start_time_formatted || execution.start_time || 'N/A'}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${execution.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                                ${execution.status || 'pending'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            ${execution.duration || 'N/A'}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            ${execution.steps_completed || 0}/${execution.total_steps || 0}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <button onclick="showExecutionDetails('${execution.execution_id}', ${JSON.stringify(execution).replace(/"/g, '&quot;')})" 
+                                    class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-medium transition-colors">
+                                <i class="fas fa-eye mr-1"></i>
+                                View Details
+                            </button>
+                        </td>
+                    `;
+
+                    tbody.appendChild(row);
+                });
+            }
+
+            // Initialize
+            await Promise.all([
+                loadPredictions(),
+                loadNextDrawing(),
+                loadPredictionHistory()
+            ]);
+        });
+
+        // Modal functions
+        function showExecutionDetails(executionId, executionData) {
+            // Implementar modal de detalles si es necesario
+            console.log('Show execution details:', executionId, executionData);
+        }
+
+        function closeModal() {
+            document.getElementById('details-modal').classList.remove('show');
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('details-modal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('details-modal')) {
+                closeModal();
+            }
+        });
+    </script>
 </body>
 </html>
