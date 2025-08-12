@@ -89,18 +89,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 return dateString; // Return as-is if can't parse
             }
             
-            // Convert to Eastern Time
-            const etDate = new Date(date.toLocaleString("en-US", {timeZone: "America/New_York"}));
-            
-            // Format for display: MM/DD/YYYY HH:MM ET
+            // Format for display: MM/DD/YYYY H:MM AM/PM ET
             const options = {
                 timeZone: 'America/New_York',
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',
-                hour: '2-digit',
+                hour: 'numeric',
                 minute: '2-digit',
-                hour12: false
+                hour12: true  // FIXED: Enable 12-hour format with AM/PM
             };
             
             const formatter = new Intl.DateTimeFormat('en-US', options);
