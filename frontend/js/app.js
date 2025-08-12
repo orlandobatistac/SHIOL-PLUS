@@ -218,10 +218,19 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Update trigger button state
+        // Update trigger button state based on current execution status
         if (triggerPipelineBtn) {
             const canTrigger = status !== 'running';
             triggerPipelineBtn.disabled = !canTrigger;
+            
+            // Update button text based on status
+            if (status === 'running') {
+                triggerPipelineBtn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i>Pipeline Running...';
+                triggerPipelineBtn.className = triggerPipelineBtn.className.replace(/bg-\w+-\d+/g, 'bg-blue-600');
+            } else {
+                triggerPipelineBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Run Pipeline Now';
+                triggerPipelineBtn.className = triggerPipelineBtn.className.replace(/bg-\w+-\d+/g, 'bg-green-600 hover:bg-green-700');
+            }
         }
     }
 
@@ -351,8 +360,14 @@ document.addEventListener('DOMContentLoaded', () => {
             stepsCell.className = 'px-4 py-3';
             
             const stepsContainer = document.createElement('div');
-            const stepsCompleted = execution.steps_completed || 0;
-            const totalSteps = execution.total_steps || 7;
+            // Fix: Use actual steps data or default to 6 if completed
+            let stepsCompleted = execution.steps_completed || 0;
+            let totalSteps = execution.total_steps || 6;
+            
+            // Fix: If execution is completed but steps_completed is 0, set to total steps
+            if (status === 'completed' && stepsCompleted === 0) {
+                stepsCompleted = totalSteps;
+            }
             
             const stepsText = document.createElement('div');
             stepsText.className = 'text-sm text-gray-900 dark:text-gray-100';
@@ -366,6 +381,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const progressPercent = (stepsCompleted / totalSteps) * 100;
                 progressFill.className = 'bg-blue-600 h-1.5 rounded-full transition-all duration-300';
                 progressFill.style.width = `${progressPercent}%`;
+                
+                progressBar.appendChild(progressFill);
+                stepsContainer.appendChild(stepsText);
+                stepsContainer.appendChild(progressBar);
+            } else if (status === 'completed') {
+                // Show completed progress bar for completed executions
+                const progressBar = document.createElement('div');
+                progressBar.className = 'w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1';
+                
+                const progressFill = document.createElement('div');
+                progressFill.className = 'bg-green-600 h-1.5 rounded-full';
+                progressFill.style.width = '100%';
                 
                 progressBar.appendChild(progressFill);
                 stepsContainer.appendChild(stepsText);
@@ -750,9 +777,160 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Global function for execution details (called from HTML)
-    window.viewExecutionDetails = function(executionId) {
-        // This would typically fetch detailed execution information
-        showPipelineNotification(`Viewing details for execution ${executionId}`, 'info');
+    window.viewExecutionDetails = async function(executionId) {
+        try {
+            showPipelineNotification('Loading execution details...', 'info');
+            
+            const response = await fetch(`${API_BASE_URL}/pipeline/execution/${executionId}`, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.status === 401) {
+                showPipelineNotification('Authentication required. Please login.', 'error');
+                return;
+            }
+            
+            let executionDetails;
+            if (response.ok) {
+                executionDetails = await response.json();
+            } else {
+                // Fallback: find execution in current status data
+                const statusResponse = await fetch(`${API_BASE_URL}/pipeline/status`);
+                if (statusResponse.ok) {
+                    const statusData = await statusResponse.json();
+                    executionDetails = statusData.pipeline_status?.recent_execution_history?.find(
+                        ex => ex.execution_id === executionId
+                    );
+                }
+            }
+            
+            if (!executionDetails) {
+                showPipelineNotification('Execution details not found', 'warning');
+                return;
+            }
+            
+            // Create detailed modal
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-hidden';
+            
+            // Header
+            const header = document.createElement('div');
+            header.className = 'flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-4';
+            
+            const title = document.createElement('h3');
+            title.className = 'text-lg font-semibold text-gray-800 dark:text-white';
+            title.textContent = `Execution Details: ${executionId}`;
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'text-gray-500 hover:text-gray-700';
+            closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+            closeBtn.onclick = () => modal.remove();
+            
+            header.appendChild(title);
+            header.appendChild(closeBtn);
+            
+            // Content
+            const content = document.createElement('div');
+            content.className = 'overflow-y-auto max-h-80';
+            
+            const details = `
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                executionDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                executionDetails.status === 'running' ? 'bg-blue-100 text-blue-800' :
+                                executionDetails.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                            }">
+                                ${executionDetails.status?.charAt(0).toUpperCase() + executionDetails.status?.slice(1) || 'Unknown'}
+                            </span>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Steps</label>
+                            <p class="text-sm text-gray-900 dark:text-gray-100">
+                                ${executionDetails.steps_completed || (executionDetails.status === 'completed' ? 6 : 0)}/6 completed
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Time</label>
+                            <p class="text-sm text-gray-900 dark:text-gray-100">
+                                ${executionDetails.start_time ? new Date(executionDetails.start_time).toLocaleString() : 'N/A'}
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Time</label>
+                            <p class="text-sm text-gray-900 dark:text-gray-100">
+                                ${executionDetails.end_time ? new Date(executionDetails.end_time).toLocaleString() : 'N/A'}
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Trigger Type</label>
+                            <p class="text-sm text-gray-900 dark:text-gray-100">
+                                ${executionDetails.trigger_type || executionDetails.trigger_source || 'Manual'}
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Predictions</label>
+                            <p class="text-sm text-gray-900 dark:text-gray-100">
+                                ${executionDetails.num_predictions || 100} generated
+                            </p>
+                        </div>
+                    </div>
+                    ${executionDetails.error ? `
+                        <div>
+                            <label class="block text-sm font-medium text-red-700 dark:text-red-300">Error</label>
+                            <p class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                                ${executionDetails.error}
+                            </p>
+                        </div>
+                    ` : ''}
+                    ${executionDetails.current_step ? `
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Current Step</label>
+                            <p class="text-sm text-gray-900 dark:text-gray-100">
+                                ${executionDetails.current_step}
+                            </p>
+                        </div>
+                    ` : ''}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Execution Progress</label>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
+                            <div class="h-2 rounded-full ${
+                                executionDetails.status === 'completed' ? 'bg-green-600' :
+                                executionDetails.status === 'running' ? 'bg-blue-600' :
+                                executionDetails.status === 'failed' ? 'bg-red-600' :
+                                'bg-gray-400'
+                            }" style="width: ${
+                                executionDetails.status === 'completed' ? '100' :
+                                ((executionDetails.steps_completed || 0) / 6) * 100
+                            }%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            content.innerHTML = details;
+            
+            modalContent.appendChild(header);
+            modalContent.appendChild(content);
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+            
+        } catch (error) {
+            console.error('Error loading execution details:', error);
+            showPipelineNotification('Error loading execution details: ' + error.message, 'error');
+        }
     };
 
     // Check authentication status

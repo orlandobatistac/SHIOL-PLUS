@@ -402,6 +402,28 @@ async def trigger_pipeline_execution(
         logger.error(f"Error triggering pipeline: {e}")
         raise HTTPException(status_code=500, detail=f"Error triggering pipeline: {str(e)}")
 
+@pipeline_router.get("/execution/{execution_id}")
+async def get_execution_details(execution_id: str, current_user: User = Depends(get_current_user)):
+    """Get detailed information for a specific pipeline execution"""
+    try:
+        from src.database import get_pipeline_execution_by_id
+        
+        execution = get_pipeline_execution_by_id(execution_id)
+        
+        if not execution:
+            raise HTTPException(status_code=404, detail=f"Execution {execution_id} not found")
+            
+        return {
+            "execution": execution,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error getting execution details for {execution_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting execution details: {str(e)}")
+
 @pipeline_router.get("/history")
 async def get_pipeline_history():
     """Get recent pipeline execution history from SQLite database"""
