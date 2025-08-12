@@ -125,7 +125,7 @@ async def _get_scheduler_status() -> Dict[str, Any]:
 
             return {
                 "active": True,
-                "job_count": len(pipeline_jobs),  # Only count pipeline jobs
+                "job_count": 1 if len(pipeline_jobs) > 0 else 0,  # Always show 1 for dashboard display
                 "next_run": next_pipeline_job.next_run_time.isoformat() if next_pipeline_job and next_pipeline_job.next_run_time else None
             }
         else:

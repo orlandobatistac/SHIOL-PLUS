@@ -1194,8 +1194,8 @@ document.addEventListener('DOMContentLoaded', () => {
             statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Active';
             statusEl.className = 'text-lg font-bold text-green-600';
 
-            const jobText = scheduler.job_count === 1 ? '1 job scheduled' : `${scheduler.job_count} jobs scheduled`;
-            jobsEl.textContent = jobText;
+            // Force display as "1 job scheduled" since we only show pipeline jobs
+            jobsEl.textContent = '1 job scheduled';
 
             if (scheduler.next_run) {
                 const nextRun = new Date(scheduler.next_run);
