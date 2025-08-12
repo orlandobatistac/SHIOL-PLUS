@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, HTTPException
 from typing import Dict
 from loguru import logger
@@ -85,41 +84,39 @@ async def cleanup_database(cleanup_options: Dict[str, bool]):
                 logger.error(f"Error deleting validations: {e}")
                 results.append(f"Error deleting validations: {str(e)}")
 
-        if cleanup_options.get('logs', False):
-            # Clear log files
-            log_files_cleared = 0
-            logs_dir = Path('logs')
-            if logs_dir.exists():
-                for log_file in logs_dir.glob('*.log'):
-                    log_file.unlink()
-                    log_files_cleared += 1
-            results.append(f"Cleared {log_files_cleared} log files")
-            logger.info(f"Cleared {log_files_cleared} log files")
-
         if cleanup_options.get('pipeline_logs', False):
-            # Clear pipeline reports
-            pipeline_files_cleared = 0
+            try:
+                # Clear pipeline executions table (execution history)
+                cursor.execute("DELETE FROM pipeline_executions")
+                deleted_executions = cursor.rowcount
+                results.append(f"Deleted {deleted_executions} pipeline executions")
+                logger.info(f"Deleted {deleted_executions} pipeline execution records")
 
-            # Clear pipeline reports
-            reports_dir = Path('reports')
-            if reports_dir.exists():
-                for report_file in reports_dir.glob('pipeline_report_*.json'):
-                    report_file.unlink()
-                    pipeline_files_cleared += 1
+                # Clear pipeline logs files if they exist
+                logs_dir = Path("logs")
+                if logs_dir.exists():
+                    for log_file in logs_dir.glob("pipeline_*.log"):
+                        log_file.unlink()
+                    results.append("Cleared pipeline log files")
+                else:
+                    results.append("No pipeline log files found")
+            except Exception as e:
+                logger.error(f"Error clearing pipeline logs: {e}")
+                results.append(f"Error clearing pipeline logs: {str(e)}")
 
-            # Clear system logs
-            logs_dir = Path('logs')
-            if logs_dir.exists():
-                for log_file in logs_dir.glob('*.log'):
-                    log_file.unlink()
-                    pipeline_files_cleared += 1
-
-            # Clear global pipeline execution tracking
-            pipeline_executions.clear()
-            pipeline_logs.clear()
-
-            results.append(f"Cleared {pipeline_files_cleared} pipeline log files and execution history")
-            logger.info(f"Cleared {pipeline_files_cleared} pipeline log files and execution history")
+        if cleanup_options.get('logs', False):
+            try:
+                # Clear general log files
+                logs_dir = Path("logs")
+                if logs_dir.exists():
+                    for log_file in logs_dir.glob("*.log"):
+                        log_file.unlink()
+                    results.append("Cleared general log files")
+                else:
+                    results.append("No log files found")
+            except Exception as e:
+                logger.error(f"Error clearing general logs: {e}")
+                results.append(f"Error clearing general logs: {str(e)}")
 
         if cleanup_options.get('models', False):
             # Reset AI models data - using safe table operations
@@ -128,9 +125,9 @@ async def cleanup_database(cleanup_options: Dict[str, bool]):
                 'model_feedback': 'DELETE FROM model_feedback', 
                 'reliable_plays': 'DELETE FROM reliable_plays'
             }
-            
+
             deleted_weights = deleted_feedback = deleted_plays = 0
-            
+
             for table_name, safe_query in safe_model_tables.items():
                 try:
                     cursor.execute(safe_query)
@@ -144,7 +141,7 @@ async def cleanup_database(cleanup_options: Dict[str, bool]):
                     logger.info(f"Safely cleared {deleted_count} records from {table_name}")
                 except sqlite3.Error as e:
                     logger.error(f"Error clearing {table_name}: {e}")
-                    
+
             results.append(f"Reset AI models: deleted {deleted_weights} weight sets, {deleted_feedback} feedback records, {deleted_plays} reliable plays")
             logger.info(f"Reset AI models data")
 
