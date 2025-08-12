@@ -116,9 +116,6 @@
                 <div class="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2" id="countdown-display">
                     Loading...
                 </div>
-                <div class="text-sm text-blue-700 dark:text-blue-300" id="next-drawing-info">
-                    Calculating next drawing time...
-                </div>
             </div>
         </div>
 
@@ -422,12 +419,19 @@
                         return;
                     }
 
-                    const hours = Math.floor(remainingSeconds / 3600);
+                    const days = Math.floor(remainingSeconds / (24 * 3600));
+                    const hours = Math.floor((remainingSeconds % (24 * 3600)) / 3600);
                     const minutes = Math.floor((remainingSeconds % 3600) / 60);
                     const secs = remainingSeconds % 60;
 
-                    document.getElementById('countdown-display').textContent = 
-                        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    let countdownText = '';
+                    if (days > 0) {
+                        countdownText = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    } else {
+                        countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    }
+
+                    document.getElementById('countdown-display').textContent = countdownText;
                     
                     remainingSeconds--;
                 };
