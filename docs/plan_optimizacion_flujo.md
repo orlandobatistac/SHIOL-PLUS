@@ -1,4 +1,3 @@
-
 # Plan de Optimización del Flujo del Pipeline SHIOL+ v6.0
 
 ## Objetivo
@@ -109,12 +108,10 @@ frontend/js/app.js → API Endpoints → Database/Orchestrator → Response → 
 
 ### 2.2 Frontend Components No Utilizados
 
-**A. Unused Frontend Files:**
-- `frontend/login.html` - Login page (no auth in main flow)
-- `frontend/static_public.html` - Static version
-- `frontend/js/auth.js` - Authentication JavaScript
-- `frontend/js/config-manager.js` - Configuration management
-- `frontend/css/auth.css` - Authentication styles
+**F. Frontend Files (No tocar):**
+- **IMPORTANTE**: Ningún archivo en `frontend/` debe ser modificado o eliminado
+- Todos los archivos frontend permanecen intactos, incluyendo `login.html`, `auth.js`, etc.
+- El backend debe mantener endpoints de autenticación para compatibilidad
 
 ---
 
@@ -181,13 +178,13 @@ class ShiolDashboard {
         this.updateInterval = 30000; // 30 seconds
         this.init();
     }
-    
+
     async fetchData() {
         // Single API call for all dashboard data
         const response = await fetch('/api/v1/dashboard/summary');
         return response.json();
     }
-    
+
     updateDisplay(data) {
         // Update all components with single data fetch
         this.updatePredictions(data.predictions);
