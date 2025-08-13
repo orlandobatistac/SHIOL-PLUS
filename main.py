@@ -132,6 +132,14 @@ class PipelineOrchestrator:
             execution_source (str): Source of execution ('scheduled_pipeline', 'manual_dashboard', etc.)
             trigger_details (dict): Additional trigger metadata
         """
+        # Production timeout: 15 minutes maximum
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Pipeline execution timeout after 15 minutes")
+        
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(900)  # 15 minutes timeout
         logger.info("=" * 60)
         logger.info("STARTING SHIOL+ PHASE 5 OPTIMIZED PIPELINE EXECUTION")
         logger.info("=" * 60)
@@ -150,8 +158,11 @@ class PipelineOrchestrator:
         logger.info(f"Execution source: {execution_source}")
 
         try:
-            # STEP 1: Data Update & Drawing Detection
-            logger.info("STEP 1/6: Data Update & Drawing Detection")
+            # Check available resources before starting
+            self._check_system_resources()
+            
+            # STEP 1: Data Update & Drawing Detection (LIGHTWEIGHT)
+            logger.info("STEP 1/6: Data Update & Drawing Detection (Resource-Optimized)")
             pipeline_results['data_update'] = self._execute_step('data_update', self.step_data_update)
 
             # STEP 2: Adaptive Analysis (Regular maintenance)
@@ -197,6 +208,18 @@ class PipelineOrchestrator:
                 'total_steps': 6  # Updated to 6 steps
             }
 
+        except TimeoutError as e:
+            execution_time = datetime.now() - self.execution_start_time if self.execution_start_time else None
+            error_msg = f"Pipeline execution timeout: {str(e)}"
+            logger.error(error_msg)
+            
+            return {
+                'status': 'timeout',
+                'error': error_msg,
+                'execution_time': str(execution_time) if execution_time else None,
+                'results': pipeline_results,
+                'resource_limited': True
+            }
         except Exception as e:
             execution_time = datetime.now() - self.execution_start_time if self.execution_start_time else None
             error_msg = f"Pipeline execution failed: {str(e)}"
@@ -210,6 +233,8 @@ class PipelineOrchestrator:
                 'results': pipeline_results,
                 'traceback': traceback.format_exc()
             }
+        finally:
+            signal.alarm(0)  # Cancel timeout
 
     def _execute_step(self, step_name: str, step_function) -> Dict[str, Any]:
         """
@@ -322,6 +347,35 @@ class PipelineOrchestrator:
 
             # Initialize adaptive system if not already done
             if self.adaptive_system is None:
+
+
+    def _check_system_resources(self):
+        """Check system resources and warn about constraints in Replit environment."""
+        try:
+            import psutil
+            
+            # Check memory usage
+            memory = psutil.virtual_memory()
+            cpu_percent = psutil.cpu_percent(interval=1)
+            
+            logger.info(f"System resources: Memory {memory.percent:.1f}%, CPU {cpu_percent:.1f}%")
+            
+            # Warn if resources are high (Replit has limited resources)
+            if memory.percent > 80:
+                logger.warning("HIGH MEMORY USAGE: Pipeline may run slowly or timeout")
+            if cpu_percent > 80:
+                logger.warning("HIGH CPU USAGE: Pipeline may run slowly or timeout")
+                
+            # Replit-specific resource management
+            if memory.percent > 90:
+                raise RuntimeError("Insufficient memory to run full pipeline safely")
+                
+        except ImportError:
+            logger.warning("psutil not available - cannot monitor system resources")
+        except Exception as e:
+            logger.warning(f"Resource check failed: {e}")
+
+
                 self.adaptive_system = initialize_adaptive_system(self.historical_data)
 
             # Run adaptive analysis
@@ -414,13 +468,12 @@ class PipelineOrchestrator:
 
     def step_prediction_generation(self) -> Dict[str, Any]:
         """
-        Step 5: Prediction Generation - Generate 100 Smart AI predictions for next drawing.
+        Step 5: Prediction Generation - Generate Smart AI predictions for next drawing (OPTIMIZED FOR REPLIT).
 
-        FUNCIONALIDAD OPTIMIZADA:
-        - Valida calidad del modelo antes de generar predicciones
-        - Ejecuta reentrenamiento automático si es necesario
+        FUNCIONALIDAD OPTIMIZADA PARA PRODUCCIÓN:
+        - Reduce número de predicciones para evitar timeout en Replit
+        - Genera 50 predicciones (en lugar de 100) para optimizar recursos
         - Calcula fecha del próximo sorteo (Lunes, Miércoles, Sábado)
-        - Genera 100 predicciones Smart AI con fecha objetivo
         - Aplica pesos adaptativos optimizados
 
         Returns:
@@ -479,10 +532,10 @@ class PipelineOrchestrator:
             # Initialize predictor (it loads data internally)
             predictor = Predictor()
 
-            # Generate 100 Smart AI predictions for the next drawing with target date
-            logger.info("Generating 100 Smart AI predictions with optimized weights...")
+            # Generate 50 Smart AI predictions (optimized for Replit resources)
+            logger.info("Generating 50 Smart AI predictions (Replit-optimized)...")
             smart_predictions = predictor.predict_diverse_plays(
-                num_plays=100,
+                num_plays=50,
                 save_to_log=True,
                 target_draw_date=next_drawing_date
             )

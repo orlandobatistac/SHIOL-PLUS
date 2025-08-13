@@ -81,7 +81,7 @@ async def get_pipeline_status_endpoint(current_user: User = Depends(get_current_
         raise HTTPException(status_code=500, detail=f"Error getting pipeline status: {str(e)}")
 
 async def _get_current_pipeline_status() -> Dict[str, Any]:
-    """Get current pipeline execution status"""
+    """Get current pipeline execution status with production timeout monitoring"""
     try:
         # Check for running pipeline process or status file
         status_file = "data/pipeline_status.json"
@@ -89,12 +89,20 @@ async def _get_current_pipeline_status() -> Dict[str, Any]:
             with open(status_file, 'r') as f:
                 status_data = json.load(f)
                 if status_data.get("status") == "running":
-                    # Check if the process is actually still running
+                    # Check if the process is actually still running (REDUCED timeout for Replit)
                     start_time = datetime.fromisoformat(status_data.get("start_time", datetime.now().isoformat()))
-                    if datetime.now() - start_time > timedelta(hours=2):
-                        # Process likely hung, mark as failed
-                        return {"status": "failed", "description": "Pipeline execution timed out"}
-                    return {"status": "running", "description": "Pipeline is currently executing"}
+                    elapsed_time = datetime.now() - start_time
+                    
+                    # Production timeout: 20 minutes (was 2 hours)
+                    if elapsed_time > timedelta(minutes=20):
+                        logger.warning(f"Pipeline timeout detected: {elapsed_time} elapsed")
+                        return {"status": "timeout", "description": f"Pipeline timed out after {elapsed_time}"}
+                    
+                    # Warning at 15 minutes
+                    if elapsed_time > timedelta(minutes=15):
+                        return {"status": "running", "description": f"Pipeline running (WARNING: {elapsed_time} elapsed, near timeout)"}
+                    
+                    return {"status": "running", "description": f"Pipeline executing ({elapsed_time} elapsed)"}
                 else:
                     return {
                         "status": status_data.get("status", "idle"),
