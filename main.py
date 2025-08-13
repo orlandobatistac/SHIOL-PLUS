@@ -387,18 +387,6 @@ class PipelineOrchestrator:
             logger.warning(f"Resource check failed: {e}")
 
     def step_weight_optimization(self) -> Dict[str, Any]:
-
-            # Run adaptive analysis
-            analysis_results = run_adaptive_analysis(days_back=30)
-
-            logger.info(f"Adaptive analysis completed: {analysis_results.get('total_predictions_analyzed', 0)} predictions analyzed")
-            return analysis_results
-
-        except Exception as e:
-            logger.error(f"Adaptive analysis step failed: {e}")
-            raise
-
-    def step_weight_optimization(self) -> Dict[str, Any]:
         """
         Step 4: Weight Optimization - Optimize scoring weights based on performance.
 
