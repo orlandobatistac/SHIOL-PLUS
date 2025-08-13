@@ -33,6 +33,7 @@ from pathlib import Path
 # Configure logging before importing other modules
 from loguru import logger
 import pandas as pd
+import numpy as np
 
 # Import SHIOL+ modules
 from src.loader import update_database_from_source, get_data_loader
@@ -889,7 +890,7 @@ def get_public_ip() -> Optional[str]:
     return None
 
 
-def start_api_server(host: str = "0.0.0.0", port: int = 8000, auto_detect_ip: bool = True):
+def start_api_server(host: str = "0.0.0.0", port: int = 3000, auto_detect_ip: bool = True):
     """
     Start the API server optimized for VPN access.
 
@@ -1057,8 +1058,8 @@ Server mode:
     parser.add_argument(
         '--port',
         type=int,
-        default=8000,
-        help='Port to bind server to (default: 8000)'
+        default=3000,
+        help='Port to bind server to (default: 3000)'
     )
 
     parser.add_argument(

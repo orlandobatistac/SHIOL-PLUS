@@ -1,5 +1,5 @@
 modules = ["python-3.12", "web", "nodejs-20", "postgresql-16"]
-run = "uvicorn main:app --host 0.0.0.0 --port 3000"
+run = "uvicorn src.api:app --host 0.0.0.0 --port 3000"
 
 [nix]
 channel = "stable-25_05"
@@ -10,7 +10,7 @@ run = ["sh", "-c", "uvicorn src.api:app --host 0.0.0.0 --port 3000"]
 deploymentTarget = "cloudrun"
 
 [workflows]
-runButton = "Restart Server"
+runButton = "Start SHIOL+ Server"
 
 [[workflows.workflow]]
 name = "Run Server"
@@ -46,6 +46,23 @@ args = "sleep 2"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py --server --host 0.0.0.0 --port 3000"
+
+[[workflows.workflow]]
+name = "Start SHIOL+ Server"
+author = 45170021
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"uvicorn.*src.api:app\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "sleep 1"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "uvicorn src.api:app --host 0.0.0.0 --port 3000 --reload"
 
 [[ports]]
 localPort = 3000

@@ -341,7 +341,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "https://localhost:3000",  # For HTTPS development
+        "https://localhost:3000",
+        "http://0.0.0.0:3000",  # For Replit external access
         # Add your production domain here
         # "https://yourdomain.com"
     ],
