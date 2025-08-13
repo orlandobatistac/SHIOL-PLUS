@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         viewLogsBtn.addEventListener('click', viewPipelineLogs);
     }
     if (refreshPipelineBtn) {
-        refreshPipelineBtn.addEventListener('click', showClearDatabaseModal); // Changed from refreshPipelineStatus
+        refreshPipelineBtn.addEventListener('click', showClearDatabaseModal);
     }
     // Auto-refresh is now enabled by default without checkbox
     if (cancelTriggerBtn) {
@@ -835,8 +835,9 @@ document.addEventListener('DOMContentLoaded', () => {
         button.disabled = true;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/database/cleanup`, { // Corrected endpoint
+            const response = await fetch(`${API_BASE_URL}/system/database/cleanup`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json'
                 },
@@ -2074,5 +2075,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Enable auto-refresh by default (no checkbox needed)
     handleAutoRefreshToggle();
+
+    // Make showClearDatabaseModal available globally for HTML onclick
+    window.showClearDatabaseModal = showClearDatabaseModal;
 
 });
