@@ -142,6 +142,8 @@ async def cleanup_database(cleanup_options: Dict[str, Any]):
             "predictions_removed": 0,
             "pipeline_logs_removed": 0,
             "old_data_removed": 0,
+            "validations_removed": 0,
+            "total_reset": 0,
             "vacuum_applied": False
         }
 
@@ -150,22 +152,56 @@ async def cleanup_database(cleanup_options: Dict[str, Any]):
 
             # Clean predictions if requested
             if cleanup_options.get("predictions", False):
-                cursor.execute("DELETE FROM predictions_log WHERE created_at < datetime('now', '-7 days')")
+                # Clean ALL predictions for next drawing cleanup
+                cursor.execute("DELETE FROM predictions_log")
                 cleanup_summary["predictions_removed"] = cursor.rowcount
-                logger.info(f"Removed {cursor.rowcount} old predictions")
+                logger.info(f"Removed {cursor.rowcount} predictions")
 
             # Clean pipeline logs if requested
             if cleanup_options.get("pipeline_logs", False):
-                cursor.execute("DELETE FROM pipeline_executions WHERE start_time < datetime('now', '-30 days')")
+                # Clean ALL pipeline execution history
+                cursor.execute("DELETE FROM pipeline_executions")
                 cleanup_summary["pipeline_logs_removed"] = cursor.rowcount
-                logger.info(f"Removed {cursor.rowcount} old pipeline executions")
+                logger.info(f"Removed {cursor.rowcount} pipeline executions")
 
             # Clean general old data if requested
             if cleanup_options.get("logs", False):
-                # Clean old performance tracking data
-                cursor.execute("DELETE FROM performance_tracking WHERE created_at < datetime('now', '-30 days')")
-                cleanup_summary["old_data_removed"] = cursor.rowcount
-                logger.info(f"Removed {cursor.rowcount} old performance tracking records")
+                # Clean performance tracking data
+                cursor.execute("DELETE FROM performance_tracking")
+                old_data_count = cursor.rowcount
+                
+                # Also clean model feedback and adaptive weights
+                cursor.execute("DELETE FROM model_feedback")
+                old_data_count += cursor.rowcount
+                
+                cursor.execute("DELETE FROM adaptive_weights WHERE is_active = FALSE")
+                old_data_count += cursor.rowcount
+                
+                cleanup_summary["old_data_removed"] = old_data_count
+                logger.info(f"Removed {old_data_count} old data records (performance tracking, model feedback, inactive weights)")
+                
+            # Clean validations if requested
+            if cleanup_options.get("validations", False):
+                cursor.execute("DELETE FROM pattern_analysis")
+                validations_removed = cursor.rowcount
+                cursor.execute("DELETE FROM reliable_plays")
+                validations_removed += cursor.rowcount
+                cleanup_summary["validations_removed"] = validations_removed
+                logger.info(f"Removed {validations_removed} validation records")
+                
+            # Complete reset option
+            if cleanup_options.get("complete_reset", False):
+                # Reset all tables except powerball_draws (historical data) and system_config
+                tables_to_reset = [
+                    "predictions_log", "pipeline_executions", "performance_tracking",
+                    "adaptive_weights", "pattern_analysis", "reliable_plays", "model_feedback"
+                ]
+                total_reset = 0
+                for table in tables_to_reset:
+                    cursor.execute(f"DELETE FROM {table}")
+                    total_reset += cursor.rowcount
+                cleanup_summary["total_reset"] = total_reset
+                logger.info(f"Complete reset: removed {total_reset} records from all prediction/analysis tables")
 
             conn.commit()
 
