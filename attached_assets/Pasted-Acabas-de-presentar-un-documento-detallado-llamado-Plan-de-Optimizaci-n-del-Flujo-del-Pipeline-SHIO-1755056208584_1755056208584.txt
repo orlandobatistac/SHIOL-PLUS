@@ -1,0 +1,21 @@
+Acabas de presentar un documento detallado llamado "Plan de Optimización del Flujo del Pipeline SHIOL+ v6.0". El plan es muy completo, pero necesito ajustar su enfoque antes de proceder.
+
+**Instrucción Principal:**
+Quiero ajustar algunos aspectos clave antes de comenzar. La modificación más importante es la siguiente: **No se debe tocar, modificar o eliminar absolutamente nada del `frontend`**.
+
+La interfaz actual, incluyendo todos los archivos dentro de `frontend/js/`, `frontend/css/` y los archivos `.html`, debe permanecer intacta y seguir funcionando tal cual está con el backend una vez que este sea optimizado.
+
+**Nuevo Enfoque del Plan:**
+Basado en esta directriz, quiero que todo el plan de optimización se centre **exclusivamente en el backend**. Las metas son:
+
+1.  **Limpiar y optimizar el pipeline de generación de jugadas:** Desde la orquestación (`orchestrator.py`) hasta la generación (`predictor.py`, `intelligent_generator.py`).
+2.  **Eficientar el guardado en la base de datos:** Optimizar el esquema y las queries para que el backend escriba los datos de forma más rápida y limpia.
+3.  **Eliminar código backend no utilizado:** Deshacerse de todos los módulos, scripts y componentes del backend que no son parte del flujo principal que sirve al frontend actual.
+
+**Tarea a Realizar:**
+Por favor, **genera una versión revisada y simplificada del "Plan de Optimización del Flujo del Pipeline SHIOL+ v6.0"** que cumpla con los siguientes requisitos:
+
+1.  **Elimina por completo** cualquier sección o punto que mencione la modificación o limpieza del `frontend` (por ejemplo, elimina la sección "3.3 Optimización del Frontend" y los archivos de frontend del "Plan de Limpieza").
+2.  Asegúrate de que la sección "Plan de Limpieza" se enfoque únicamente en archivos del backend que han sido identificados como no utilizados en el flujo principal (como `src/cli.py`, `tests/`, `src/generative_predictor.py`, `src/auto_retrainer.py`, etc.).
+3.  El plan de optimización del pipeline (por ejemplo, la propuesta de 5 pasos en lugar de 7) y de la base de datos debe mantenerse, ya que son tareas del backend.
+4.  El objetivo final del plan revisado debe ser un backend más limpio, rápido y eficiente que siga siendo **100% compatible con el frontend actual**, sin requerir ningún cambio en este último. El `JSON` que la API devuelve al frontend debe mantener su estructura actual para no romper la compatibilidad.
