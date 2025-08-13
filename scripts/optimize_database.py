@@ -58,36 +58,38 @@ def optimize_database():
 
         # Clean old data
         cleanup_queries = [
-            "DELETE FROM predictions_log WHERE created_at < datetime('now', '-30 days')",
-            "DELETE FROM pipeline_executions WHERE created_at < datetime('now', '-30 days')"
+            "DELETE FROM predictions_log WHERE timestamp < datetime('now', '-30 days')",
+            "DELETE FROM pipeline_executions WHERE start_time < datetime('now', '-30 days')"
         ]
 
+        cleanup_count = 0
         for query in cleanup_queries:
-            logger.info(f"✅ Applied optimization: {query[:50]}...")
             cursor.execute(query)
+            cleanup_count += cursor.rowcount
+            logger.info(f"✅ Applied cleanup: {query.split('WHERE')[0]}...")
+        
+        logger.info(f"✅ Cleaned {cleanup_count} old records")
 
         conn.commit()
+        conn.close()  # Close connection before VACUUM
 
-    # VACUUM must be run outside of transaction
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.execute("VACUUM")
-        conn.close()
-        logger.info("✅ Applied optimization: VACUUM - Database compacted")
-    except Exception as vacuum_error:
-        logger.warning(f"VACUUM optimization skipped: {vacuum_error}")
+        # VACUUM must be run outside of transaction
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.execute("VACUUM")
+            conn.close()
+            logger.info("✅ Applied optimization: VACUUM - Database compacted")
+        except Exception as vacuum_error:
+            logger.warning(f"VACUUM optimization skipped: {vacuum_error}")
 
-    
     except Exception as e:
         logger.error(f"Database optimization failed: {e}")
         return False
 
     logger.info(f"🎯 Database optimization complete:")
     logger.info(f"   - Removed {removed_count} unused tables")
-    logger.info(f"   - Removed {old_predictions_removed} old predictions") # This line might be problematic if old_predictions_removed is not defined in the new context. It was defined in the old code snippet related to predictions. Let's assume it should be removed or redefined. For now, I will comment it out.
-    # logger.info(f"   - Removed {old_predictions_removed} old predictions") 
     logger.info(f"   - Applied performance indexes")
-    # logger.info(f"   - Reclaimed disk space with VACUUM") # This is now handled by the specific VACUUM block.
+    logger.info(f"   - Database cleanup completed")
 
     return True
 

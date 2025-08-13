@@ -25,10 +25,7 @@ from starlette.responses import Response
 from src.api_utils import convert_numpy_types
 from src.api_prediction_endpoints import prediction_router, set_prediction_components
 from src.api_system_endpoints import system_router
-from src.api_config_endpoints import config_router
-from src.api_database_endpoints import database_router
-from src.api_analytics_endpoints import analytics_router
-from src.api_model_endpoints import model_router
+# Removed unused endpoint imports after optimization
 from src.api_pipeline_endpoints import pipeline_router
 from src.public_api import public_router, auth_manager, auth_router
 from src.api_public_endpoints import public_frontend_router, set_public_components
@@ -479,10 +476,7 @@ async def logout(response: Response):
 app.include_router(api_router)
 app.include_router(prediction_router)
 app.include_router(system_router)
-app.include_router(config_router, prefix="/api/v1")
-app.include_router(database_router, prefix="/api/v1")
-app.include_router(analytics_router, prefix="/api/v1")
-app.include_router(model_router, prefix="/api/v1")
+# Router mounts removed for optimized system
 app.include_router(pipeline_router, prefix="/api/v1")
 app.include_router(public_router)
 app.include_router(auth_router)
