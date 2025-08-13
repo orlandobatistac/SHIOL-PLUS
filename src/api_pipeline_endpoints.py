@@ -93,10 +93,16 @@ async def _get_current_pipeline_status() -> Dict[str, Any]:
                     start_time = datetime.fromisoformat(status_data.get("start_time", datetime.now().isoformat()))
                     elapsed_time = datetime.now() - start_time
                     
-                    # Production timeout: 20 minutes (was 2 hours)
+                    # Production timeout: 20 minutes optimized for Replit
                     if elapsed_time > timedelta(minutes=20):
                         logger.warning(f"Pipeline timeout detected: {elapsed_time} elapsed")
-                        return {"status": "timeout", "description": f"Pipeline timed out after {elapsed_time}"}
+                        # Mark as failed and clean up status file
+                        status_data["status"] = "failed"
+                        status_data["description"] = f"Pipeline timed out after {elapsed_time}"
+                        status_data["end_time"] = datetime.now().isoformat()
+                        with open(status_file, 'w') as f:
+                            json.dump(status_data, f)
+                        return {"status": "failed", "description": f"Pipeline timed out after {elapsed_time}"}
                     
                     # Warning at 15 minutes
                     if elapsed_time > timedelta(minutes=15):

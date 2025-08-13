@@ -106,9 +106,9 @@ async def trigger_full_pipeline_automatically():
                 }
             }
 
-            # Run the full 7-step pipeline in background with 50 predictions using robust subprocess
+            # Run the full 6-step pipeline in background with 50 predictions using robust subprocess
             asyncio.create_task(run_full_pipeline_background(execution_id, 50))
-            logger.info(f"Automatic pipeline execution started with ID: {execution_id} - Full 7-step pipeline (scheduled: {matches_schedule})")
+            logger.info(f"Automatic pipeline execution started with ID: {execution_id} - Full 6-step pipeline (scheduled: {matches_schedule})")
         else:
             logger.warning("Pipeline orchestrator not available to trigger pipeline.")
     except Exception as e:
@@ -157,25 +157,26 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int):
             # Update execution status based on result
             if result.returncode == 0:
                 pipeline_executions[execution_id].update({
-                    "status": "completed",
+                    "status": "completed", 
                     "end_time": datetime.now().isoformat(),
                     "subprocess_success": True,
                     "steps_completed": 6,  # Pipeline has 6 steps
-                    "stdout": result.stdout,
-                    "stderr": result.stderr
+                    "stdout": result.stdout[-2000:] if result.stdout else "",  # Limit stdout size
+                    "stderr": result.stderr[-1000:] if result.stderr else ""   # Limit stderr size
                 })
                 logger.info(f"Pipeline execution {execution_id} completed successfully")
             else:
+                error_details = result.stderr[-1000:] if result.stderr else "No error details available"
                 pipeline_executions[execution_id].update({
                     "status": "failed",
                     "end_time": datetime.now().isoformat(),
                     "subprocess_success": False,
-                    "error": f"Pipeline failed with return code {result.returncode}",
-                    "stderr": result.stderr,
-                    "stdout": result.stdout
+                    "error": f"Pipeline failed with return code {result.returncode}: {error_details[:200]}",
+                    "stderr": error_details,
+                    "stdout": result.stdout[-1000:] if result.stdout else ""
                 })
                 logger.error(f"Pipeline execution {execution_id} failed with return code {result.returncode}")
-                logger.error(f"STDERR: {result.stderr}")
+                logger.error(f"STDERR: {error_details}")
 
         except subprocess.TimeoutExpired:
             pipeline_executions[execution_id].update({

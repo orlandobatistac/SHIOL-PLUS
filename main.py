@@ -348,7 +348,17 @@ class PipelineOrchestrator:
 
             # Initialize adaptive system if not already done
             if self.adaptive_system is None:
+                self.adaptive_system = initialize_adaptive_system(self.historical_data)
 
+            # Run adaptive analysis
+            analysis_results = run_adaptive_analysis(days_back=30)
+
+            logger.info(f"Adaptive analysis completed: {analysis_results.get('total_predictions_analyzed', 0)} predictions analyzed")
+            return analysis_results
+
+        except Exception as e:
+            logger.error(f"Adaptive analysis step failed: {e}")
+            raise
 
     def _check_system_resources(self):
         """Check system resources and warn about constraints in Replit environment."""
@@ -376,8 +386,7 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.warning(f"Resource check failed: {e}")
 
-
-                self.adaptive_system = initialize_adaptive_system(self.historical_data)
+    def step_weight_optimization(self) -> Dict[str, Any]:
 
             # Run adaptive analysis
             analysis_results = run_adaptive_analysis(days_back=30)
