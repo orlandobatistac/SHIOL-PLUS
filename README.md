@@ -1,103 +1,55 @@
 
-# SHIOL+ v6.0: Advanced AI-Powered Lottery Analysis System with Configuration Dashboard
+# SHIOL+ v6.1: Optimized AI-Powered Lottery Analysis System
 
-An intelligent, enterprise-grade system designed to analyze historical lottery data and predict combinations using advanced Machine Learning techniques with a comprehensive configuration dashboard and automated pipeline orchestrator.
+An intelligent, streamlined system designed to analyze historical Powerball lottery data and generate predictions using advanced Machine Learning techniques with an optimized pipeline and modern web interface.
 
 **🌐 Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
 
-## Project Summary
+## 🚀 Project Overview
 
-**SHIOL+ (System for Hybrid Intelligence Optimization and Learning)** is a comprehensive software platform that analyzes historical Powerball lottery draw data to identify statistical patterns and generate optimized predictions. The system combines artificial intelligence models with adaptive learning mechanisms, providing a complete pipeline for data processing, prediction generation, validation, and performance analysis.
+**SHIOL+ (System for Hybrid Intelligence Optimization and Learning)** is an optimized AI platform that analyzes historical Powerball lottery data to identify statistical patterns and generate intelligent predictions. The system combines machine learning models with adaptive algorithms, providing a complete 6-step pipeline for data processing, prediction generation, validation, and performance analysis.
 
-Version 6.0 introduces a revolutionary **Configuration Dashboard** that transforms SHIOL+ into a fully configurable, enterprise-ready system with real-time monitoring, advanced database management, comprehensive system controls, and **enterprise-grade security**.
+Version 6.1 introduces **pipeline optimization** with a streamlined codebase, enhanced performance, and a focus on the core prediction workflow that powers the frontend interface.
 
-> **Important**: This tool was created for educational, research, and entertainment purposes. The lottery is a game of chance, and SHIOL+ **does not guarantee prizes or winnings**. Always play responsibly.
+> **Important**: This tool is created for educational, research, and entertainment purposes. The lottery is a game of chance, and SHIOL+ **does not guarantee prizes or winnings**. Always play responsibly.
 
-## 🚀 What's New in v6.0
+## ✨ Key Features
 
-### **Advanced Configuration Dashboard**
-- **Real-time System Monitoring**: CPU, memory, disk usage with live graphs
-- **Pipeline Configuration**: Schedule execution, configure prediction methods, adjust scoring weights
-- **Database Management**: Complete database control with cleanup, backup, and statistics
-- **Model Management**: AI model retraining, backup, and performance tracking
-- **Configuration Profiles**: Pre-built profiles (Conservative, Aggressive, Balanced, Custom)
-- **Notification System**: Email and browser notifications for system events
-- **Advanced Analytics**: Performance trends, win rate analysis, and method comparison
+### 🤖 Optimized AI Pipeline System
+- **6-Step Automated Pipeline**: Data update, adaptive analysis, weight optimization, prediction generation, validation, and performance analysis
+- **Smart AI Predictions**: 100 optimized predictions per execution using ensemble machine learning
+- **Automatic Scheduling**: Executes 30 minutes after each Powerball drawing (Mon/Wed/Sat at 11:29 PM ET)
+- **Adaptive Learning**: Continuous improvement based on historical performance data
+- **Multi-Criteria Scoring**: Probability, diversity, historical patterns, and risk assessment
 
-### **Enterprise Security Features**
-- **XSS Protection**: Complete elimination of innerHTML vulnerabilities with safe DOM manipulation
-- **SQL Injection Prevention**: Parameterized queries and safe table operations
-- **Command Injection Security**: Secure subprocess execution with proper escaping
-- **CORS Security**: Configurable origin restrictions for production environments
-- **Session Management**: Secure HttpOnly cookie-based authentication
-- **Security Headers**: Comprehensive HTTP security headers implementation
-- **Input Sanitization**: Complete user input validation and sanitization
+### 🌐 Modern Web Interface
+- **Real-time Dashboard**: Live pipeline status, prediction displays, and system monitoring
+- **Public Interface**: Clean, mobile-responsive design for viewing latest predictions
+- **Countdown Timer**: Real-time countdown to next Powerball drawing
+- **Performance Analytics**: Historical win rates, accuracy metrics, and trend analysis
+- **RESTful API**: Complete API suite for integration and automation
 
-### **Enterprise Features**
-- **Import/Export Settings**: Save and share configuration templates
-- **Session Management**: Configurable timeouts and security controls
-- **System Health Monitoring**: Comprehensive health checks and alerts
-- **Audit Logging**: Complete system activity tracking
-- **Backup & Recovery**: Automated backup systems with one-click restore
+### 📊 Intelligent Prediction Engine
+- **Ensemble Model**: Multiple ML algorithms working together for optimal accuracy
+- **Feature Engineering**: 15+ engineered features from historical lottery data
+- **Dynamic Weighting**: Adaptive weight optimization based on recent performance
+- **Quality Validation**: Automatic model validation and retraining when needed
+- **Target Dating**: Predictions automatically generated for next scheduled drawing
 
-## Key Features
+### 🔧 System Architecture
+- **Streamlined Codebase**: Optimized for performance and maintainability
+- **SQLite Database**: Efficient data storage with automatic cleanup and optimization
+- **FastAPI Backend**: High-performance API with automatic documentation
+- **Automated Scheduling**: APScheduler for reliable, timezone-aware execution
+- **Comprehensive Logging**: Detailed execution tracking and error handling
 
-### 🎯 Phase 6 Configuration Management System
-
-*   **Unified Dashboard**: Single interface for all system configuration and monitoring
-*   **Profile-Based Configuration**: Quick setup with predefined configuration profiles
-*   **Real-time Monitoring**: Live system health, resource usage, and pipeline status
-*   **Advanced Database Controls**: Complete database management with cleanup and backup tools
-*   **Model Management Suite**: AI model training, validation, and performance optimization
-*   **Notification System**: Multi-channel alerts for system events and winning predictions
-*   **Configuration Import/Export**: Share and backup system configurations
-
-### 🔒 Enterprise Security System
-
-*   **XSS Prevention**: Complete protection against Cross-Site Scripting attacks
-*   **SQL Injection Protection**: Parameterized queries and safe database operations
-*   **Command Injection Security**: Safe subprocess execution with proper validation
-*   **CSRF Protection**: Cross-Site Request Forgery prevention mechanisms
-*   **Secure Authentication**: HttpOnly cookies with secure session management
-*   **Input Validation**: Comprehensive user input sanitization and validation
-*   **Security Headers**: Full HTTP security headers implementation
-
-### 🤖 Enhanced AI Pipeline System
-
-*   **Smart Scheduling**: Configurable execution days and times with timezone support
-*   **Multiple Prediction Methods**: Smart AI, Deterministic, Ensemble, and Adaptive Hybrid
-*   **Dynamic Weight Adjustment**: Real-time scoring weight optimization based on performance
-*   **Batch Processing**: Configure prediction quantities from 10 to 1000 per execution
-*   **Adaptive Learning**: Continuous improvement based on historical performance
-*   **Performance Analytics**: Comprehensive metrics and trend analysis
-
-### 🌐 Advanced Web Interface
-
-*   **Public Interface**: Clean, modern interface for viewing predictions and statistics
-*   **Admin Dashboard**: Comprehensive configuration and monitoring interface
-*   **Real-time Updates**: Live data refresh and status monitoring
-*   **Mobile Responsive**: Optimized for desktop, tablet, and mobile devices
-*   **RESTful API**: Complete API suite for integration and automation
-*   **Security-First Design**: All interfaces protected against common web vulnerabilities
-
-### 📊 Comprehensive Analytics & Monitoring
-
-*   **Performance Dashboards**: Win rates, accuracy metrics, and trend analysis
-*   **System Health Monitoring**: Resource usage, database health, and service status
-*   **Historical Analysis**: Long-term performance tracking and pattern identification
-*   **Comparative Analytics**: Method performance comparison and optimization recommendations
-*   **Real-time Logging**: Advanced logging with filtering, search, and export capabilities
-
-## Quick Start
+## 🏃‍♂️ Quick Start
 
 ### Simple Setup & Execution
-
-The easiest way to get started with SHIOL+ v6.0:
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
-pip install bcrypt==4.1.2 psutil==5.9.8
 
 # Initialize the system
 python src/database.py
@@ -111,396 +63,289 @@ python main.py --server --host 0.0.0.0 --port 3000
 
 ### Access the System
 
-After starting the server, access the different interfaces:
+After starting the server:
 
-*   **Public Interface**: `http://localhost:3000/` - View predictions and statistics
-*   **Admin Login**: `http://localhost:3000/login.html` - Administrator login
-*   **Configuration Dashboard**: `http://localhost:3000/dashboard.html` - Complete system control
-*   **Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app) - Public demonstration
+- **Public Interface**: `http://localhost:3000/` - View latest predictions and countdown
+- **Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app) - Public demonstration
 
-**Default Admin Credentials**: `admin` / `shiol2024!` (Change immediately in production)
+## 🔄 Pipeline Workflow
 
-## Security Improvements
+The SHIOL+ system follows an optimized 6-step pipeline:
 
-### 🛡️ Security Vulnerabilities Resolved
+### Step 1: Data Update
+- Downloads latest Powerball drawing results
+- Validates and stores new data in SQLite database
+- Loads historical data for analysis (currently 36+ drawings)
 
-#### XSS (Cross-Site Scripting) Protection
-- **Fixed**: All `innerHTML` usage replaced with safe DOM manipulation
-- **Files Secured**: `app.js`, `config-manager.js`, `powerball-utils.js`, `public.js`
-- **Method**: Using `textContent`, `createElement()`, and `appendChild()` for safe content insertion
+### Step 2: Adaptive Analysis
+- Analyzes recent prediction performance
+- Identifies patterns in winning combinations
+- Updates adaptive learning parameters
 
-#### SQL Injection Prevention
-- **Fixed**: Dynamic SQL construction replaced with parameterized queries
-- **Files Secured**: `api_database_endpoints.py`
-- **Method**: Predefined safe queries and parameterized statements
+### Step 3: Weight Optimization
+- Optimizes scoring weights based on performance data
+- Uses differential evolution algorithm for optimization
+- Balances probability, diversity, historical, and risk factors
 
-#### Command Injection Security
-- **Fixed**: Subprocess calls secured with proper escaping
-- **Files Secured**: `main.py`
-- **Method**: Using `shlex.escape()` for command parameter sanitization
+### Step 4: Historical Validation
+- Validates recent predictions against actual results
+- Tracks win rates and accuracy metrics
+- Feeds results back into adaptive learning system
 
-#### Authentication Security
-- **Enhanced**: HttpOnly cookie-based session management
-- **Files Updated**: `auth.js`, `auth.py`
-- **Features**: Secure token storage, CSRF protection, session validation
+### Step 5: Prediction Generation ⭐
+- **Primary Function**: Generates 100 Smart AI predictions
+- **Target Dating**: Automatically calculates next drawing date
+- **Ensemble Scoring**: Multi-criteria evaluation of each combination
+- **Quality Assurance**: Model validation and automatic retraining if needed
 
-### 🔧 Security Best Practices Implemented
+### Step 6: Performance Analysis
+- Generates comprehensive performance metrics
+- Analyzes trends over 1, 7, and 30-day periods
+- Provides insights for system optimization
 
-1. **Input Sanitization**: All user inputs validated and sanitized
-2. **Output Encoding**: Safe content rendering without HTML injection
-3. **Parameterized Queries**: Database operations use prepared statements
-4. **Secure Sessions**: HttpOnly, Secure, SameSite cookie attributes
-5. **CORS Configuration**: Configurable origin restrictions
-6. **Error Handling**: Secure error messages without information disclosure
+## 🌐 Web Interface Features
 
-## Configuration Dashboard Features
+### Public Dashboard
+- **Next Drawing Countdown**: Real-time countdown with timezone handling
+- **Latest Predictions**: Top-scored predictions with confidence ratings
+- **System Status**: Pipeline health and last execution time
+- **Mobile Responsive**: Optimized for all device sizes
 
-### 🎯 Pipeline Configuration
-- **Execution Scheduling**: Set days and times for automatic pipeline execution
-- **Timezone Management**: Configure system timezone for accurate scheduling
-- **Prediction Settings**: Adjust quantity, methods, and scoring weights
-- **Auto-execution Control**: Enable/disable automated pipeline runs
-
-### 🗄️ Database Management
-- **Real-time Statistics**: View record counts, database size, and health metrics
-- **Cleanup Tools**: Selective data cleanup with safety confirmations
-- **Backup System**: Create and manage database backups
-- **Performance Monitoring**: Track database performance and optimization
-
-### 🤖 Model Management
-- **Training Controls**: Retrain models with latest data
-- **Performance Tracking**: Monitor model accuracy and effectiveness
-- **Backup & Recovery**: Backup and restore model states
-- **Version Management**: Track model versions and improvements
-
-### 📊 System Monitoring
-- **Resource Usage**: Real-time CPU, memory, and disk monitoring
-- **Pipeline Status**: Track execution progress and history
-- **Health Checks**: Comprehensive system health monitoring
-- **Performance Metrics**: Detailed analytics and trend analysis
-
-### ⚙️ Advanced Configuration
-- **Configuration Profiles**: Quick setup with predefined profiles
-  - **Conservative**: Lower risk, higher accuracy focus
-  - **Aggressive**: Higher volume, diverse prediction strategies  
-  - **Balanced**: Optimal balance of all factors
-  - **Custom**: Full manual configuration control
-- **Import/Export**: Save and share configuration templates
-- **Notification Settings**: Configure email and browser alerts
-- **Security Controls**: Session management and access controls
-
-## System Architecture
-
-### Core Components
-
-*   **Main Pipeline (`main.py`)**: Complete pipeline orchestrator with web server integration
-*   **Configuration Dashboard (`frontend/dashboard.html`)**: Advanced web-based configuration interface
-*   **API Layer (`src/api.py`)**: RESTful API with v6.0 configuration endpoints
-*   **Database Engine (`src/database.py`)**: Enhanced SQLite database with analytics
-*   **AI Engine (`src/predictor.py`)**: Machine learning models with adaptive learning
-*   **Intelligent Generator (`src/intelligent_generator.py`)**: Advanced prediction algorithms
-*   **Adaptive Feedback (`src/adaptive_feedback.py`)**: Performance-based learning system
-
-### New v6.0 Components
-
-*   **System Monitor**: Real-time resource and performance monitoring
-*   **Configuration Manager**: Centralized configuration management system
-*   **Database Manager**: Advanced database operations and maintenance
-*   **Model Manager**: AI model lifecycle management
-*   **Notification Engine**: Multi-channel notification system
-*   **Analytics Engine**: Advanced performance analytics and reporting
-*   **Security Layer**: Comprehensive security controls and validation
-
-### Security Components
-
-*   **Authentication System (`src/auth.py`)**: Secure user authentication and session management
-*   **Input Validator**: Comprehensive input validation and sanitization
-*   **SQL Security**: Parameterized queries and injection prevention
-*   **XSS Protection**: Safe DOM manipulation and content rendering
-*   **CSRF Protection**: Cross-site request forgery prevention
-
-## API Endpoints
-
-### Core Prediction Endpoints
-- `GET /api/v1/predict/smart` - Smart AI predictions
-- `GET /api/v1/predict-deterministic` - Deterministic predictions
-- `GET /api/v1/prediction-history` - Historical predictions
-- `GET /api/v1/prediction-history-grouped` - Grouped prediction analytics
-
-### v6.0 Configuration Endpoints
-- `GET /api/v1/system/stats` - Real-time system statistics
-- `GET /api/v1/database/stats` - Database health and statistics
-- `POST /api/v1/database/cleanup` - Database maintenance operations
-- `POST /api/v1/database/backup` - Create database backups
-- `GET /api/v1/config/load` - Load system configuration
-- `POST /api/v1/config/save` - Save system configuration
-- `GET /api/v1/analytics/performance` - Performance analytics
-- `POST /api/v1/pipeline/test` - Test pipeline execution
-- `POST /api/v1/model/retrain` - Trigger model retraining
-- `GET /api/v1/logs` - System logs and debugging
-
-### Pipeline Control Endpoints
+### API Endpoints
+- `GET /api/v1/public/featured-predictions` - Latest AI predictions
+- `GET /api/v1/public/next-drawing` - Next drawing information
 - `GET /api/v1/pipeline/status` - Pipeline execution status
-- `POST /api/v1/pipeline/trigger` - Manual pipeline execution
-- `GET /api/v1/pipeline/health` - System health check
+- `GET /api/v1/system/stats` - System health metrics
 
-### Authentication Endpoints
-- `POST /api/v1/auth/login` - Secure user authentication
-- `POST /api/v1/auth/logout` - Session termination
-- `POST /api/v1/auth/verify` - Session validation
+## 📈 Performance & Analytics
 
-## Configuration Management
+### Current System Status
+- **Database**: 36+ historical Powerball drawings
+- **Model**: Trained ensemble with multiple ML algorithms
+- **Predictions**: Smart AI generates 100 predictions per execution
+- **Execution**: Automatic runs 30 minutes after each drawing
+- **Accuracy**: Continuous tracking and improvement
 
-### Configuration Profiles
+### Prediction Quality
+- **Scoring Algorithm**: Multi-criteria evaluation system
+- **Quality Thresholds**: Automatic filtering of low-quality predictions
+- **Diversity Optimization**: Ensures varied number combinations
+- **Risk Assessment**: Balanced approach between safety and potential
 
-SHIOL+ v6.0 includes predefined configuration profiles for different use cases:
+## 🛠️ Technical Specifications
 
-#### Conservative Profile
-- **Predictions**: 50 per execution
-- **Method**: Deterministic scoring
-- **Focus**: Higher accuracy, lower risk
-- **Weights**: Probability (50%), Historical (30%), Diversity (10%), Risk (10%)
+### Core Technologies
+- **Backend**: Python 3.8+, FastAPI, SQLite
+- **Machine Learning**: Scikit-learn, XGBoost, Pandas, NumPy
+- **Frontend**: HTML5, CSS3, JavaScript (Vanilla)
+- **Scheduling**: APScheduler with timezone awareness
+- **API**: RESTful design with automatic documentation
 
-#### Aggressive Profile  
-- **Predictions**: 500 per execution
-- **Method**: Ensemble method
-- **Focus**: Maximum coverage, diverse strategies
-- **Weights**: Diversity (35%), Probability (30%), Historical (20%), Risk (15%)
+### System Requirements
+- **Minimum**: Python 3.8+, 2GB RAM, 1GB disk space
+- **Recommended**: Python 3.10+, 4GB RAM, SSD storage
+- **Network**: Internet connection for data updates
+- **Browser**: Modern browser for web interface
 
-#### Balanced Profile
-- **Predictions**: 100 per execution  
-- **Method**: Smart AI Pipeline
-- **Focus**: Optimal balance of all factors
-- **Weights**: Probability (40%), Diversity (25%), Historical (20%), Risk (15%)
+### Database Schema
+```sql
+-- Core tables (optimized)
+powerball_numbers     -- Historical drawing results
+predictions_log       -- Generated predictions with scores
+pipeline_executions   -- Execution history and status
+adaptive_weights      -- Dynamic scoring parameters
+```
 
-### Configuration File Structure
+## 🚀 Deployment Options
 
-The system uses an enhanced `config/config.ini` file:
+### Local Development
+```bash
+# Clone repository
+git clone <repository-url>
+cd shiol-plus
 
+# Install dependencies
+pip install -r requirements.txt
+
+# Initialize database
+python src/database.py
+
+# Run full pipeline
+python main.py
+
+# Start web server
+python main.py --server --host 0.0.0.0 --port 3000
+```
+
+### Replit Deployment (Recommended)
+The system is optimized for Replit deployment with automatic:
+- Dependency management
+- Port forwarding (port 3000)
+- Public URL generation
+- Automatic scheduling
+- Database persistence
+
+**Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
+
+## 📋 Command Line Interface
+
+### Pipeline Operations
+```bash
+# Full pipeline execution
+python main.py
+
+# Specific steps
+python main.py --step data          # Data update only
+python main.py --step prediction    # Prediction generation only
+python main.py --step validation    # Validation only
+
+# System status
+python main.py --status
+
+# Web server
+python main.py --server --host 0.0.0.0 --port 3000
+```
+
+### CLI Tool (Advanced)
+```bash
+# Generate predictions
+python src/cli.py predict --count 100
+
+# Validate against results
+python src/cli.py validate
+
+# Analyze performance
+python src/cli.py analyze-feedback --days 30
+
+# Optimize weights
+python src/cli.py optimize-weights
+```
+
+## 🔧 Configuration
+
+### System Configuration (`config/config.ini`)
 ```ini
 [pipeline]
 execution_days = 0,2,5  # Monday, Wednesday, Saturday
-execution_time = 02:00
+execution_time = 23:29   # 11:29 PM ET (30 min after drawing)
 timezone = America/New_York
 auto_execution_enabled = true
 
 [predictions]
 default_count = 100
-default_method = smart_ai
+method = smart_ai
 
 [scoring]
 probability_weight = 40
 diversity_weight = 25
 historical_weight = 20
 risk_weight = 15
-
-[notifications]
-admin_email = admin@shiolplus.com
-email_results = true
-email_errors = true
-browser_notifications = true
-
-[security]
-session_timeout = 60
-require_2fa = false
-cors_origins = https://shiolplus.replit.app
 ```
 
-## Database Management
+## 📊 API Documentation
 
-### Enhanced Database Features
-- **Automated Cleanup**: Selective data cleanup with confirmation dialogs
-- **Backup System**: Automated and manual backup creation
-- **Health Monitoring**: Real-time database health and performance metrics
-- **Migration Support**: Automatic schema updates and data migration
-- **Analytics Integration**: Built-in analytics for performance tracking
-- **Security**: Protected against SQL injection with parameterized queries
+### Public Endpoints
+- `GET /` - Main web interface
+- `GET /api/v1/public/featured-predictions` - Latest predictions
+- `GET /api/v1/public/next-drawing` - Drawing countdown
+- `GET /api/v1/system/info` - System information
 
-### Database Tables
-- `draws` - Historical lottery data
-- `predictions_log` - All generated predictions with metadata
-- `validation_results` - Prediction validation results
-- `adaptive_weights` - Dynamic scoring weights
-- `adaptive_performance` - Performance tracking data
-- `system_logs` - System events and audit trail
-- `user_sessions` - Authentication and session management
+### Pipeline Endpoints
+- `GET /api/v1/pipeline/status` - Current pipeline status
+- `POST /api/v1/pipeline/trigger` - Manual pipeline execution
+- `GET /api/v1/pipeline/health` - System health check
 
-## Performance Analytics
-
-### Key Metrics
-- **Win Rate**: Percentage of predictions with prizes
-- **Average Score**: Mean prediction quality score
-- **Method Performance**: Comparative analysis of prediction methods
-- **Trend Analysis**: Performance trends over time
-- **ROI Analysis**: Return on investment calculations
-
-### Monitoring Dashboards
-- **Real-time Monitoring**: Live system resource usage
-- **Pipeline Analytics**: Execution history and performance
-- **Database Analytics**: Storage optimization and query performance
-- **Model Analytics**: AI model accuracy and improvement tracking
-
-## Security & Access Control
-
-### Authentication System
-- **Secure Login**: Encrypted password authentication with bcrypt
-- **Session Management**: Configurable session timeouts with HttpOnly cookies
-- **Role-based Access**: Different access levels for different users
-- **Audit Logging**: Complete activity tracking and logging
-
-### Security Features  
-- **Password Encryption**: Bcrypt-based password hashing
-- **Session Security**: Secure session token management with HttpOnly cookies
-- **Access Control**: Protected endpoints and functionality
-- **Data Protection**: Encrypted sensitive data storage
-- **XSS Prevention**: Complete protection against script injection
-- **SQL Injection Prevention**: Parameterized queries for all database operations
-- **CSRF Protection**: Cross-site request forgery prevention
-- **Command Injection Prevention**: Secure subprocess execution
-
-## System Requirements
-
-### Minimum Requirements
-- Python 3.10+
-- 4GB RAM (recommended: 8GB+)
-- 2GB free disk space
-- Modern web browser for dashboard access
-
-### Recommended Setup
-- Python 3.11+
-- 8GB+ RAM for optimal performance  
-- SSD storage for database operations
-- High-speed internet for data updates
-
-### Security Requirements
-- HTTPS enabled for production deployment
-- Environment variables for sensitive configuration
-- Regular security updates and monitoring
-
-## Installation & Setup
-
-### Quick Installation
-
-```bash
-# Clone the repository
-git clone <REPOSITORY_URL>
-cd SHIOL-PLUS-V6
-
-# Install dependencies
-pip install -r requirements.txt
-pip install bcrypt==4.1.2 psutil==5.9.8
-
-# Initialize database
-python src/database.py
-
-# Configure system (edit config/config.ini)
-# Run initial pipeline
-python main.py
-
-# Start web server
-python main.py --server --host 0.0.0.0 --port 3000
-```
-
-### Production Deployment on Replit
-
-For secure production deployment:
-
-1. **Environment Setup**: Configure environment variables and secrets
-2. **Database Configuration**: Set up persistent database storage  
-3. **Security Configuration**: Change default credentials and enable security features
-4. **Monitoring Setup**: Configure notification endpoints and monitoring
-5. **Backup Configuration**: Set up automated backup schedules
-6. **CORS Configuration**: Restrict origins to production domains
-7. **HTTPS Setup**: Enable SSL/TLS for secure connections
-
-**Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
-
-## Usage Examples
-
-### Command Line Interface
-
-```bash
-# Full pipeline execution
-python main.py
-
-# Specific pipeline steps
-python main.py --step data          # Data update only
-python main.py --step prediction    # Prediction generation only  
-python main.py --step validation    # Validation only
-
-# Start web server
-python main.py --server --host 0.0.0.0 --port 3000
-
-# Check system status
-python main.py --status
-
-# Get help
-python main.py --help
-```
-
-### Dashboard Operations
-
-1. **Access Dashboard**: [https://shiolplus.replit.app/dashboard.html](https://shiolplus.replit.app/dashboard.html)
-2. **Configure Pipeline**: Set execution schedule and parameters
-3. **Manage Database**: Monitor health and perform maintenance
-4. **Monitor System**: View real-time resource usage and performance
-5. **Export Configuration**: Save current settings for backup or sharing
-
-### API Integration
-
+### Integration Example
 ```python
 import requests
 
-# Base URL for live demo
-BASE_URL = 'https://shiolplus.replit.app/api/v1'
-
-# Get system status
-response = requests.get(f'{BASE_URL}/system/stats')
-stats = response.json()
-
-# Trigger pipeline
-response = requests.post(f'{BASE_URL}/pipeline/trigger')
-
-# Get predictions
-response = requests.get(f'{BASE_URL}/predict/smart?limit=10')
+# Get latest predictions
+response = requests.get('https://shiolplus.replit.app/api/v1/public/featured-predictions')
 predictions = response.json()
+
+# Check next drawing
+response = requests.get('https://shiolplus.replit.app/api/v1/public/next-drawing')
+next_drawing = response.json()
 ```
 
-## Troubleshooting
+## 🧠 Machine Learning Details
 
-### Common Issues
+### Model Architecture
+- **Ensemble Approach**: Multiple algorithms with weighted voting
+- **Feature Engineering**: 15+ calculated features from historical data
+- **Training Data**: All available Powerball drawing history
+- **Validation**: Cross-validation with historical splits
+- **Optimization**: Continuous parameter tuning based on performance
 
-1. **Database Connection Issues**: Check database file permissions and path
-2. **Model Loading Errors**: Ensure model files exist and are not corrupted
-3. **Memory Issues**: Increase available RAM or reduce batch sizes
-4. **Permission Errors**: Check file system permissions for data directories
-5. **Web Interface Issues**: Clear browser cache and check console for errors
-6. **Security Errors**: Verify CORS configuration and authentication settings
+### Prediction Process
+1. **Data Preparation**: Feature engineering from historical draws
+2. **Model Prediction**: Ensemble generates probability scores
+3. **Candidate Generation**: Creates thousands of potential combinations
+4. **Multi-Criteria Scoring**: Evaluates each combination across multiple dimensions
+5. **Selection Algorithm**: Chooses top 100 diverse, high-quality predictions
+6. **Quality Validation**: Final verification before serving
 
-### Debug Commands
+## 🔄 Automation & Scheduling
 
-```bash
-# Check system health
-python main.py --status
+### Automatic Execution
+- **Schedule**: 30 minutes after each Powerball drawing
+- **Drawing Days**: Monday, Wednesday, Saturday at 10:59 PM ET
+- **Pipeline Runs**: Monday 11:29 PM, Wednesday 11:29 PM, Saturday 11:29 PM ET
+- **Timezone**: America/New_York (handles DST automatically)
+- **Overlap Protection**: Prevents multiple simultaneous executions
 
-# Validate configuration
-python -c "import configparser; c=configparser.ConfigParser(); c.read('config/config.ini'); print('Config OK')"
+### Manual Execution
+- **CLI**: `python main.py` for full pipeline
+- **API**: `POST /api/v1/pipeline/trigger` for programmatic execution
+- **Web Interface**: Direct pipeline triggering (when authentication is enabled)
 
-# Test database connection
-python -c "from src.database import get_db_connection; print('DB OK' if get_db_connection() else 'DB Error')"
+## 📈 Performance Monitoring
 
-# Check logs
-tail -f logs/shiolplus.log
+### Real-time Metrics
+- **Pipeline Status**: Current execution state and progress
+- **Prediction Quality**: Scoring distributions and confidence levels
+- **System Health**: Database status, model validity, execution history
+- **Performance Trends**: Win rates, accuracy metrics over time
 
-# Security scan (if available)
-python src/security_analyzer.py
-```
+### Analytics Dashboard
+- **Execution History**: Success rates, timing, error tracking
+- **Prediction Performance**: Hit rates, prize categories, ROI analysis
+- **System Resources**: Database size, model performance, API response times
 
-## Contributing
+## 🔒 Security & Reliability
 
-We welcome contributions to SHIOL+ v6.0! Please follow our contribution guidelines:
+### Data Security
+- **Local Storage**: All data stored locally in SQLite database
+- **No External Dependencies**: Predictions generated entirely locally
+- **Secure API**: CORS configuration for controlled access
+- **Input Validation**: Comprehensive validation of all inputs
 
-### Development Setup
+### System Reliability
+- **Error Handling**: Comprehensive exception handling with recovery
+- **Logging**: Detailed execution logs for debugging and monitoring
+- **Backup System**: Automatic database backups before major operations
+- **Health Checks**: Continuous monitoring of system components
+
+## 🚀 Future Enhancements
+
+### Planned Features
+- **Advanced Analytics**: Enhanced performance tracking and visualization
+- **Model Improvements**: New ML algorithms and feature engineering
+- **API Expansion**: Additional endpoints for detailed analytics
+- **Mobile App**: Native mobile application for iOS/Android
+- **Multi-Lottery Support**: Support for additional lottery games
+
+### Performance Optimizations
+- **Database Optimization**: Query performance and storage efficiency
+- **Prediction Speed**: Faster generation with maintained quality
+- **API Performance**: Response time optimization and caching
+- **Resource Usage**: Memory and CPU optimization
+
+## 📝 Contributing
+
+We welcome contributions to SHIOL+ v6.1! Please follow these guidelines:
+
+### Development Process
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes with tests
@@ -510,64 +355,26 @@ We welcome contributions to SHIOL+ v6.0! Please follow our contribution guidelin
 - Follow PEP 8 for Python code
 - Use meaningful variable and function names
 - Add comprehensive docstrings
-- Include unit tests for new features
+- Include tests for new features
 - Update documentation for changes
-- Follow security best practices
-- Validate all user inputs
-- Use parameterized queries for database operations
 
-### Security Guidelines
-- Never use `innerHTML` with user data
-- Always validate and sanitize user inputs
-- Use parameterized queries for all database operations
-- Implement proper error handling without information disclosure
-- Follow principle of least privilege
-- Regular security testing and code review
-
-## Version History
-
-- **v6.0 (Phase 6)**: Advanced Configuration Dashboard with enterprise security features
-- **v5.0 (Phase 5)**: Automated pipeline system with web dashboard
-- **v4.0 (Phase 4)**: Adaptive feedback system with weight optimization
-- **v3.0 (Phase 3)**: Advanced analytics and performance tracking
-- **v2.0 (Phase 2)**: Deterministic prediction system with validation
-- **v1.0**: Basic ML prediction system with SQLite database
-
-## Security Audit
-
-### Recent Security Improvements (Phase 6 Final)
-- ✅ **XSS Vulnerabilities**: Eliminated all innerHTML usage with safe DOM manipulation
-- ✅ **SQL Injection**: Implemented parameterized queries for all database operations
-- ✅ **Command Injection**: Secured subprocess execution with proper escaping
-- ✅ **Session Security**: Implemented HttpOnly cookie-based authentication
-- ✅ **Input Validation**: Comprehensive user input sanitization
-- ✅ **CORS Security**: Configurable origin restrictions
-- ✅ **Error Handling**: Secure error messages without information disclosure
-
-### Security Testing
-The system has been thoroughly tested for common web vulnerabilities including:
-- Cross-Site Scripting (XSS)
-- SQL Injection
-- Command Injection
-- Cross-Site Request Forgery (CSRF)
-- Session Management vulnerabilities
-- Input validation bypass attempts
-
-## Credits
-
-- **Creator**: Orlando Batista
-- **Version**: 6.0 (Phase 6 - Advanced Configuration Dashboard with Enterprise Security)
-- **Last Updated**: August 2025
-- **Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
-
-## License
+## 📄 License
 
 Private use – All rights reserved.
 
+## 🏆 Credits
+
+- **Creator**: Orlando Batista
+- **Version**: 6.1 (Optimized Pipeline)
+- **Last Updated**: August 2025
+- **Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
+
 ---
 
-**SHIOL+ v6.0** - Transforming lottery analysis with enterprise-grade AI, comprehensive system management, and bulletproof security.
+**SHIOL+ v6.1** - Optimized AI-powered lottery analysis with streamlined performance and intelligent predictions.
 
 **🌐 Experience SHIOL+ Live**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
 
-For support, documentation, and updates, visit the project repository or contact the development team.
+For support, documentation, and updates, visit the project repository.
+
+**⚡ Optimized for Performance • 🤖 Powered by AI • 🎯 Built for Accuracy**
