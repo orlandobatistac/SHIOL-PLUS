@@ -138,15 +138,15 @@ async def cleanup_database(cleanup_options: Dict[str, Any]):
     try:
         logger.info(f"Database cleanup requested with options: {cleanup_options}")
 
+        cleanup_summary = {
+            "predictions_removed": 0,
+            "pipeline_logs_removed": 0,
+            "old_data_removed": 0,
+            "vacuum_applied": False
+        }
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
-
-            cleanup_summary = {
-                "predictions_removed": 0,
-                "pipeline_logs_removed": 0,
-                "old_data_removed": 0,
-                "vacuum_applied": False
-            }
 
             # Clean predictions if requested
             if cleanup_options.get("predictions", False):
@@ -169,19 +169,17 @@ async def cleanup_database(cleanup_options: Dict[str, Any]):
 
             conn.commit()
 
-            # Apply VACUUM if requested
-            if cleanup_options.get("vacuum", True):
-                try:
-                    conn.close()  # Close connection before VACUUM
-                    vacuum_conn = get_db_connection()
+        # Apply VACUUM if requested (outside the context manager)
+        if cleanup_options.get("vacuum", True):
+            try:
+                with get_db_connection() as vacuum_conn:
                     vacuum_conn.execute("VACUUM")
-                    vacuum_conn.close()
-                    cleanup_summary["vacuum_applied"] = True
-                    logger.info("VACUUM applied successfully")
-                except Exception as vacuum_error:
-                    logger.warning(f"VACUUM failed: {vacuum_error}")
+                cleanup_summary["vacuum_applied"] = True
+                logger.info("VACUUM applied successfully")
+            except Exception as vacuum_error:
+                logger.warning(f"VACUUM failed: {vacuum_error}")
 
-            logger.info(f"Database cleanup completed: {cleanup_summary}")
+        logger.info(f"Database cleanup completed: {cleanup_summary}")
             return {
                 "success": True,
                 "message": "Database cleanup completed successfully",
