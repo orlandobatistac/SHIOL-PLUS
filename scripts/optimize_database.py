@@ -49,7 +49,7 @@ def optimize_database():
         optimization_queries = [
             "CREATE INDEX IF NOT EXISTS idx_predictions_date ON predictions_log(timestamp)",
             "CREATE INDEX IF NOT EXISTS idx_predictions_active ON predictions_log(timestamp, score_total)",
-            "CREATE INDEX IF NOT EXISTS idx_powerball_date ON powerball_numbers(date)",
+            "CREATE INDEX IF NOT EXISTS idx_powerball_date ON powerball_draws(draw_date)",
             "CREATE INDEX IF NOT EXISTS idx_pipeline_status ON pipeline_executions(status, start_time)"
         ]
         

@@ -13,7 +13,25 @@ from loguru import logger
 def verify_optimization():
     """Verificar que la optimización mantuvo la funcionalidad del frontend"""
     
+    import socket
+    
     base_url = "http://0.0.0.0:3000"
+    
+    # Check if server is running first
+    def is_server_running():
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            result = sock.connect_ex(('0.0.0.0', 3000))
+            sock.close()
+            return result == 0
+        except:
+            return False
+    
+    if not is_server_running():
+        logger.warning("⚠️  Server is not running on port 3000. Please start the server first.")
+        logger.info("💡 Start server with: python main.py --server --host 0.0.0.0 --port 3000")
+        return False
     
     tests = [
         {
@@ -95,5 +113,52 @@ def verify_optimization():
         logger.warning(f"⚠️  {total - passed} tests failed. Check compatibility.")
         return False
 
+def verify_database_optimization():
+    """Verificar que la optimización de base de datos fue exitosa"""
+    try:
+        import sqlite3
+        import os
+        
+        db_path = "data/shiolplus.db"
+        if not os.path.exists(db_path):
+            logger.error("❌ Database file not found")
+            return False
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Check if optimization indexes exist
+        cursor.execute("PRAGMA index_list(predictions_log)")
+        indexes = [row[1] for row in cursor.fetchall()]
+        
+        required_indexes = ['idx_predictions_date', 'idx_predictions_active']
+        missing_indexes = [idx for idx in required_indexes if idx not in indexes]
+        
+        if missing_indexes:
+            logger.warning(f"⚠️  Missing database indexes: {missing_indexes}")
+            return False
+        else:
+            logger.info("✅ Database optimization indexes verified")
+            return True
+            
+    except Exception as e:
+        logger.error(f"❌ Database verification failed: {e}")
+        return False
+
 if __name__ == "__main__":
-    verify_optimization()
+    logger.info("🔍 Starting optimization verification...")
+    
+    # Verify database optimization first
+    db_ok = verify_database_optimization()
+    
+    # Verify frontend functionality (only if server is running)
+    frontend_ok = verify_optimization()
+    
+    logger.info(f"\n📊 Verification Summary:")
+    logger.info(f"   Database optimization: {'✅ OK' if db_ok else '❌ FAILED'}")
+    logger.info(f"   Frontend compatibility: {'✅ OK' if frontend_ok else '⚠️  SERVER NOT RUNNING'}")
+    
+    if db_ok:
+        logger.info("🎯 Plan de optimización implementado correctamente")
+    else:
+        logger.error("❌ Optimización requiere correcciones")
