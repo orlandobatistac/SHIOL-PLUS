@@ -375,14 +375,17 @@ async def trigger_pipeline_execution(
     """Trigger manual pipeline execution"""
     try:
         import uuid
-        from src.api import pipeline_executions, run_full_pipeline_background, pipeline_orchestrator
+        from src.api import pipeline_executions, run_full_pipeline_background
 
         # Check if pipeline is already running (unless force is True)
-        if pipeline_orchestrator.is_running():
-            return JSONResponse(
-                status_code=409,
-                content={"detail": "Pipeline is already running"}
-            )
+        if not force:
+            # Check for existing running pipeline execution
+            current_status = await _get_current_pipeline_status()
+            if current_status.get("status") == "running":
+                return JSONResponse(
+                    status_code=409,
+                    content={"detail": "Pipeline is already running"}
+                )
 
         # Validate num_predictions
         if not (1 <= num_predictions <= 200):

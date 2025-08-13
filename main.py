@@ -1203,7 +1203,7 @@ Server mode:
                 print("Step completed successfully!")
             return
 
-        # Run full pipeline
+        # Run full pipeline with proper parameters
         # Set trigger_details for dashboard execution if available, otherwise use defaults
         if args.server or args.api: # If server is started, it might be triggered by dashboard/external call
             # In a real scenario, 'trigger_details' would be passed from the API handler
@@ -1219,10 +1219,17 @@ Server mode:
                 },
                 "triggered_by": "user_dashboard"
             }
-            result = orchestrator.run_full_pipeline(execution_source="manual_dashboard", trigger_details=simulated_trigger_details)
+            result = orchestrator.run_full_pipeline(
+                num_predictions=50, 
+                execution_source="manual_dashboard", 
+                trigger_details=simulated_trigger_details
+            )
         else:
             # Default to scheduled pipeline if not running in server mode
-            result = orchestrator.run_full_pipeline(execution_source="scheduled_pipeline")
+            result = orchestrator.run_full_pipeline(
+                num_predictions=50,
+                execution_source="scheduled_pipeline"
+            )
 
 
         # Print results summary

@@ -114,126 +114,92 @@ async def trigger_full_pipeline_automatically():
     except Exception as e:
         logger.error(f"Error triggering automatic full pipeline: {e}")
 
-async def run_full_pipeline_background(execution_id: str, num_predictions: int = 100):
-    """Run the full pipeline in background using robust subprocess execution"""
-    import subprocess
-    import asyncio
-    import os
+async def run_full_pipeline_background(execution_id: str, num_predictions: int):
+    """
+    Run the full pipeline in background using subprocess for production reliability.
+
+    Args:
+        execution_id: Unique execution identifier
+        num_predictions: Number of predictions to generate
+    """
+    logger.info(f"Starting background pipeline execution {execution_id} with {num_predictions} predictions")
 
     try:
-        # Save execution to database
-        from src.database import save_pipeline_execution, update_pipeline_execution
+        # Update execution status to starting
+        pipeline_executions[execution_id]["status"] = "starting"
 
-        # Save initial execution record
-        save_pipeline_execution(pipeline_executions[execution_id])
+        # Build command - main.py ahora acepta argumentos
+        cmd = [
+            "python", "main.py"
+        ]
 
-        # Update execution status to running
-        pipeline_executions[execution_id]["status"] = "running"
-        pipeline_executions[execution_id]["current_step"] = "subprocess_execution"
+        logger.info(f"Executing pipeline command: {' '.join(cmd)}")
 
-        # Update database
-        update_pipeline_execution(execution_id, {
-            "status": "running",
-            "current_step": "subprocess_execution"
-        })
+        # Execute pipeline with proper timeout (15 minutes for Replit production)
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=900,  # 15 minutes timeout optimized for Replit
+                cwd=os.getcwd()
+            )
 
-        logger.info(f"Starting robust pipeline execution {execution_id} with subprocess: python main.py")
-
-        # Prepare subprocess command
-        cmd = ["python", "main.py"]
-
-        # Set working directory to project root
-        working_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-        # Set environment variables for subprocess
-        env = os.environ.copy()
-        env["PIPELINE_EXECUTION_ID"] = execution_id
-        env["PIPELINE_NUM_PREDICTIONS"] = str(num_predictions)
-        env["PIPELINE_SOURCE"] = "dashboard_subprocess"
-
-        # Execute subprocess in thread pool to avoid blocking
-        def run_subprocess():
-            try:
-                result = subprocess.run(
-                    cmd,
-                    cwd=working_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=600,  # 10 minute timeout
-                    env=env
-                )
-                return result
-            except subprocess.TimeoutExpired:
-                return {"timeout": True, "error": "Pipeline execution timed out after 10 minutes"}
-            except Exception as e:
-                return {"error": str(e)}
-
-        # Run subprocess in executor
-        result = await asyncio.get_event_loop().run_in_executor(None, run_subprocess)
-
-        if hasattr(result, 'returncode'):
-            # Successful subprocess execution
+            # Update execution status based on result
             if result.returncode == 0:
-                pipeline_executions[execution_id]["status"] = "completed"
-                pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-                pipeline_executions[execution_id]["predictions_generated"] = num_predictions
-                pipeline_executions[execution_id]["stdout"] = result.stdout[-2000:] if result.stdout else ""  # Last 2000 chars
-                pipeline_executions[execution_id]["subprocess_success"] = True
-
-                update_pipeline_execution(execution_id, {
+                pipeline_executions[execution_id].update({
                     "status": "completed",
                     "end_time": datetime.now().isoformat(),
-                    "predictions_generated": num_predictions,
-                    "stdout": result.stdout[-2000:] if result.stdout else "",
-                    "subprocess_success": True
+                    "subprocess_success": True,
+                    "steps_completed": 6,  # Pipeline has 6 steps
+                    "stdout": result.stdout,
+                    "stderr": result.stderr
                 })
-
-                logger.info(f"Pipeline execution {execution_id} completed successfully via subprocess")
-                logger.info(f"Subprocess output (last 500 chars): {result.stdout[-500:] if result.stdout else 'No output'}")
+                logger.info(f"Pipeline execution {execution_id} completed successfully")
             else:
-                pipeline_executions[execution_id]["status"] = "failed"
-                pipeline_executions[execution_id]["error"] = f"Subprocess failed with exit code {result.returncode}"
-                pipeline_executions[execution_id]["stderr"] = result.stderr[-1000:] if result.stderr else ""
-                pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-
-                update_pipeline_execution(execution_id, {
+                pipeline_executions[execution_id].update({
                     "status": "failed",
-                    "error": f"Subprocess failed with exit code {result.returncode}",
-                    "stderr": result.stderr[-1000:] if result.stderr else "",
-                    "end_time": datetime.now().isoformat()
+                    "end_time": datetime.now().isoformat(),
+                    "subprocess_success": False,
+                    "error": f"Pipeline failed with return code {result.returncode}",
+                    "stderr": result.stderr,
+                    "stdout": result.stdout
                 })
+                logger.error(f"Pipeline execution {execution_id} failed with return code {result.returncode}")
+                logger.error(f"STDERR: {result.stderr}")
 
-                logger.error(f"Pipeline execution {execution_id} failed with exit code {result.returncode}")
-                logger.error(f"Subprocess stderr: {result.stderr[-500:] if result.stderr else 'No error output'}")
-        else:
-            # Subprocess execution failed
-            error_msg = result.get("error", "Unknown subprocess error")
-            if result.get("timeout"):
-                error_msg = "Pipeline execution timed out"
-
-            pipeline_executions[execution_id]["status"] = "failed"
-            pipeline_executions[execution_id]["error"] = error_msg
-            pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-
-            update_pipeline_execution(execution_id, {
-                "status": "failed",
-                "error": error_msg,
-                "end_time": datetime.now().isoformat()
+        except subprocess.TimeoutExpired:
+            pipeline_executions[execution_id].update({
+                "status": "timeout",
+                "end_time": datetime.now().isoformat(),
+                "subprocess_success": False,
+                "error": "Pipeline execution timed out after 15 minutes"
             })
+            logger.error(f"Pipeline execution {execution_id} timed out")
 
-            logger.error(f"Pipeline execution {execution_id} failed: {error_msg}")
+        except Exception as subprocess_error:
+            pipeline_executions[execution_id].update({
+                "status": "failed",
+                "end_time": datetime.now().isoformat(),
+                "subprocess_success": False,
+                "error": f"Subprocess execution failed: {str(subprocess_error)}"
+            })
+            logger.error(f"Pipeline subprocess execution failed: {subprocess_error}")
 
     except Exception as e:
-        logger.error(f"Error in subprocess pipeline execution {execution_id}: {e}")
-        if execution_id in pipeline_executions:
-            pipeline_executions[execution_id]["status"] = "failed"
-            pipeline_executions[execution_id]["error"] = f"Subprocess execution error: {str(e)}"
-            pipeline_executions[execution_id]["end_time"] = datetime.now().isoformat()
-            update_pipeline_execution(execution_id, {
-                "status": "failed",
-                "error": f"Subprocess execution error: {str(e)}",
-                "end_time": datetime.now().isoformat()
-            })
+        logger.error(f"Background pipeline execution failed: {e}")
+        pipeline_executions[execution_id].update({
+            "status": "failed",
+            "end_time": datetime.now().isoformat(),
+            "error": str(e),
+            "subprocess_success": False
+        })
+
+    # Save execution record to database
+    try:
+        save_pipeline_execution_record(pipeline_executions[execution_id])
+    except Exception as db_error:
+        logger.error(f"Failed to save execution record to database: {db_error}")
 
 
 @asynccontextmanager
