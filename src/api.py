@@ -122,11 +122,20 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int):
         execution_id: Unique execution identifier
         num_predictions: Number of predictions to generate
     """
+    import subprocess
     logger.info(f"Starting background pipeline execution {execution_id} with {num_predictions} predictions")
 
     try:
-        # Update execution status to starting
-        pipeline_executions[execution_id]["status"] = "starting"
+        # Update execution status to running and save to database immediately
+        pipeline_executions[execution_id]["status"] = "running" 
+        pipeline_executions[execution_id]["current_step"] = "pipeline_execution"
+        
+        # Save to database immediately so it appears in Execution History
+        try:
+            save_pipeline_execution_record(pipeline_executions[execution_id])
+            logger.info(f"Saved pipeline execution {execution_id} to database with status: running")
+        except Exception as db_error:
+            logger.error(f"Failed to save initial execution record: {db_error}")
 
         # Build command - main.py ahora acepta argumentos
         cmd = [
@@ -195,12 +204,46 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int):
             "subprocess_success": False
         })
 
-    # Save execution record to database
+    # Update execution record in database with final status
     try:
         save_pipeline_execution_record(pipeline_executions[execution_id])
+        logger.info(f"Updated pipeline execution {execution_id} in database with final status: {pipeline_executions[execution_id]['status']}")
     except Exception as db_error:
-        logger.error(f"Failed to save execution record to database: {db_error}")
+        logger.error(f"Failed to update execution record in database: {db_error}")
 
+
+def save_pipeline_execution_record(execution_data: dict):
+    """
+    Save pipeline execution record to the database.
+    
+    Args:
+        execution_data: Dictionary containing execution information
+    """
+    try:
+        from src.database import save_pipeline_execution
+        
+        # Ensure all required fields are present with defaults
+        record = {
+            'execution_id': execution_data.get('execution_id'),
+            'status': execution_data.get('status', 'unknown'),
+            'start_time': execution_data.get('start_time'),
+            'end_time': execution_data.get('end_time'),
+            'trigger_type': execution_data.get('trigger_type', 'manual'),
+            'trigger_source': execution_data.get('trigger_source', 'dashboard'),
+            'steps_completed': execution_data.get('steps_completed', 0),
+            'num_predictions': execution_data.get('num_predictions', 50),
+            'error': execution_data.get('error'),
+            'subprocess_success': execution_data.get('subprocess_success', False),
+            'current_step': execution_data.get('current_step')
+        }
+        
+        # Save to database
+        save_pipeline_execution(record)
+        logger.info(f"Saved execution record {record['execution_id']} to database")
+        
+    except Exception as e:
+        logger.error(f"Error saving pipeline execution record: {e}")
+        raise
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

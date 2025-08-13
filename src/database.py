@@ -59,7 +59,7 @@ def calculate_next_drawing_date() -> str:
     # Use native DateManager time without corrections
     current_et = DateManager.get_current_et_time()
     next_date = DateManager.calculate_next_drawing_date(reference_date=current_et)
-    
+
     logger.debug(f"Next drawing date calculated: {next_date} (from ET time: {current_et.strftime('%Y-%m-%d %H:%M')})")
     return next_date
 
@@ -86,19 +86,19 @@ def get_db_connection() -> sqlite3.Connection:
 def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
     """
     Save pipeline execution to SQLite database.
-    
+
     Args:
         execution_data: Dictionary with execution details
-        
+
     Returns:
         execution_id if successful, None if error
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             execution_id = execution_data.get('execution_id')
-            
+
             cursor.execute("""
                 INSERT OR REPLACE INTO pipeline_executions (
                     execution_id, status, start_time, trigger_type, trigger_source,
@@ -117,11 +117,11 @@ def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
                 execution_data.get('num_predictions', 100),
                 json.dumps(execution_data.get('trigger_details', {}), cls=NumpyEncoder)
             ))
-            
+
             conn.commit()
             logger.info(f"Pipeline execution {execution_id} saved to SQLite")
             return execution_id
-            
+
     except Exception as e:
         logger.error(f"Error saving pipeline execution to SQLite: {e}")
         return None
@@ -129,72 +129,72 @@ def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
 def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) -> bool:
     """
     Update pipeline execution in SQLite database.
-    
+
     Args:
         execution_id: Execution ID to update
         update_data: Dictionary with fields to update
-        
+
     Returns:
         True if successful, False if error
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Build dynamic update query
             update_fields = []
             params = []
-            
+
             if 'status' in update_data:
                 update_fields.append("status = ?")
                 params.append(update_data['status'])
-                
+
             if 'end_time' in update_data:
                 update_fields.append("end_time = ?")
                 params.append(update_data['end_time'])
-                
+
             if 'current_step' in update_data:
                 update_fields.append("current_step = ?")
                 params.append(update_data['current_step'])
-                
+
             if 'steps_completed' in update_data:
                 update_fields.append("steps_completed = ?")
                 params.append(update_data['steps_completed'])
-                
+
             if 'error_message' in update_data:
                 update_fields.append("error_message = ?")
                 params.append(update_data['error_message'])
-                
+
             if 'subprocess_success' in update_data:
                 update_fields.append("subprocess_success = ?")
                 params.append(update_data['subprocess_success'])
-                
+
             if 'stdout_output' in update_data:
                 update_fields.append("stdout_output = ?")
                 params.append(update_data['stdout_output'])
-                
+
             if 'stderr_output' in update_data:
                 update_fields.append("stderr_output = ?")
                 params.append(update_data['stderr_output'])
-            
+
             if not update_fields:
                 logger.warning(f"No valid fields to update for execution {execution_id}")
                 return False
-            
+
             # Add updated_at field
             update_fields.append("updated_at = CURRENT_TIMESTAMP")
-            
+
             # Add execution_id parameter
             params.append(execution_id)
-                
+
             query = f"""
                 UPDATE pipeline_executions 
                 SET {', '.join(update_fields)}
                 WHERE execution_id = ?
             """
-            
+
             cursor.execute(query, params)
-            
+
             if cursor.rowcount > 0:
                 conn.commit()
                 logger.info(f"Pipeline execution {execution_id} updated in SQLite")
@@ -202,7 +202,7 @@ def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) ->
             else:
                 logger.warning(f"Pipeline execution {execution_id} not found for update")
                 return False
-                
+
     except Exception as e:
         logger.error(f"Error updating pipeline execution in SQLite: {e}")
         return False
@@ -210,17 +210,17 @@ def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) ->
 def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
     """
     Get pipeline execution history from SQLite database.
-    
+
     Args:
         limit: Maximum number of executions to return
-        
+
     Returns:
         List of execution dictionaries
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 SELECT 
                     execution_id, status, start_time, end_time,
@@ -231,7 +231,7 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
                 ORDER BY start_time DESC
                 LIMIT ?
             """, (limit,))
-            
+
             executions = []
             for row in cursor.fetchall():
                 execution = {
@@ -250,10 +250,10 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
                     'created_at': row[12]
                 }
                 executions.append(execution)
-            
+
             logger.info(f"Retrieved {len(executions)} pipeline executions from SQLite")
             return executions
-            
+
     except Exception as e:
         logger.error(f"Error getting pipeline execution history from SQLite: {e}")
         return []
@@ -261,17 +261,17 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
 def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
     """
     Get specific pipeline execution by ID from SQLite.
-    
+
     Args:
         execution_id: Execution ID to retrieve
-        
+
     Returns:
         Execution dictionary or None if not found
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 SELECT 
                     execution_id, status, start_time, end_time,
@@ -282,7 +282,7 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
                 FROM pipeline_executions
                 WHERE execution_id = ?
             """, (execution_id,))
-            
+
             row = cursor.fetchone()
             if row:
                 execution = {
@@ -304,13 +304,13 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
                     'created_at': row[15],
                     'updated_at': row[16]
                 }
-                
+
                 logger.info(f"Retrieved pipeline execution {execution_id} from SQLite")
                 return execution
             else:
                 logger.warning(f"Pipeline execution {execution_id} not found in SQLite")
                 return None
-                
+
     except Exception as e:
         logger.error(f"Error getting pipeline execution by ID from SQLite: {e}")
         return None
@@ -526,13 +526,13 @@ def initialize_database():
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_tracking_prediction_id ON performance_tracking (prediction_id)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_tracking_draw_date ON performance_tracking (draw_date)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_powerball_draws_date ON powerball_draws (draw_date)")
-                
+
                 # Pipeline executions indexes
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_status ON pipeline_executions (status)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_start_time ON pipeline_executions (start_time DESC)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_trigger_type ON pipeline_executions (trigger_type)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_execution_id ON pipeline_executions (execution_id)")
-                
+
                 logger.info("Database performance indexes created successfully")
             except sqlite3.Error as idx_error:
                 logger.warning(f"Error creating indexes (may already exist): {idx_error}")
@@ -691,15 +691,15 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
 
     # PIPELINE-ONLY VALIDATION: Only accept predictions from authorized sources
     authorized_sources = ["manual_dashboard", "automatic_scheduler", "pipeline_execution"]
-    
+
     if execution_source and execution_source not in authorized_sources:
         logger.error(f"UNAUTHORIZED: Rejected prediction from source: {execution_source}")
         return None
-    
+
     # Check if prediction comes from pipeline execution (has proper metadata)
     model_version = str(prediction_data.get("model_version", "1.0.0-pipeline"))
     dataset_hash = str(prediction_data.get("dataset_hash", ""))
-    
+
     # Generate valid dataset_hash if missing
     if not dataset_hash or len(dataset_hash) < 10:
         import hashlib
@@ -707,20 +707,20 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
         timestamp_str = str(time.time())
         dataset_hash = hashlib.md5(f"pipeline_{timestamp_str}".encode()).hexdigest()[:16]
         logger.info(f"Generated dataset_hash for pipeline prediction: {dataset_hash}")
-    
+
     # Only reject if explicitly marked as test data and simulated not allowed
     if not allow_simulated and execution_source != "pipeline_execution":
         if (model_version in ["fallback", "test", "simulated"] or
             dataset_hash in ["simulated", "test", "fallback"]):
             logger.warning(f"REJECTED: Non-pipeline prediction - model={model_version}, hash={dataset_hash}")
             return None
-    
+
     # Accept all pipeline_execution predictions
     if execution_source == "pipeline_execution":
         logger.info(f"ACCEPTING pipeline prediction - model={model_version}, hash={dataset_hash}")
         prediction_data["model_version"] = model_version
         prediction_data["dataset_hash"] = dataset_hash
-    
+
     # Sanitizar y validar los datos de la predicción
     sanitized_data = _sanitize_prediction_data(prediction_data, allow_simulated)
     if sanitized_data is None:
@@ -2108,7 +2108,7 @@ def _sanitize_prediction_data(prediction_data: Dict[str, Any], allow_simulated: 
         Datos de predicción sanitizados y validados
     """
     from src.date_utils import DateManager
-    
+
     sanitized_data = prediction_data.copy()
 
     # Validar y corregir timestamp usando DateManager consistente
