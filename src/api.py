@@ -475,7 +475,7 @@ async def logout(response: Response):
 # Mount all API routers before static files
 app.include_router(api_router)
 app.include_router(prediction_router)
-app.include_router(system_router)
+app.include_router(system_router, prefix="/api/v1")
 # Router mounts removed for optimized system
 app.include_router(pipeline_router, prefix="/api/v1")
 app.include_router(public_router)
