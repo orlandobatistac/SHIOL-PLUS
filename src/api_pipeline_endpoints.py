@@ -196,7 +196,7 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
                 'trigger_source': execution.get('trigger_source', 'unknown'),
                 'current_step': execution.get('current_step'),
                 'steps_completed': execution.get('steps_completed', 0),
-                'total_steps': 7,  # CORRECTED: Pipeline has 7 steps
+                "total_steps": 5,  # OPTIMIZED: Pipeline now has 5 steps
                 'num_predictions': execution.get('num_predictions', 100),
                 'error': execution.get('error'),
                 'subprocess_success': execution.get('subprocess_success', False),
@@ -394,7 +394,7 @@ async def trigger_pipeline_execution(
             "start_time": current_time.isoformat(),
             "current_step": "manual_trigger",
             "steps_completed": 0,
-            "total_steps": 7,  # CORRECTED: Pipeline has 7 steps
+            "total_steps": 5,  # OPTIMIZED: Pipeline now has 5 steps
             "num_predictions": num_predictions,
             "error": None,
             "trigger_type": "manual_dashboard",
@@ -461,7 +461,7 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
             enhanced_execution['steps_completed'] = 0
 
         # Ensure total_steps is set to correct value
-        enhanced_execution['total_steps'] = 7  # CORRECTED: Always set to 7 steps
+        enhanced_execution['total_steps'] = 5  # OPTIMIZED: Pipeline now has 5 steps
 
         # Pre-format dates for frontend display
         from src.date_utils import DateManager
@@ -526,12 +526,12 @@ async def get_pipeline_history():
                 "trigger_type": execution.get('trigger_type', 'unknown'),
                 "trigger_source": execution.get('trigger_source', 'unknown'),
                 "steps_completed": execution.get('steps_completed', 0),
-                "total_steps": 7,  # CORRECTED: Pipeline has 7 steps
+                "total_steps": 5,  # OPTIMIZED: Pipeline now has 5 steps
                 "num_predictions": execution.get('num_predictions', 0),
                 "error": execution.get('error'),
                 "subprocess_success": execution.get('subprocess_success', False),
                 "duration": execution.get('duration'),
-                "progress_percentage": (execution.get('steps_completed', 0) / 7) * 100  # Use 7 steps
+                "progress_percentage": (execution.get('steps_completed', 0) / 5) * 100  # Use 5 steps
             }
             formatted_executions.append(formatted_execution)
 
