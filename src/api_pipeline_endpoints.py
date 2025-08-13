@@ -368,7 +368,7 @@ async def get_scheduler_jobs():
 
 @pipeline_router.post("/trigger")
 async def trigger_pipeline_execution(
-    num_predictions: int = 100,
+    num_predictions: int = 50,
     force: bool = False,
     current_user: User = Depends(get_current_user)
 ):
@@ -385,10 +385,10 @@ async def trigger_pipeline_execution(
             )
 
         # Validate num_predictions
-        if not (1 <= num_predictions <= 500):
+        if not (1 <= num_predictions <= 200):
             raise HTTPException(
                 status_code=400,
-                detail="num_predictions must be between 1 and 500"
+                detail="num_predictions must be between 1 and 200"
             )
 
         # Generate execution ID

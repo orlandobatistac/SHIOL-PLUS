@@ -85,7 +85,7 @@ async def trigger_full_pipeline_automatically():
                 "current_step": "automated_trigger",
                 "steps_completed": 0,
                 "total_steps": 7,  # Always 7 steps for full pipeline
-                "num_predictions": 100,  # Standard 100 predictions
+                "num_predictions": 50,  # Standard 50 predictions
                 "requested_steps": None,  # Full pipeline, all steps
                 "error": None,
                 "trigger_type": "automatic_scheduler",
@@ -106,8 +106,8 @@ async def trigger_full_pipeline_automatically():
                 }
             }
 
-            # Run the full 7-step pipeline in background with 100 predictions using robust subprocess
-            asyncio.create_task(run_full_pipeline_background(execution_id, 100))
+            # Run the full 7-step pipeline in background with 50 predictions using robust subprocess
+            asyncio.create_task(run_full_pipeline_background(execution_id, 50))
             logger.info(f"Automatic pipeline execution started with ID: {execution_id} - Full 7-step pipeline (scheduled: {matches_schedule})")
         else:
             logger.warning("Pipeline orchestrator not available to trigger pipeline.")

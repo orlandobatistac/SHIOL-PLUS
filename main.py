@@ -540,7 +540,7 @@ class PipelineOrchestrator:
                 target_draw_date=next_drawing_date
             )
 
-            # Prepare result with all 100 plays
+            # Prepare result with all 50 plays
             plays_info = []
             for i, prediction in enumerate(smart_predictions):
                 play_info = {
@@ -575,7 +575,7 @@ class PipelineOrchestrator:
                 'dataset_hash': smart_predictions[0]['dataset_hash'],
                 'candidates_evaluated': smart_predictions[0]['num_candidates_evaluated'],
                 'generation_method': 'smart_ai_diverse_deterministic',
-                'diversity_algorithm': 'intelligent_selection_100_plays',
+                'diversity_algorithm': 'intelligent_selection_50_plays',
                 'drawing_schedule': {
                     'next_drawing_date': next_drawing_date,
                     'is_drawing_day': datetime.now().weekday() in [0, 2, 5],
@@ -591,7 +591,7 @@ class PipelineOrchestrator:
             logger.info(f"Average score: {avg_score:.4f}")
             logger.info(f"Top 10 average score: {top_10_avg:.4f}")
             logger.info(f"Best prediction: {smart_predictions[0]['numbers']} + {smart_predictions[0]['powerball']} (Score: {smart_predictions[0]['score_total']:.4f})")
-            logger.info("All 100 Smart AI predictions have been saved to the database")
+            logger.info("All 50 Smart AI predictions have been saved to the database")
 
             return result
 
