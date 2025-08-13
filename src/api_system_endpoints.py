@@ -180,11 +180,12 @@ async def cleanup_database(cleanup_options: Dict[str, Any]):
                 logger.warning(f"VACUUM failed: {vacuum_error}")
 
         logger.info(f"Database cleanup completed: {cleanup_summary}")
-            return {
-                "success": True,
-                "message": "Database cleanup completed successfully",
-                "summary": cleanup_summary
-            }
+        
+        return {
+            "success": True,
+            "message": "Database cleanup completed successfully",
+            "summary": cleanup_summary
+        }
 
     except Exception as e:
         logger.error(f"Error during database cleanup: {e}")
