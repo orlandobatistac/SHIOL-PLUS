@@ -1,10 +1,10 @@
 
 
-# Análisis Completo del Flujo de Modelos SHIOL+ v6.0
+# Análisis Completo del Flujo de Modelos SHIOL+ v6.1
 
 ## Resumen Ejecutivo
 
-SHIOL+ v6.0 es un sistema avanzado de machine learning para predicción de lotería que implementa un pipeline completo de 9 etapas con arquitectura de microservicios, sistema adaptativo de retroalimentación, y capacidades de auto-optimización. El sistema procesa datos históricos, aplica feature engineering avanzado, entrena modelos ensemble, y genera predicciones optimizadas con validación continua.
+SHIOL+ v6.1 es un sistema avanzado de machine learning para predicción de lotería que implementa un pipeline completo de 9 etapas con arquitectura de microservicios, sistema adaptativo de retroalimentación, y capacidades de auto-optimización. El sistema procesa datos históricos, aplica feature engineering avanzado, entrena modelos ensemble, y genera predicciones optimizadas con validación continua.
 
 ## Arquitectura del Sistema
 
