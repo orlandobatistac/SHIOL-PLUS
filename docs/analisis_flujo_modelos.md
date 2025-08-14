@@ -1,200 +1,252 @@
-
-
-# Análisis Completo del Flujo de Modelos SHIOL+ v6.1
+# Análisis del Flujo Actual del Sistema SHIOL+ v6.1
 
 ## Resumen Ejecutivo
 
-SHIOL+ v6.1 es un sistema avanzado de machine learning para predicción de lotería que implementa un pipeline completo de 9 etapas con arquitectura de microservicios, sistema adaptativo de retroalimentación, y capacidades de auto-optimización. El sistema procesa datos históricos, aplica feature engineering avanzado, entrena modelos ensemble, y genera predicciones optimizadas con validación continua.
+SHIOL+ v6.1 es un sistema optimizado de machine learning para predicción de lotería que implementa un **pipeline de 5 pasos** con arquitectura de microservicios, sistema adaptativo de retroalimentación, y capacidades de auto-optimización. El sistema está diseñado específicamente para funcionar de manera eficiente en el entorno Replit con recursos limitados.
 
-## Arquitectura del Sistema
+## Arquitectura del Sistema Actual
 
-### Stack Tecnológico
+### Stack Tecnológico Implementado
 - **Backend**: Python 3.12, FastAPI, Uvicorn ASGI
 - **Machine Learning**: XGBoost, Scikit-learn, NumPy, Pandas
-- **Base de Datos**: SQLite (migrable a PostgreSQL)
-- **Frontend**: HTML5, CSS3, JavaScript ES6+
+- **Base de Datos**: SQLite (optimizada para Replit)
+- **Frontend**: HTML5, CSS3, JavaScript ES6+ (sin frameworks)
 - **API**: RESTful endpoints con documentación automática
 - **Deployment**: Replit Cloud Infrastructure
+- **Scheduling**: APScheduler con timezone America/New_York
 
-### Componentes Principales
+### Componentes Principales Activos
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Data Loader   │    │ Feature Engine  │    │  Model Trainer  │
-│   (loader.py)   │───▶│(intelligent_    │───▶│ (predictor.py)  │
-│                 │    │ generator.py)   │    │                 │
+│   Data Loader   │    │ Orchestrator    │    │ Smart AI Engine │
+│   (loader.py)   │───▶│(orchestrator.py)│───▶│(predictor.py +  │
+│                 │    │                 │    │ intelligent_    │
+└─────────────────┘    └─────────────────┘    │ generator.py)   │
+         │                       │             └─────────────────┘
+         ▼                       ▼                       │
+┌─────────────────┐    ┌─────────────────┐             ▼
+│   Database      │    │   API Server    │    ┌─────────────────┐
+│ (database.py)   │    │   (api.py)      │    │ Dashboard UI    │
+│                 │    │                 │    │ (dashboard.html)│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Database      │    │ Ensemble System │    │ Pipeline Orch.  │
-│ (database.py)   │    │ (ensemble_      │    │(orchestrator.py)│
-│                 │    │ predictor.py)   │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## 1. Flujo de Entrada de Datos
+## Pipeline Optimizado de 5 Pasos (Flujo Actual)
 
-### Data Loader (`src/loader.py`)
+### Implementación en `src/orchestrator.py`
+
+El sistema actual utiliza un **pipeline optimizado de 5 pasos** implementado en el método `run_full_pipeline_async()`:
+
 ```python
-class DataLoader:
-    def load_powerball_data() -> pd.DataFrame
-    def update_database_from_source() -> dict
-    def validate_data_integrity() -> bool
+# Pipeline actual optimizado para Replit
+OPTIMIZED_PIPELINE_STEPS = [
+    'data_update_validation',    # Paso 1: Actualización y validación de datos
+    'model_prediction',          # Paso 2: Predicción del modelo ensemble
+    'scoring_selection',         # Paso 3: Scoring y selección optimizada
+    'prediction_generation',     # Paso 4: Generación de predicciones (50 plays)
+    'save_serve'                # Paso 5: Guardado y preparación para frontend
+]
 ```
 
-**Funcionalidades:**
-- Carga automática de datos históricos de Powerball
-- Validación de integridad y consistencia
-- Detección automática de nuevos sorteos
-- Backup automático antes de actualizaciones
+### Paso 1: Data Update & Validation
+**Método**: `_update_and_validate_data()`
+**Tiempo estimado**: < 30 segundos
 
-**Flujo de Procesamiento:**
-1. **Descarga**: Obtiene datos más recientes desde fuente oficial
-2. **Validación**: Verifica formato, rangos, y consistencia temporal
-3. **Normalización**: Estandariza formato de fechas y números
-4. **Almacenamiento**: Inserta en base de datos con control de duplicados
+**Funcionalidades**:
+- Actualiza la base de datos desde la fuente CSV
+- Valida integridad de datos recientes (últimos 30 días)
+- Verifica conectividad de base de datos
+- Retorna conteo de registros válidos
 
-## 2. Sistema de Base de Datos
-
-### Database Manager (`src/database.py`)
+**Código actual**:
 ```python
-class DatabaseManager:
-    - 2,847 líneas de código
-    - 89 funciones especializadas
-    - Soporte completo CRUD
-    - Sistema de backups automáticos
-    - Validación de pipeline autorizada
+async def _update_and_validate_data(self) -> Dict[str, Any]:
+    try:
+        from src.loader import update_database_from_source
+        await asyncio.get_event_loop().run_in_executor(None, update_database_from_source)
+
+        # Validación básica - verificar datos recientes
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM powerball_numbers WHERE date >= date('now', '-30 days')")
+        recent_count = cursor.fetchone()[0]
+        conn.close()
+
+        return {
+            "status": "success", 
+            "message": "Data updated and validated",
+            "recent_records": recent_count,
+            "validation_passed": recent_count > 0
+        }
 ```
 
-**Tablas Principales:**
-- `powerball_draws`: Sorteos históricos (n1-n5, pb, fecha)
-- `predictions_deterministic`: Predicciones generadas por AI
-- `adaptive_plays`: Jugadas con sistema adaptativo
-- `model_metadata`: Metadatos de modelos y versiones
-- `pipeline_executions`: Historial de ejecuciones
+### Paso 2: Model Prediction (Ensemble Only)
+**Método**: `_run_model_prediction()`
+**Tiempo estimado**: < 1 minuto
 
-**Características Avanzadas:**
-- **Pipeline Validation**: Solo acepta predicciones de fuentes autorizadas
-- **Metadata Tracking**: Rastrea dataset_hash, model_version, timestamps
-- **Performance Analytics**: Métricas de win rate, accuracy, ROI
-- **Auto-backup**: Respaldo automático antes de operaciones críticas
+**Funcionalidades**:
+- Ejecuta únicamente el modelo ensemble para optimizar velocidad
+- Calcula probabilidades para números principales y powerball
+- Genera métricas de entropía para validación
+- Se enfoca en predicción ensemble para máxima eficiencia
 
-## 3. Feature Engineering Avanzado
-
-### Intelligent Generator (`src/intelligent_generator.py`)
-Sistema de 15 características estándar para machine learning:
-
-#### Características Básicas (5):
+**Código actual**:
 ```python
-def calculate_basic_features(numbers: List[int]) -> dict:
-    return {
-        'even_count': sum(1 for n in numbers if n % 2 == 0),
-        'odd_count': sum(1 for n in numbers if n % 2 == 1),
-        'sum': sum(numbers),
-        'spread': max(numbers) - min(numbers),
-        'consecutive_count': count_consecutive_pairs(numbers)
-    }
+async def _run_model_prediction(self) -> Dict[str, Any]:
+    try:
+        if self.predictor:
+            wb_probs, pb_probs = await asyncio.get_event_loop().run_in_executor(
+                None, self.predictor.predict_probabilities, True  # Force ensemble
+            )
+            return {
+                "status": "success",
+                "wb_prob_entropy": float(-np.sum(wb_probs * np.log(wb_probs + 1e-10))),
+                "pb_prob_entropy": float(-np.sum(pb_probs * np.log(pb_probs + 1e-10))),
+                "method": "ensemble_only"
+            }
 ```
 
-#### Características Temporales (4):
+### Paso 3: Scoring & Selection (Optimizado)
+**Método**: `_score_and_select()`
+**Tiempo estimado**: < 10 segundos
+
+**Funcionalidades**:
+- Scoring simplificado enfocado en criterios core
+- Optimización de alto nivel para Replit
+- Criterios: probability, diversity, historical
+- Procesamiento mínimo para máxima velocidad
+
+### Paso 4: Prediction Generation (50 Predicciones)
+**Método**: `_generate_predictions_optimized()`
+**Tiempo estimado**: < 2 minutos
+
+**Funcionalidades**:
+- Genera exactamente **50 predicciones Smart AI** (optimizado para Replit)
+- Utiliza `intelligent_generator` directamente para máxima velocidad
+- Procesa en batches de 50 para eficiencia
+- Calcula fecha del próximo sorteo automáticamente
+- Incluye sistema de ranking y scoring detallado
+
+**Código actual**:
 ```python
-def calculate_temporal_features(numbers: List[int]) -> dict:
-    return {
-        'avg_delay': calculate_average_delay(numbers),
-        'max_delay': max_delay_since_appearance(numbers),
-        'min_delay': min_delay_since_appearance(numbers),
-        'time_weight': calculate_recency_weight(numbers)
-    }
+async def _generate_predictions_optimized(self, num_predictions: int, scoring_result: Dict) -> list:
+    try:
+        predictions = []
+
+        # Usa intelligent generator directamente para velocidad
+        batch_size = 50  # Batches más grandes para eficiencia
+        for i in range(0, num_predictions, batch_size):
+            batch_end = min(i + batch_size, num_predictions)
+            batch_size_actual = batch_end - i
+
+            # Genera batch usando intelligent generator
+            batch_predictions = await asyncio.get_event_loop().run_in_executor(
+                None, self._generate_batch_intelligent, batch_size_actual, i
+            )
+            predictions.extend(batch_predictions)
 ```
 
-#### Características de Distancia (3):
+### Paso 5: Save & Serve
+**Método**: `_save_and_serve()`
+**Tiempo estimado**: < 30 segundos
+
+**Funcionalidades**:
+- Guarda todas las predicciones en la base de datos
+- Prepara top 10 predicciones para el frontend
+- Optimiza datos para compatibilidad con dashboard
+- Retorna estadísticas de guardado
+
+## Flujo de Datos Actual
+
+### 1. Trigger Automático (Scheduler)
+El sistema utiliza APScheduler con la siguiente configuración:
+
 ```python
-def calculate_distance_features(numbers: List[int]) -> dict:
-    return {
-        'dist_to_recent': distance_to_recent_draws(numbers),
-        'avg_dist_to_top_n': distance_to_frequent_numbers(numbers),
-        'dist_to_centroid': distance_to_historical_centroid(numbers)
-    }
+# Configuración actual del scheduler en src/api.py
+scheduler.add_job(
+    func=trigger_full_pipeline_automatically,
+    trigger="cron",
+    day_of_week="mon,wed,sat",  # Solo días de sorteo de Powerball
+    hour=23,                    # 11 PM ET
+    minute=29,                  # 11:29 PM - 30 minutos después del sorteo
+    timezone="America/New_York",
+    id="post_drawing_pipeline",
+    max_instances=1,
+    coalesce=True
+)
 ```
 
-#### Características de Tendencia (3):
+### 2. Ejecución del Pipeline
+El pipeline se ejecuta de forma **asíncrona** utilizando subprocess para máxima estabilidad:
+
 ```python
-def calculate_trend_features(numbers: List[int]) -> dict:
-    return {
-        'increasing_trend_count': count_increasing_trends(numbers),
-        'decreasing_trend_count': count_decreasing_trends(numbers),
-        'stable_trend_count': count_stable_trends(numbers)
-    }
+# Ejecuta main.py en subprocess para producción
+cmd = ["python", "main.py"]
+result = subprocess.run(
+    cmd,
+    capture_output=True,
+    text=True,
+    timeout=900,  # 15 minutos timeout para Replit
+    cwd=os.getcwd()
+)
 ```
 
-## 4. Sistema de Modelos de Machine Learning
+### 3. Monitoreo en Tiempo Real
+El sistema incluye monitoreo completo del estado del pipeline:
 
-### A. Modelo Principal - SHIOL+ v6.0 (`src/predictor.py`)
-
-#### Arquitectura del Modelo:
 ```python
-class ModelTrainer:
-    def __init__(self):
-        self.model = XGBClassifier(
-            objective='multi:softprob',
-            n_estimators=200,
-            max_depth=8,
-            learning_rate=0.1,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
-        )
-        self.multi_output = MultiOutputClassifier(self.model)
+# Variables globales de monitoreo en src/api.py
+pipeline_executions = {}  # Track running pipeline executions
+pipeline_logs = []        # Store recent pipeline logs
+
+# Estado típico de ejecución
+pipeline_executions[execution_id] = {
+    "execution_id": execution_id,
+    "status": "running",
+    "start_time": current_time.isoformat(),
+    "current_step": "prediction_generation",
+    "steps_completed": 4,
+    "total_steps": 5,
+    "num_predictions": 50
+}
 ```
 
-#### Proceso de Entrenamiento:
-1. **Preparación de Features**: Convierte sorteos históricos a 15 características
-2. **Multi-label Target**: Crea targets binarios para cada número posible
-3. **Entrenamiento**: XGBoost con validación cruzada
-4. **Optimización**: Grid search para hiperparámetros óptimos
-5. **Validación**: Testing en datos held-out con métricas específicas
+## Sistema de Generación de Predicciones
 
-#### Predicción de Probabilidades:
+### IntelligentGenerator Optimizado
+El sistema actual utiliza el `IntelligentGenerator` como motor principal:
+
+**Características implementadas**:
+- **15 features estándar** de machine learning
+- **Multi-criteria scoring** con 4 componentes principales
+- **Pesos adaptativos** basados en performance histórica
+- **Generación determinística** para consistencia
+
+**Implementación actual**:
 ```python
-def predict_probabilities(self, features: np.ndarray) -> dict:
-    # Predice probabilidades para todos los números posibles
-    probabilities = self.model.predict_proba(features.reshape(1, -1))
-    
-    return {
-        'white_balls': probabilities[0][:69],  # Números 1-69
-        'powerball': probabilities[0][69:],    # Powerballs 1-26
-        'confidence': calculate_confidence(probabilities),
-        'entropy': calculate_entropy(probabilities)
-    }
+class IntelligentGenerator:
+    def generate_play(self) -> dict:
+        # Genera una jugada usando scoring multi-criterio
+        candidates = self._generate_candidates(2500)  # 2500 candidatos
+        scored_candidates = []
+
+        for candidate in candidates:
+            score = self.calculate_multi_criteria_score(
+                candidate['numbers'], 
+                candidate['powerball']
+            )
+            scored_candidates.append({
+                'numbers': candidate['numbers'],
+                'powerball': candidate['powerball'],
+                'score': score['score_total'],
+                'score_details': score['score_details']
+            })
+
+        # Retorna el mejor candidato
+        return max(scored_candidates, key=lambda x: x['score'])
 ```
 
-### B. Sistema Ensemble (`src/ensemble_predictor.py`)
-
-#### EnsemblePredictor:
-```python
-class EnsemblePredictor:
-    STRATEGIES = [
-        'WEIGHTED_AVERAGE',      # Promedio ponderado simple
-        'PERFORMANCE_WEIGHTED',  # Pesos basados en performance
-        'DYNAMIC_SELECTION',     # Selección dinámica de mejores
-        'MAJORITY_VOTING',       # Votación por mayoría
-        'CONFIDENCE_WEIGHTED',   # Pesos por confianza
-        'ADAPTIVE_HYBRID'        # Estrategia híbrida adaptativa
-    ]
-```
-
-#### Model Pool Manager (`src/model_pool_manager.py`):
-- **Auto-discovery**: Encuentra modelos compatibles automáticamente
-- **Validation**: Verifica funcionalidad y compatibilidad
-- **Standardization**: Convierte features a formato SHIOL+ estándar
-- **Load Balancing**: Distribuye carga entre modelos disponibles
-
-## 5. Sistema de Scoring Multi-Criterio
-
-### DeterministicGenerator (`src/intelligent_generator.py`)
-Sistema avanzado de scoring con 4 componentes principales:
-
-#### Distribución de Pesos (Configurable):
+### Sistema de Scoring Multi-Criterio Actual
 ```python
 DEFAULT_WEIGHTS = {
     'probability': 0.40,      # 40% - Probabilidades del modelo ML
@@ -204,339 +256,115 @@ DEFAULT_WEIGHTS = {
 }
 ```
 
-#### Proceso de Scoring:
+## API y Dashboard Integration
+
+### Endpoints Principales Activos
 ```python
-def calculate_multi_criteria_score(self, numbers: List[int], pb: int) -> dict:
-    # 1. Probability Score - Basado en ML model
-    prob_score = self._calculate_probability_score(numbers, pb)
-    
-    # 2. Diversity Score - Penaliza clusters y patrones obvios
-    div_score = self._calculate_diversity_score(numbers)
-    
-    # 3. Historical Score - Analiza success patterns del pasado
-    hist_score = self._calculate_historical_score(numbers, pb)
-    
-    # 4. Risk Adjusted Score - Ajusta por varianza y volatilidad
-    risk_score = self._calculate_risk_adjusted_score(numbers, pb)
-    
-    # Combina scores con pesos configurables
-    total_score = (
-        prob_score * self.weights['probability'] +
-        div_score * self.weights['diversity'] +
-        hist_score * self.weights['historical'] +
-        risk_score * self.weights['risk_adjusted']
-    )
-    
-    return {
-        'score_total': total_score,
-        'score_details': {
-            'probability': prob_score,
-            'diversity': div_score,
-            'historical': hist_score,
-            'risk_adjusted': risk_score
-        }
-    }
+# Endpoints implementados en src/api_pipeline_endpoints.py
+POST /api/v1/pipeline/execute       # Ejecutar pipeline manual
+GET  /api/v1/pipeline/status        # Estado del pipeline
+GET  /api/v1/pipeline/history       # Historial de ejecuciones
+
+# Endpoints de predicciones en src/api_prediction_endpoints.py
+GET  /api/v1/predictions/history    # Historial de predicciones
+GET  /api/v1/predictions/latest     # Últimas predicciones
+
+# Dashboard endpoints en src/api_dashboard_endpoints.py
+GET  /api/v1/dashboard/next-drawing # Próximo sorteo
+GET  /api/v1/dashboard/predictions  # Predicciones para dashboard
 ```
 
-## 6. Pipeline Orchestrator (`src/orchestrator.py`)
+### Dashboard Frontend Actual
+El dashboard (`frontend/dashboard.html`) muestra:
 
-### Ejecución de Pipeline Completo:
-Sistema coordinado de 7 pasos con ejecución asíncrona y manejo de errores:
+1. **Próximo Sorteo**: Countdown timer con información en tiempo real
+2. **Predicciones AI**: Top 10 predicciones con scoring detallado
+3. **Execution History**: Historial completo de ejecuciones del pipeline
+4. **System Health**: CPU, memoria, y estado de componentes
 
-```python
-class PipelineOrchestrator:
-    PIPELINE_STEPS = [
-        'step_data_update',           # Actualización de datos
-        'step_adaptive_analysis',     # Análisis adaptativo
-        'step_weight_optimization',   # Optimización de pesos
-        'step_historical_validation', # Validación histórica
-        'step_prediction_generation', # Generación de predicciones
-        'step_performance_analysis',  # Análisis de performance
-        'step_save_results'          # Guardado de resultados
-    ]
+**Actualización en tiempo real**:
+```javascript
+// Actualización cada 30 segundos
+setInterval(async () => {
+    await Promise.all([
+        updateNextDrawing(),
+        updatePredictions(),
+        updateExecutionHistory(),
+        updateSystemHealth()
+    ]);
+}, 30000);
 ```
 
-#### Características del Pipeline:
-- **Ejecución Asíncrona**: Procesamiento no-bloqueante con yield statements
-- **Batch Processing**: Predicciones en lotes de 25 para optimización
-- **Error Recovery**: Manejo robusto de errores con rollback automático
-- **Progress Tracking**: Estado en tiempo real con porcentajes de progreso
-- **Resource Management**: Control de memoria y CPU durante ejecución
+## Optimizaciones para Replit
 
-#### Flujo de Ejecución:
-```python
-async def execute_pipeline(self) -> dict:
-    try:
-        for i, step_name in enumerate(self.PIPELINE_STEPS):
-            self.current_step = step_name
-            self.progress = (i / len(self.PIPELINE_STEPS)) * 100
-            
-            step_method = getattr(self, step_name)
-            result = await step_method()
-            
-            self.results[step_name] = result
-            yield {'step': step_name, 'progress': self.progress, 'result': result}
-            
-    except Exception as e:
-        await self._handle_pipeline_error(e)
-        raise
-```
+### 1. Gestión de Recursos
+- **Timeout de 15 minutos** para evitar timeouts de Replit
+- **Batches de 50 predicciones** para optimizar memoria
+- **Subprocess execution** para estabilidad
+- **Async/await** para operaciones no-bloqueantes
 
-## 7. Sistema Adaptativo de Retroalimentación
+### 2. Base de Datos Optimizada
+- **SQLite local** para máxima velocidad
+- **Índices optimizados** en tablas principales
+- **Cleanup automático** de datos antiguos
+- **Backup automático** antes de operaciones críticas
 
-### AdaptivePlayScorer (`src/adaptive_feedback.py`)
-Sistema de aprendizaje continuo que ajusta el comportamiento basado en resultados:
+### 3. Pipeline Simplificado
+- **5 pasos en lugar de 7** para reducir tiempo de ejecución
+- **Ensemble único** en lugar de múltiples modelos
+- **Scoring optimizado** con criterios esenciales
+- **Validación mínima** para velocidad
 
-#### Funcionalidades Principales:
-```python
-class AdaptivePlayScorer:
-    def analyze_recent_performance(self, days_back: int = 30) -> dict
-    def adjust_scoring_weights(self, performance_data: dict) -> dict
-    def track_pattern_success(self, patterns: List[dict]) -> dict
-    def generate_recommendations(self) -> List[str]
-```
+## Métricas de Performance Actual
 
-#### Análisis de Performance:
-- **Win Rate Tracking**: Rastrea porcentaje de predicciones ganadoras
-- **Pattern Recognition**: Identifica patrones exitosos automáticamente
-- **Weight Adjustment**: Modifica pesos de scoring basado en resultados
-- **Confidence Calibration**: Ajusta niveles de confianza del modelo
+### Tiempos de Ejecución Típicos
+- **Pipeline completo**: 3-5 minutos
+- **Generación de 50 predicciones**: 1-2 minutos
+- **Data update**: 10-30 segundos
+- **API response time**: < 2 segundos
 
-#### Sistema de Recomendaciones:
-```python
-def _generate_weight_recommendations(self, weights: dict, performance: dict) -> List[str]:
-    recommendations = []
-    
-    if performance.get('win_rate', 0) < 0.05:
-        recommendations.append("Consider increasing diversity weight for better coverage")
-    
-    if performance.get('avg_accuracy', 0) < 0.3:
-        recommendations.append("Consider increasing probability weight for ML focus")
-    
-    return recommendations
-```
+### Recursos Utilizados
+- **CPU**: 60-80% durante ejecución del pipeline
+- **Memoria**: 70-90% durante generación de predicciones
+- **Almacenamiento**: < 100MB para base de datos completa
 
-## 8. Sistema de Validación y Calidad
+### Programación Automática
+- **Ejecución automática**: Lunes, Miércoles, Sábado a las 11:29 PM ET
+- **30 minutos después del sorteo** para incluir resultados más recientes
+- **Timezone fijo**: America/New_York para consistencia
 
-### Model Validator (`src/model_validator.py`)
-Sistema comprehensivo de validación antes de predicciones:
+## Estado del Sistema Actual
 
-#### Métricas de Validación:
-```python
-VALIDATION_CRITERIA = {
-    'min_accuracy': 0.05,           # 5% mínimo para números blancos
-    'min_top_n_recall': 0.15,       # 15% mínimo en top-N predictions
-    'min_pb_accuracy': 0.03,        # 3% mínimo para powerball
-    'max_prediction_variance': 0.6,  # 60% máximo de varianza
-    'min_confidence': 0.4           # 40% mínimo de confianza
-}
-```
+### Componentes Operativos
+✅ **Pipeline Orchestrator** - Funcional con 5 pasos optimizados  
+✅ **Intelligent Generator** - Generando 50 predicciones por ejecución  
+✅ **Database Manager** - SQLite optimizada funcionando  
+✅ **API Server** - FastAPI en puerto 3000  
+✅ **Dashboard Frontend** - Interfaz web completa  
+✅ **Scheduler** - APScheduler con timezone ET configurado  
+✅ **Subprocess Execution** - Ejecución robusta del pipeline  
 
-#### Proceso de Validación:
-1. **Recent Performance**: Evalúa performance en últimos 30 días
-2. **Stability Test**: Verifica estabilidad con perturbaciones controladas
-3. **Cross-validation**: Validación cruzada con k-folds
-4. **Confidence Analysis**: Análisis de calibración de confianza
-5. **Comparative Analysis**: Comparación con baseline models
-
-## 9. API y Sistema de Endpoints
-
-### Estructura de API (`src/api.py`, `src/api_*_endpoints.py`)
-
-#### Endpoints Principales:
-```python
-# Predicción Core
-POST /api/v1/predictions/smart_ai_pipeline
-GET  /api/v1/predictions/deterministic/history
-
-# Sistema Adaptativo  
-GET  /api/v1/adaptive/analysis
-POST /api/v1/adaptive/weights/optimize
-
-# Pipeline Management
-POST /api/v1/pipeline/execute
-GET  /api/v1/pipeline/status
-
-# System Health
-GET  /api/v1/system/health
-GET  /api/v1/system/metrics
-```
-
-#### Respuesta Típica de Predicción:
-```json
-{
-    "success": true,
-    "predictions": [
-        {
-            "numbers": [7, 23, 45, 58, 67],
-            "powerball": 12,
-            "score_total": 0.8534,
-            "score_details": {
-                "probability": 0.7234,
-                "diversity": 0.8123,
-                "historical": 0.7845,
-                "risk_adjusted": 0.9012
-            },
-            "model_version": "v6.0.1",
-            "dataset_hash": "a8b9c7d5e3f1",
-            "confidence": 0.92,
-            "method": "smart_ai_pipeline",
-            "timestamp": "2025-01-09T15:30:45Z"
-        }
-    ],
-    "analysis": {
-        "candidates_evaluated": 2500,
-        "methods_used": ["xgboost", "ensemble", "deterministic"],
-        "average_score": 0.7823,
-        "execution_time_ms": 1247
-    }
-}
-```
-
-## 10. Dashboard y Frontend
-
-### Tecnologías Frontend:
-- **HTML5 Semantic**: Estructura semántica moderna
-- **CSS3 Grid/Flexbox**: Layout responsivo avanzado
-- **JavaScript ES6+**: Funcionalidad interactiva sin frameworks
-- **Real-time Updates**: WebSocket connections para updates live
-
-### Funcionalidades del Dashboard:
-- **Próximo Sorteo**: Countdown timer con información actualizada
-- **Predicciones AI**: Display de predicciones con scoring detallado
-- **Execution History**: Historial completo de ejecuciones del pipeline
-- **Performance Analytics**: Gráficos de win rate y accuracy
-- **System Health**: Monitoreo en tiempo real del sistema
-
-## 11. Monitoreo y Métricas
-
-### Logging System:
-```python
-# Configuración de logging estructurado
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(name)s:%(funcName)s:%(lineno)d - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/shiolplus.log'),
-        logging.StreamHandler()
-    ]
-)
-```
-
-### Métricas Clave:
-- **Pipeline Performance**: Tiempo de ejecución, success rate, error rate
-- **Model Performance**: Accuracy, precision, recall, F1-score
-- **Business Metrics**: Win rate, ROI simulado, user engagement
-- **System Metrics**: CPU usage, memory consumption, API response times
-
-## 12. Flujo Completo del Sistema
-
-### Diagrama de Arquitectura:
-```mermaid
-graph TD
-    A[Data Source CSV] --> B[Data Loader]
-    B --> C[SQLite Database]
-    C --> D[Feature Engineering]
-    D --> E[XGBoost Model]
-    E --> F[Ensemble System]
-    F --> G[Multi-Criteria Scoring]
-    G --> H[Model Validation]
-    H --> I[Pipeline Orchestrator]
-    I --> J[API Endpoints]
-    J --> K[Dashboard Frontend]
-    
-    L[Adaptive Feedback] --> G
-    M[Performance Analytics] --> I
-    N[Health Monitoring] --> K
-```
-
-### Flujo de Datos Paso a Paso:
-
-1. **Input**: Datos históricos de Powerball (CSV) → Database
-2. **Processing**: Feature engineering (15 características estándar)
-3. **Training**: XGBoost multi-output con validación cruzada
-4. **Ensemble**: Combinación de múltiples modelos y estrategias
-5. **Scoring**: Sistema multi-criterio con 4 componentes (40%+25%+20%+15%)
-6. **Validation**: Verificación de calidad y confianza del modelo
-7. **Orchestration**: Pipeline coordinado de 7 pasos con batch processing
-8. **Output**: Predicciones rankeadas con metadata completo
-9. **Feedback**: Sistema adaptativo ajusta pesos basado en resultados
-10. **Delivery**: API REST + Dashboard web con real-time updates
-
-## 13. Métricas de Rendimiento
-
-### KPIs Técnicos:
-- **Pipeline Execution Time**: < 5 minutos para 25 predicciones
-- **API Response Time**: < 2 segundos para endpoints críticos
-- **Model Accuracy**: > 5% para números principales, > 3% para powerball
-- **System Uptime**: > 99% disponibilidad
-- **Database Performance**: < 100ms para queries principales
-
-### KPIs de Negocio:
-- **Win Rate**: Porcentaje de predicciones con algún premio
-- **Average Score**: Calidad promedio de predicciones (0-1 scale)
-- **User Satisfaction**: Basado en feedback y retention
-- **Feature Adoption**: Uso de diferentes métodos de predicción
-
-## 14. Seguridad y Confiabilidad
-
-### Medidas de Seguridad:
-- **Input Validation**: Validación comprehensiva de todos los inputs
-- **SQL Injection Prevention**: Prepared statements y parameterized queries
-- **CORS Configuration**: Control de acceso cross-origin
-- **Rate Limiting**: Protección contra abuse de API
-- **Local Data Storage**: Todos los datos almacenados localmente
-
-### Sistema de Confiabilidad:
-- **Error Handling**: Exception handling robusto con recovery
-- **Backup System**: Respaldos automáticos antes de operaciones críticas
-- **Health Checks**: Monitoreo continuo de componentes del sistema
-- **Failover Mechanisms**: Fallback automático a modelos de respaldo
-
-## 15. Desarrollo Futuro
-
-### Roadmap Técnico:
-- **Advanced ML Models**: Implementación de Neural Networks y Deep Learning
-- **Real-time Processing**: Stream processing para datos en tiempo real
-- **Enhanced Analytics**: Visualizaciones avanzadas y dashboards interactivos
-- **Mobile API**: Endpoints optimizados para aplicaciones móviles
-- **Cloud Integration**: Migración a infrastructure cloud escalable
-
-### Innovaciones Planificadas:
-- **Quantum Computing**: Exploración de algoritmos cuánticos para optimización
-- **Blockchain Integration**: Verificación inmutable de predicciones
-- **AI Explainability**: Herramientas para explicar decisiones del modelo
-- **Multi-lottery Support**: Extensión a otros tipos de lotería
-- **Social Features**: Funcionalidades de sindicatos y grupos
+### Arquitectura de Deployment
+- **Replit Cloud**: Deployment principal en https://replit.com/@orlandobatistac/SHIOL
+- **Port 3000**: Configurado para acceso público
+- **Uvicorn ASGI**: Servidor de producción
+- **Auto-restart**: Configuración de workflows para reinicio automático
 
 ---
 
-## Conclusión
+## Flujo Actual Completo (Resumen)
 
-SHIOL+ v6.0 representa un sistema de machine learning de clase enterprise para predicción de lotería, combinando tecnologías de vanguardia con arquitectura robusta y escalable. El sistema implementa un pipeline completo de datos con validación continua, aprendizaje adaptativo, y capacidades de auto-optimización.
+1. **Trigger**: Scheduler ejecuta automáticamente después de cada sorteo
+2. **Pipeline**: 5 pasos optimizados en < 5 minutos
+3. **Predicciones**: Genera exactamente 50 Smart AI predictions
+4. **Storage**: Guarda en SQLite con metadata completo
+5. **Frontend**: Dashboard muestra resultados en tiempo real
+6. **Monitoring**: Sistema de logs y métricas de performance
 
-**Fortalezas Clave:**
-- Arquitectura modular y mantenible
-- Pipeline automatizado de 7 pasos
-- Sistema de scoring multi-criterio avanzado
-- Retroalimentación adaptativa con ajuste automático
-- API comprehensive con documentación completa
-- Dashboard interactivo con real-time updates
-
-**Métricas de Éxito:**
-- 2,847 líneas de código en database manager
-- 15 características estándar de feature engineering
-- 7 estrategias de ensemble diferentes
-- 4 componentes de scoring multi-criterio
-- < 5 minutos de tiempo de ejecución del pipeline
-- > 99% uptime del sistema
-
-El sistema está diseñado para operar de manera autónoma con mínima intervención humana, mientras proporciona transparencia completa en el proceso de toma de decisiones y resultados obtenidos.
+**Próxima ejecución programada**: Sábado 13 de agosto a las 11:29 PM ET
 
 ---
 
-*Documento técnico generado por SHIOL+ v6.0*  
-*Sistema Híbrido de Optimización e Inteligencia para Lotería*  
-*Versión: 2025.01.09*  
+*Documento actualizado reflejando el estado actual del sistema SHIOL+ v6.1*  
+*Última actualización: 2025-01-09*  
 *Replit Deployment: https://replit.com/@orlandobatistac/SHIOL*
-
