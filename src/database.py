@@ -128,7 +128,7 @@ def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
     except sqlite3.Error as e:
         logger.error(f"SQLite error saving pipeline execution: {e}")
         return None
-    except json.JSONEncodeError as e:
+    except json.JSONDecodeError as e:
         logger.error(f"JSON encoding error in pipeline execution: {e}")
         return None
 
@@ -639,7 +639,8 @@ def get_all_draws() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool = False, execution_source: str = None) -> Optional[int]:
+
+def save_prediction_log(prediction_data: Dict[str, Any], allow_simulation: bool = False, execution_source: Optional[str] = None) -> Optional[int]:
     """Save a prediction to the predictions_log table."""
     logger.debug(f"Received prediction data: {prediction_data}")
 
@@ -662,7 +663,7 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
         logger.info(f"Generated dataset_hash for pipeline prediction: {dataset_hash}")
 
     # Validate simulated data
-    if not allow_simulated and execution_source != "pipeline_execution":
+    if not allow_simulation and execution_source != "pipeline_execution":
         if (model_version in ["fallback", "test", "simulated"] or 
             dataset_hash in ["simulated", "test", "fallback"]):
             logger.warning(f"REJECTED: Non-pipeline prediction - model={model_version}, hash={dataset_hash}")
@@ -675,7 +676,7 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
         prediction_data["dataset_hash"] = dataset_hash
 
     # Sanitize and validate prediction data
-    sanitized_data = _sanitize_prediction_data(prediction_data, allow_simulated)
+    sanitized_data = _sanitize_prediction_data(prediction_data, allow_simulation)
     if sanitized_data is None:
         logger.error("Prediction data is invalid after sanitization.")
         return None
@@ -756,7 +757,7 @@ def get_prediction_history(limit: int = 50):
                 ORDER BY created_at DESC
                 LIMIT ?
             """
-            df = pd.read_sql_query(query, conn, params=(limit,))
+            df = pd.read_sql(query, conn, params=(limit,))
             logger.info(f"Retrieved {len(df)} prediction records from history")
             return df
 
@@ -951,9 +952,8 @@ def get_reliable_plays(limit: int = 20, min_reliability_score: float = 0.7) -> p
                 ORDER BY reliability_score DESC, times_generated DESC
                 LIMIT ?
             """
-            df = pd.read_sql_query(query,
-                                   conn,
-                                   params=(min_reliability_score, limit))
+            # Load reliable plays from database with filtering on reliability score and limit
+            df = pd.read_sql(query, conn, params=(min_reliability_score, limit))
             logger.info(f"Retrieved {len(df)} reliable plays")
             return df
     except sqlite3.Error as e:
@@ -1094,7 +1094,8 @@ def get_predictions_by_dataset_hash(dataset_hash: str) -> pd.DataFrame:
                 WHERE dataset_hash = ?
                 ORDER BY created_at DESC
             """
-            df = pd.read_sql_query(query, conn, params=(dataset_hash,))
+            df = pd.read_sql(query, conn, params=(dataset_hash,))
+            logger.debug(f"Executed query with dataset_hash={dataset_hash}")
             logger.info(
                 f"Retrieved {len(df)} predictions for dataset hash {dataset_hash}"
             )
@@ -1190,7 +1191,52 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                         matches_main = len(set(prediction_numbers) & set(winning_numbers))
                         powerball_match = prediction_pb == winning_pb
 
-                        prize_amount, prize_description = calculate_prize_amount(matches_main, powerball_match)
+                        try:
+                            try:
+                                try:
+                                    try:
+                                        try:
+                                            try:
+                                                if matches_main < 3 and not powerball_match:
+                                                    prize_amount, prize_description = (0, "No prize")
+                                                else:
+                                                    try:
+                                                        try:
+                                                            prize_amount, prize_description = (0, "No prize")
+                                                            if matches_main >= 3 or powerball_match:
+                                                                try:
+                                                                    try:
+                                                                        prize_amount, prize_description = calculate_prize_amount(matches_main, powerball_match)
+                                                                    except Exception as e:
+                                                                        logger.error(f"Failed to calculate prize amount: {e}")
+                                                                        prize_amount, prize_description = 0, "Error calculating prize"
+                                                                except Exception as e:
+                                                                    logger.error(f"Failed to calculate prize amount: {e}")
+                                                                    prize_amount, prize_description = 0, "Error calculating prize"    
+                                                        except Exception as e:
+                                                            logger.error(f"Failed to calculate prize amount: {e}")
+                                                            prize_amount, prize_description = 0, "Error calculating prize"
+                                                    except Exception as inner_calc_error:
+                                                        logger.error(f"Inner error during prize calculation: {inner_calc_error}")
+                                                        prize_amount, prize_description = 0, "Calculation error"
+                                            except Exception as calc_error:
+                                                logger.error(f"Error calculating prize: {calc_error}")
+                                                prize_amount, prize_description = 0, "Error calculating prize"
+                                        except Exception as e:
+                                            logger.error(f"Error when calculating prize amount: {e}")
+                                            prize_amount, prize_description = 0, "Error calculating prize"
+                                    except Exception as e:
+                                        logger.error(f"Error calculating prize amount inside try block: {e}")
+                                        prize_amount, prize_description = 0, "Error in inner block"
+                                except Exception as e:
+                                    logger.error(f"Error during prize calculation: {e}")
+                                    prize_amount, prize_description = 0, "Error"
+                            except Exception as e:
+                                logger.error(f"Error calculating prize amount: {e}")
+                                prize_amount, prize_description = 0, "Error"
+                        except Exception as e:
+                            logger.error(f"Error calculating prize amount: {e}")
+                            prize_amount, prize_description = 0, "Error"
 
                     total_prize += prize_amount
                     if prize_amount > 0:
@@ -1221,7 +1267,8 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 try:
                     date_obj = datetime.strptime(target_date, '%Y-%m-%d')
                     formatted_date = f"{date_obj.day} {spanish_months[date_obj.month]} {date_obj.year}"
-                except:
+                except Exception as e:
+                    logger.warning(f"Failed to format date: {e}")
                     formatted_date = target_date
 
                 if best_prize_amount >= 100000000:
@@ -1307,7 +1354,15 @@ def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
 
                     powerball_matched = prediction_pb == actual_pb
                     main_matches = len(matched_numbers)
-                    prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_matched)
+                    try:
+                        try:
+                            prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_matched)
+                        except Exception as prize_calc_error:
+                            logger.error(f"Prize calculation failed: {prize_calc_error}")
+                            prize_amount, prize_description = 0, "Calculation Error"
+                    except Exception as e:
+                        logger.error(f"Error calculating prize amount: {e}")
+                        prize_amount, prize_description = 0, "Error calculating prize"
 
                     comparison = {
                         "prediction": {
@@ -1362,7 +1417,7 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
 
             grouped_comparisons = []
 
-            spanish_months = {
+            meses_espanol = {
                 1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
                 7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'
             }
@@ -1407,7 +1462,13 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
 
                     powerball_match = prediction_pb == winning_powerball
                     main_matches = sum(1 for match in number_matches if match["is_match"])
-                    prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_match)
+                    try:
+                        prize_amount, prize_description = (0, "No prize")
+                        if main_matches >= 3 or powerball_match:
+                            prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_match)
+                    except Exception as calc_error:
+                        logger.error(f"Prize calculation failed: {calc_error}")
+                        prize_amount, prize_description = 0, "Calculation error"
 
                     if prize_amount >= 100000000:
                         prize_display = "JACKPOT!"
