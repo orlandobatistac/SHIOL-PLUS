@@ -92,7 +92,7 @@ async def _get_current_pipeline_status() -> Dict[str, Any]:
                     # Check if the process is actually still running (REDUCED timeout for Replit)
                     start_time = datetime.fromisoformat(status_data.get("start_time", datetime.now().isoformat()))
                     elapsed_time = datetime.now() - start_time
-                    
+
                     # Production timeout: 20 minutes optimized for Replit
                     if elapsed_time > timedelta(minutes=20):
                         logger.warning(f"Pipeline timeout detected: {elapsed_time} elapsed")
@@ -103,11 +103,11 @@ async def _get_current_pipeline_status() -> Dict[str, Any]:
                         with open(status_file, 'w') as f:
                             json.dump(status_data, f)
                         return {"status": "failed", "description": f"Pipeline timed out after {elapsed_time}"}
-                    
+
                     # Warning at 15 minutes
                     if elapsed_time > timedelta(minutes=15):
                         return {"status": "running", "description": f"Pipeline running (WARNING: {elapsed_time} elapsed, near timeout)"}
-                    
+
                     return {"status": "running", "description": f"Pipeline executing ({elapsed_time} elapsed)"}
                 else:
                     return {
@@ -180,6 +180,8 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent pipeline execution history from SQLite database"""
     try:
         from src.database import get_pipeline_execution_history
+        from src.date_utils import DateManager
+        import sqlite3
 
         # Get executions from SQLite database
         executions = get_pipeline_execution_history(limit=limit)
@@ -187,8 +189,6 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
         # Format for API response with pre-formatted dates
         formatted_executions = []
         for execution in executions:
-            from src.date_utils import DateManager
-
             # Pre-format dates for frontend display
             start_time_formatted = 'N/A'
             end_time_formatted = 'N/A'
@@ -214,7 +214,8 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
                 'num_predictions': execution.get('num_predictions', 100),
                 'error': execution.get('error'),
                 'subprocess_success': execution.get('subprocess_success', False),
-                'duration': _calculate_execution_duration(execution.get('start_time'), execution.get('end_time'))
+                'duration': _calculate_execution_duration(execution.get('start_time'), execution.get('end_time')),
+                "has_evaluation_data": execution.get("has_evaluation_data", False) # New field from changes
             }
             formatted_executions.append(formatted_execution)
 
@@ -448,6 +449,7 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
     """Get detailed information for a specific pipeline execution"""
     try:
         from src.database import get_pipeline_execution_by_id
+        from src.date_utils import DateManager
 
         execution = get_pipeline_execution_by_id(execution_id)
 
@@ -481,8 +483,6 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
         enhanced_execution['total_steps'] = 5  # OPTIMIZED: Pipeline now has 5 steps
 
         # Pre-format dates for frontend display
-        from src.date_utils import DateManager
-
         start_time_formatted = 'N/A'
         end_time_formatted = 'N/A'
 
@@ -512,6 +512,15 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
                 logger.warning(f"Could not calculate duration: {duration_error}")
                 enhanced_execution['duration'] = 'Unknown'
 
+        # Add the 'has_evaluation_data' flag based on whether there are evaluated predictions
+        try:
+            from src.database import get_evaluated_predictions_count
+            evaluation_count = get_evaluated_predictions_count(execution_id)
+            enhanced_execution["has_evaluation_data"] = evaluation_count > 0
+        except Exception as eval_err:
+            logger.warning(f"Could not fetch evaluation data count: {eval_err}")
+            enhanced_execution["has_evaluation_data"] = False
+
         return {
             "execution": enhanced_execution,
             "timestamp": datetime.now().isoformat()
@@ -528,6 +537,7 @@ async def get_pipeline_history():
     """Get recent pipeline execution history from SQLite database"""
     try:
         from src.database import get_pipeline_execution_history
+        from src.date_utils import DateManager
 
         # Get executions from SQLite database
         executions = get_pipeline_execution_history(limit=50)  # Get more for detailed history
@@ -535,11 +545,23 @@ async def get_pipeline_history():
         # Format for API response
         formatted_executions = []
         for execution in executions:
+            # Pre-format dates for frontend display
+            start_time_formatted = 'N/A'
+            end_time_formatted = 'N/A'
+
+            if execution.get('start_time'):
+                start_time_formatted = DateManager.format_datetime_for_display(execution.get('start_time'))
+
+            if execution.get('end_time'):
+                end_time_formatted = DateManager.format_datetime_for_display(execution.get('end_time'))
+
             formatted_execution = {
                 "execution_id": execution.get('execution_id'),
                 "status": execution.get('status'),
                 "start_time": execution.get('start_time'),
+                "start_time_formatted": start_time_formatted,
                 "end_time": execution.get('end_time'),
+                "end_time_formatted": end_time_formatted,
                 "trigger_type": execution.get('trigger_type', 'unknown'),
                 "trigger_source": execution.get('trigger_source', 'unknown'),
                 "steps_completed": execution.get('steps_completed', 0),
@@ -547,8 +569,9 @@ async def get_pipeline_history():
                 "num_predictions": execution.get('num_predictions', 0),
                 "error": execution.get('error'),
                 "subprocess_success": execution.get('subprocess_success', False),
-                "duration": execution.get('duration'),
-                "progress_percentage": (execution.get('steps_completed', 0) / 5) * 100  # Use 5 steps
+                "duration": _calculate_execution_duration(execution.get('start_time'), execution.get('end_time')),
+                "progress_percentage": (execution.get('steps_completed', 0) / 5) * 100 if 5 > 0 else 0,  # Use 5 steps
+                "has_evaluation_data": execution.get("has_evaluation_data", False)
             }
             formatted_executions.append(formatted_execution)
 
