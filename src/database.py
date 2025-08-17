@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List
 
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle numpy types."""
-    
+
     def default(self, o):
         """Override default method with correct parameter name."""
         if isinstance(o, np.integer):
@@ -21,6 +21,7 @@ class NumpyEncoder(json.JSONEncoder):
         elif isinstance(o, np.ndarray):
             return o.tolist()
         return super(NumpyEncoder, self).default(o)
+
 
 def get_db_path() -> str:
     """Reads the database file path from the configuration file."""
@@ -32,23 +33,27 @@ def get_db_path() -> str:
     try:
         config.read(config_path)
         # Try to get db path from paths section, with fallback
-        if config.has_section('paths') and config.has_option('paths', 'db_file'):
+        if config.has_section('paths') and config.has_option(
+                'paths', 'db_file'):
             db_file = config["paths"]["db_file"]
         else:
             # Fallback to default path
             db_file = "data/shiolplus.db"
-            logger.warning(f"Config section 'paths' not found, using default: {db_file}")
+            logger.warning(
+                f"Config section 'paths' not found, using default: {db_file}")
 
         db_path = os.path.join(current_dir, '..', db_file)
     except Exception as e:
         # Complete fallback
-        logger.error(f"Error reading config file: {e}. Using default database path.")
+        logger.error(
+            f"Error reading config file: {e}. Using default database path.")
         db_path = os.path.join(current_dir, '..', 'data', 'shiolplus.db')
 
     # Ensure the directory for the database exists
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
     return db_path
+
 
 def calculate_next_drawing_date() -> str:
     """
@@ -63,12 +68,15 @@ def calculate_next_drawing_date() -> str:
     """
     try:
         from src.date_utils import DateManager
-        
+
         # Use native DateManager time without corrections
         current_et = DateManager.get_current_et_time()
-        next_date = DateManager.calculate_next_drawing_date(reference_date=current_et)
+        next_date = DateManager.calculate_next_drawing_date(
+            reference_date=current_et)
 
-        logger.debug(f"Next drawing date calculated: {next_date} (from ET time: {current_et.strftime('%Y-%m-%d %H:%M')})")
+        logger.debug(
+            f"Next drawing date calculated: {next_date} (from ET time: {current_et.strftime('%Y-%m-%d %H:%M')})"
+        )
         return next_date
     except ImportError as e:
         logger.error(f"Failed to import DateManager: {e}")
@@ -76,6 +84,7 @@ def calculate_next_drawing_date() -> str:
     except Exception as e:
         logger.error(f"Error calculating next drawing date: {e}")
         raise
+
 
 def get_db_connection() -> sqlite3.Connection:
     """
@@ -99,9 +108,11 @@ def get_db_connection() -> sqlite3.Connection:
         logger.error(f"Unexpected error connecting to database: {e}")
         raise sqlite3.Error(f"Database connection failed: {e}") from e
 
+
 # ========================================================================
 # PIPELINE EXECUTION FUNCTIONS - SQLITE
 # ========================================================================
+
 
 def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
     """
@@ -119,24 +130,23 @@ def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
 
             execution_id = execution_data.get('execution_id')
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO pipeline_executions (
                     execution_id, status, start_time, trigger_type, trigger_source,
                     current_step, steps_completed, total_steps, num_predictions,
                     execution_details
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                execution_id,
-                execution_data.get('status', 'starting'),
-                execution_data.get('start_time'),
-                execution_data.get('trigger_type', 'unknown'),
-                execution_data.get('execution_source', 'unknown'), 
-                execution_data.get('current_step'),
-                execution_data.get('steps_completed', 0),
-                execution_data.get('total_steps', 7),
-                execution_data.get('num_predictions', 100),
-                json.dumps(execution_data.get('trigger_details', {}), cls=NumpyEncoder)
-            ))
+            """, (execution_id, execution_data.get(
+                    'status', 'starting'), execution_data.get('start_time'),
+                  execution_data.get('trigger_type', 'unknown'),
+                  execution_data.get('execution_source', 'unknown'),
+                  execution_data.get('current_step'),
+                  execution_data.get('steps_completed',
+                                     0), execution_data.get('total_steps', 7),
+                  execution_data.get('num_predictions', 100),
+                  json.dumps(execution_data.get('trigger_details', {}),
+                             cls=NumpyEncoder)))
 
             conn.commit()
             logger.info(f"Pipeline execution {execution_id} saved to SQLite")
@@ -152,7 +162,9 @@ def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
         logger.error(f"Unexpected error saving pipeline execution: {e}")
         return None
 
-def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) -> bool:
+
+def update_pipeline_execution(execution_id: str,
+                              update_data: Dict[str, Any]) -> bool:
     """
     Update pipeline execution in SQLite database.
 
@@ -204,7 +216,8 @@ def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) ->
                 params.append(update_data['stderr_output'])
 
             if not update_fields:
-                logger.warning(f"No valid fields to update for execution {execution_id}")
+                logger.warning(
+                    f"No valid fields to update for execution {execution_id}")
                 return False
 
             # Add updated_at field
@@ -223,10 +236,12 @@ def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) ->
 
             if cursor.rowcount > 0:
                 conn.commit()
-                logger.info(f"Pipeline execution {execution_id} updated in SQLite")
+                logger.info(
+                    f"Pipeline execution {execution_id} updated in SQLite")
                 return True
             else:
-                logger.warning(f"Pipeline execution {execution_id} not found for update")
+                logger.warning(
+                    f"Pipeline execution {execution_id} not found for update")
                 return False
 
     except sqlite3.Error as e:
@@ -235,6 +250,7 @@ def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) ->
     except Exception as e:
         logger.error(f"Unexpected error updating pipeline execution: {e}")
         return False
+
 
 def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
     """
@@ -250,7 +266,8 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT 
                     execution_id, status, start_time, end_time,
                     trigger_type, trigger_source, current_step,
@@ -259,7 +276,7 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
                 FROM pipeline_executions
                 ORDER BY start_time DESC
                 LIMIT ?
-            """, (limit,))
+            """, (limit, ))
 
             executions = []
             for row in cursor.fetchall():
@@ -275,22 +292,27 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
                     'total_steps': row[8],
                     'num_predictions': row[9],
                     'error': row[10],
-                    'subprocess_success': row[11] == 1 if row[11] is not None else False,
+                    'subprocess_success':
+                    row[11] == 1 if row[11] is not None else False,
                     'created_at': row[12]
                 }
                 executions.append(execution)
 
-            logger.info(f"Retrieved {len(executions)} pipeline executions from SQLite")
+            logger.info(
+                f"Retrieved {len(executions)} pipeline executions from SQLite")
             return executions
 
     except sqlite3.Error as e:
         logger.error(f"SQLite error getting pipeline execution history: {e}")
         return []
     except Exception as e:
-        logger.error(f"Unexpected error getting pipeline execution history: {e}")
+        logger.error(
+            f"Unexpected error getting pipeline execution history: {e}")
         return []
 
-def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
+
+def get_pipeline_execution_by_id(
+        execution_id: str) -> Optional[Dict[str, Any]]:
     """
     Get specific pipeline execution by ID from SQLite.
 
@@ -304,7 +326,8 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT 
                     execution_id, status, start_time, end_time,
                     trigger_type, trigger_source, current_step,
@@ -313,7 +336,7 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
                     stdout_output, stderr_output, created_at, updated_at
                 FROM pipeline_executions
                 WHERE execution_id = ?
-            """, (execution_id,))
+            """, (execution_id, ))
 
             row = cursor.fetchone()
             if row:
@@ -329,23 +352,29 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
                     'total_steps': row[8],
                     'num_predictions': row[9],
                     'error': row[10],
-                    'execution_details': json.loads(row[11]) if row[11] else {},
-                    'subprocess_success': row[12] == 1 if row[12] is not None else False,
+                    'execution_details':
+                    json.loads(row[11]) if row[11] else {},
+                    'subprocess_success':
+                    row[12] == 1 if row[12] is not None else False,
                     'stdout_output': row[13],
                     'stderr_output': row[14],
                     'created_at': row[15],
                     'updated_at': row[16]
                 }
 
-                logger.info(f"Retrieved pipeline execution {execution_id} from SQLite")
+                logger.info(
+                    f"Retrieved pipeline execution {execution_id} from SQLite")
                 return execution
             else:
-                logger.warning(f"Pipeline execution {execution_id} not found in SQLite")
+                logger.warning(
+                    f"Pipeline execution {execution_id} not found in SQLite")
                 return None
 
     except Exception as e:
-        logger.error(f"Error getting pipeline execution by ID from SQLite: {e}")
+        logger.error(
+            f"Error getting pipeline execution by ID from SQLite: {e}")
         return None
+
 
 def initialize_database():
     """
@@ -408,8 +437,12 @@ def initialize_database():
                 columns = [column[1] for column in cursor.fetchall()]
 
                 if 'target_draw_date' not in columns:
-                    logger.info("Adding target_draw_date column to existing predictions_log table...")
-                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN target_draw_date DATE")
+                    logger.info(
+                        "Adding target_draw_date column to existing predictions_log table..."
+                    )
+                    cursor.execute(
+                        "ALTER TABLE predictions_log ADD COLUMN target_draw_date DATE"
+                    )
 
                     # Update existing records with calculated target draw date
                     cursor.execute("""
@@ -417,7 +450,9 @@ def initialize_database():
                         SET target_draw_date = DATE(created_at)
                         WHERE target_draw_date IS NULL
                     """)
-                    logger.info("target_draw_date column added and populated for existing records")
+                    logger.info(
+                        "target_draw_date column added and populated for existing records"
+                    )
                 else:
                     # Update any NULL target_draw_date records
                     cursor.execute("""
@@ -426,7 +461,9 @@ def initialize_database():
                         WHERE target_draw_date IS NULL
                     """)
                     if cursor.rowcount > 0:
-                        logger.info(f"Updated {cursor.rowcount} existing records with target_draw_date")
+                        logger.info(
+                            f"Updated {cursor.rowcount} existing records with target_draw_date"
+                        )
             except sqlite3.Error as e:
                 logger.error(f"Error during target_draw_date migration: {e}")
 
@@ -553,21 +590,41 @@ def initialize_database():
 
             # Create performance indexes for frequently queried columns
             try:
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_log_created_at ON predictions_log (created_at DESC)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_log_target_date ON predictions_log (target_draw_date)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_tracking_prediction_id ON performance_tracking (prediction_id)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_tracking_draw_date ON performance_tracking (draw_date)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_powerball_draws_date ON powerball_draws (draw_date)")
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_predictions_log_created_at ON predictions_log (created_at DESC)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_predictions_log_target_date ON predictions_log (target_draw_date)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_performance_tracking_prediction_id ON performance_tracking (prediction_id)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_performance_tracking_draw_date ON performance_tracking (draw_date)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_powerball_draws_date ON powerball_draws (draw_date)"
+                )
 
                 # Pipeline executions indexes
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_status ON pipeline_executions (status)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_start_time ON pipeline_executions (start_time DESC)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_trigger_type ON pipeline_executions (trigger_type)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_executions_execution_id ON pipeline_executions (execution_id)")
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_pipeline_executions_status ON pipeline_executions (status)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_pipeline_executions_start_time ON pipeline_executions (start_time DESC)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_pipeline_executions_trigger_type ON pipeline_executions (trigger_type)"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_pipeline_executions_execution_id ON pipeline_executions (execution_id)"
+                )
 
-                logger.info("Database performance indexes created successfully")
+                logger.info(
+                    "Database performance indexes created successfully")
             except sqlite3.Error as idx_error:
-                logger.warning(f"Error creating indexes (may already exist): {idx_error}")
+                logger.warning(
+                    f"Error creating indexes (may already exist): {idx_error}")
 
             conn.commit()
 
@@ -581,55 +638,61 @@ def initialize_database():
             count = cursor.fetchone()[0]
 
             if count == 0:
-                logger.info("No historical data found. Adding sample data for testing...")
-                sample_data = [
-                    ('2024-01-01', 7, 14, 21, 35, 42, 18),
-                    ('2024-01-03', 3, 16, 27, 44, 58, 9),
-                    ('2024-01-06', 12, 23, 34, 45, 56, 15),
-                    ('2024-01-08', 5, 19, 28, 37, 49, 22),
-                    ('2024-01-10', 11, 25, 33, 41, 52, 8),
-                    ('2024-01-13', 8, 17, 26, 39, 54, 13),
-                    ('2024-01-15', 14, 22, 31, 46, 57, 11),
-                    ('2024-01-17', 6, 18, 29, 43, 51, 19),
-                    ('2024-01-20', 9, 20, 32, 47, 59, 7),
-                    ('2024-01-22', 15, 24, 30, 40, 55, 16),
-                    ('2024-01-24', 4, 13, 25, 38, 48, 21),
-                    ('2024-01-27', 10, 21, 34, 44, 53, 12),
-                    ('2024-01-29', 2, 15, 28, 41, 56, 6),
-                    ('2024-01-31', 16, 23, 35, 45, 58, 14),
-                    ('2024-02-03', 7, 18, 27, 42, 50, 10),
-                    ('2024-02-05', 12, 19, 31, 46, 54, 17),
-                    ('2024-02-07', 5, 22, 29, 39, 57, 8),
-                    ('2024-02-10', 9, 16, 33, 43, 51, 20),
-                    ('2024-02-12', 11, 24, 36, 47, 59, 4),
-                    ('2024-02-14', 3, 14, 26, 40, 52, 15),
-                    ('2024-02-17', 8, 17, 30, 44, 55, 9),
-                    ('2024-02-19', 13, 21, 32, 48, 56, 7),
-                    ('2024-02-21', 6, 19, 28, 41, 53, 18),
-                    ('2024-02-24', 10, 23, 34, 45, 58, 11),
-                    ('2024-02-26', 4, 15, 27, 38, 49, 13),
-                    ('2024-02-28', 14, 20, 31, 42, 54, 16),
-                    ('2024-03-02', 7, 18, 29, 46, 57, 5),
-                    ('2024-03-04', 12, 22, 35, 43, 51, 19),
-                    ('2024-03-06', 9, 16, 26, 39, 55, 8),
-                    ('2024-03-09', 5, 24, 33, 47, 59, 12),
-                    ('2025-08-04', 1, 12, 20, 33, 66, 21),
-                    ('2025-08-05', 5, 15, 27, 41, 53, 18),
-                    ('2025-08-06', 10, 18, 27, 41, 54, 14),
-                    ('2025-08-07', 8, 22, 35, 44, 58, 9)
-                ]
+                logger.info(
+                    "No historical data found. Adding sample data for testing..."
+                )
+                sample_data = [('2024-01-01', 7, 14, 21, 35, 42, 18),
+                               ('2024-01-03', 3, 16, 27, 44, 58, 9),
+                               ('2024-01-06', 12, 23, 34, 45, 56, 15),
+                               ('2024-01-08', 5, 19, 28, 37, 49, 22),
+                               ('2024-01-10', 11, 25, 33, 41, 52, 8),
+                               ('2024-01-13', 8, 17, 26, 39, 54, 13),
+                               ('2024-01-15', 14, 22, 31, 46, 57, 11),
+                               ('2024-01-17', 6, 18, 29, 43, 51, 19),
+                               ('2024-01-20', 9, 20, 32, 47, 59, 7),
+                               ('2024-01-22', 15, 24, 30, 40, 55, 16),
+                               ('2024-01-24', 4, 13, 25, 38, 48, 21),
+                               ('2024-01-27', 10, 21, 34, 44, 53, 12),
+                               ('2024-01-29', 2, 15, 28, 41, 56, 6),
+                               ('2024-01-31', 16, 23, 35, 45, 58, 14),
+                               ('2024-02-03', 7, 18, 27, 42, 50, 10),
+                               ('2024-02-05', 12, 19, 31, 46, 54, 17),
+                               ('2024-02-07', 5, 22, 29, 39, 57, 8),
+                               ('2024-02-10', 9, 16, 33, 43, 51, 20),
+                               ('2024-02-12', 11, 24, 36, 47, 59, 4),
+                               ('2024-02-14', 3, 14, 26, 40, 52, 15),
+                               ('2024-02-17', 8, 17, 30, 44, 55, 9),
+                               ('2024-02-19', 13, 21, 32, 48, 56, 7),
+                               ('2024-02-21', 6, 19, 28, 41, 53, 18),
+                               ('2024-02-24', 10, 23, 34, 45, 58, 11),
+                               ('2024-02-26', 4, 15, 27, 38, 49, 13),
+                               ('2024-02-28', 14, 20, 31, 42, 54, 16),
+                               ('2024-03-02', 7, 18, 29, 46, 57, 5),
+                               ('2024-03-04', 12, 22, 35, 43, 51, 19),
+                               ('2024-03-06', 9, 16, 26, 39, 55, 8),
+                               ('2024-03-09', 5, 24, 33, 47, 59, 12),
+                               ('2025-08-04', 1, 12, 20, 33, 66, 21),
+                               ('2025-08-05', 5, 15, 27, 41, 53, 18),
+                               ('2025-08-06', 10, 18, 27, 41, 54, 14),
+                               ('2025-08-07', 8, 22, 35, 44, 58, 9)]
 
-                cursor.executemany("""
+                cursor.executemany(
+                    """
                     INSERT INTO powerball_draws (draw_date, n1, n2, n3, n4, n5, pb)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, sample_data)
 
                 conn.commit()
-                logger.info(f"Added {len(sample_data)} sample draw records to database")
+                logger.info(
+                    f"Added {len(sample_data)} sample draw records to database"
+                )
 
-            logger.info("Database initialized. All tables including Phase 4 adaptive feedback system are ready.")
+            logger.info(
+                "Database initialized. All tables including Phase 4 adaptive feedback system are ready."
+            )
     except sqlite3.Error as e:
         logger.error(f"Database error during initialization: {e}")
+
 
 def get_latest_draw_date() -> Optional[str]:
     """
@@ -653,6 +716,7 @@ def get_latest_draw_date() -> Optional[str]:
         logger.error(f"Failed to get latest draw date: {e}")
         return None
 
+
 def bulk_insert_draws(df: pd.DataFrame):
     """
     Inserts or replaces a batch of draw data into the database from a DataFrame.
@@ -667,14 +731,18 @@ def bulk_insert_draws(df: pd.DataFrame):
     try:
         with get_db_connection() as conn:
             df.to_sql('powerball_draws', conn, if_exists='append', index=False)
-            logger.info(f"Successfully inserted {len(df)} rows into the database.")
+            logger.info(
+                f"Successfully inserted {len(df)} rows into the database.")
     except sqlite3.IntegrityError as e:
-        logger.warning(f"Integrity constraint violation during bulk insert: {e}. Using upsert method.")
+        logger.warning(
+            f"Integrity constraint violation during bulk insert: {e}. Using upsert method."
+        )
         _upsert_draws(df)
     except sqlite3.Error as e:
         logger.error(f"SQLite error during bulk insert: {e}")
     except Exception as e:
         logger.error(f"Unexpected error during bulk insert: {e}")
+
 
 def _upsert_draws(df: pd.DataFrame):
     """Slower, row-by-row insert/replace for handling duplicates."""
@@ -682,7 +750,8 @@ def _upsert_draws(df: pd.DataFrame):
         with get_db_connection() as conn:
             cursor = conn.cursor()
             for _, row in df.iterrows():
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT OR REPLACE INTO powerball_draws (draw_date, n1, n2, n3, n4, n5, pb)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, tuple(row))
@@ -703,8 +772,12 @@ def get_all_draws() -> pd.DataFrame:
     """
     try:
         with get_db_connection() as conn:
-            df = pd.read_sql_query("SELECT * FROM powerball_draws ORDER BY draw_date ASC", conn, parse_dates=['draw_date'])
-            logger.info(f"Successfully loaded {len(df)} rows from the database.")
+            df = pd.read_sql_query(
+                "SELECT * FROM powerball_draws ORDER BY draw_date ASC",
+                conn,
+                parse_dates=['draw_date'])
+            logger.info(
+                f"Successfully loaded {len(df)} rows from the database.")
             return df
     except sqlite3.Error as e:
         logger.error(f"SQLite error retrieving draws data: {e}")
@@ -717,7 +790,9 @@ def get_all_draws() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool = False, execution_source: str = None) -> Optional[int]:
+def save_prediction_log(prediction_data: Dict[str, Any],
+                        allow_simulated: bool = False,
+                        execution_source: str = None) -> Optional[int]:
     """
     Guarda una predicción en la tabla predictions_log.
 
@@ -732,10 +807,14 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
     logger.debug(f"Received prediction data: {prediction_data}")
 
     # PIPELINE-ONLY VALIDATION: Only accept predictions from authorized sources
-    authorized_sources = ["manual_dashboard", "automatic_scheduler", "pipeline_execution"]
+    authorized_sources = [
+        "manual_dashboard", "automatic_scheduler", "pipeline_execution"
+    ]
 
     if execution_source and execution_source not in authorized_sources:
-        logger.error(f"UNAUTHORIZED: Rejected prediction from source: {execution_source}")
+        logger.error(
+            f"UNAUTHORIZED: Rejected prediction from source: {execution_source}"
+        )
         return None
 
     # Check if prediction comes from pipeline execution (has proper metadata)
@@ -747,24 +826,31 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
         import hashlib
         import time
         timestamp_str = str(time.time())
-        dataset_hash = hashlib.md5(f"pipeline_{timestamp_str}".encode()).hexdigest()[:16]
-        logger.info(f"Generated dataset_hash for pipeline prediction: {dataset_hash}")
+        dataset_hash = hashlib.md5(
+            f"pipeline_{timestamp_str}".encode()).hexdigest()[:16]
+        logger.info(
+            f"Generated dataset_hash for pipeline prediction: {dataset_hash}")
 
     # Only reject if explicitly marked as test data and simulated not allowed
     if not allow_simulated and execution_source != "pipeline_execution":
-        if (model_version in ["fallback", "test", "simulated"] or
-            dataset_hash in ["simulated", "test", "fallback"]):
-            logger.warning(f"REJECTED: Non-pipeline prediction - model={model_version}, hash={dataset_hash}")
+        if (model_version in ["fallback", "test", "simulated"]
+                or dataset_hash in ["simulated", "test", "fallback"]):
+            logger.warning(
+                f"REJECTED: Non-pipeline prediction - model={model_version}, hash={dataset_hash}"
+            )
             return None
 
     # Accept all pipeline_execution predictions
     if execution_source == "pipeline_execution":
-        logger.info(f"ACCEPTING pipeline prediction - model={model_version}, hash={dataset_hash}")
+        logger.info(
+            f"ACCEPTING pipeline prediction - model={model_version}, hash={dataset_hash}"
+        )
         prediction_data["model_version"] = model_version
         prediction_data["dataset_hash"] = dataset_hash
 
     # Sanitizar y validar los datos de la predicción
-    sanitized_data = _sanitize_prediction_data(prediction_data, allow_simulated)
+    sanitized_data = _sanitize_prediction_data(prediction_data,
+                                               allow_simulated)
     if sanitized_data is None:
         logger.error("Prediction data is invalid after sanitization.")
         return None
@@ -773,17 +859,24 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
     target_draw_date_str = sanitized_data.get('target_draw_date')
     if not target_draw_date_str:
         target_draw_date_str = calculate_next_drawing_date()
-        logger.debug(f"Target draw date not provided, calculated: {target_draw_date_str}")
+        logger.debug(
+            f"Target draw date not provided, calculated: {target_draw_date_str}"
+        )
 
     # Validar la fecha del sorteo objetivo
     if not _validate_target_draw_date(target_draw_date_str):
-        logger.error(f"Invalid target_draw_date format: {target_draw_date_str}")
-        raise ValueError(f"Invalid target_draw_date format: {target_draw_date_str}")
+        logger.error(
+            f"Invalid target_draw_date format: {target_draw_date_str}")
+        raise ValueError(
+            f"Invalid target_draw_date format: {target_draw_date_str}")
 
     # Additional validation to prevent data corruption
     if len(target_draw_date_str) != 10 or target_draw_date_str.count('-') != 2:
-        logger.error(f"CORRUPTION DETECTED: target_draw_date has invalid format: {target_draw_date_str}")
-        raise ValueError(f"Corrupted target_draw_date detected: {target_draw_date_str}")
+        logger.error(
+            f"CORRUPTION DETECTED: target_draw_date has invalid format: {target_draw_date_str}"
+        )
+        raise ValueError(
+            f"Corrupted target_draw_date detected: {target_draw_date_str}")
 
     # Validate created_at
     created_at_val = sanitized_data.get('created_at')
@@ -793,7 +886,9 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
         logger.debug(f"Using current time for created_at: {created_at_val}")
 
     if not _is_valid_drawing_date(target_draw_date_str):
-        logger.warning(f"Target draw date {target_draw_date_str} is not a valid Powerball drawing day.")
+        logger.warning(
+            f"Target draw date {target_draw_date_str} is not a valid Powerball drawing day."
+        )
         # Decidir si se debe continuar o fallar aquí. Por ahora, registramos una advertencia.
 
     # Safe type conversion to avoid numpy issues
@@ -811,25 +906,27 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulated: bool =
         # Insertar registro en SQLite
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO predictions_log
                 (timestamp, n1, n2, n3, n4, n5, powerball, score_total,
                  model_version, dataset_hash, json_details_path, target_draw_date)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                str(sanitized_data['timestamp']),
-                safe_int(sanitized_data['numbers'][0]),
-                safe_int(sanitized_data['numbers'][1]),
-                safe_int(sanitized_data['numbers'][2]),
-                safe_int(sanitized_data['numbers'][3]),
-                safe_int(sanitized_data['numbers'][4]),
-                safe_int(sanitized_data['powerball']),
-                safe_float(sanitized_data['score_total']),
-                str(sanitized_data['model_version']),
-                str(sanitized_data['dataset_hash']),
-                sanitized_data.get('json_details_path', None),
-                target_draw_date_str # Usar la fecha validada
-            ))
+            """,
+                (
+                    str(sanitized_data['timestamp']),
+                    safe_int(sanitized_data['numbers'][0]),
+                    safe_int(sanitized_data['numbers'][1]),
+                    safe_int(sanitized_data['numbers'][2]),
+                    safe_int(sanitized_data['numbers'][3]),
+                    safe_int(sanitized_data['numbers'][4]),
+                    safe_int(sanitized_data['powerball']),
+                    safe_float(sanitized_data['score_total']),
+                    str(sanitized_data['model_version']),
+                    str(sanitized_data['dataset_hash']),
+                    sanitized_data.get('json_details_path', None),
+                    target_draw_date_str  # Usar la fecha validada
+                ))
 
             prediction_id = cursor.lastrowid
             conn.commit()
@@ -862,7 +959,7 @@ def get_prediction_history(limit: int = 50):
                 ORDER BY created_at DESC
                 LIMIT ?
             """
-            df = pd.read_sql_query(query, conn, params=(limit,))
+            df = pd.read_sql_query(query, conn, params=(limit, ))
             logger.info(f"Retrieved {len(df)} prediction records from history")
 
             # The original request implied returning a DataFrame by default
@@ -875,9 +972,12 @@ def get_prediction_history(limit: int = 50):
 
 # Phase 4: Adaptive Feedback System Database Methods
 
-def save_performance_tracking(prediction_id: int, draw_date: str, actual_numbers: List[int],
-                            actual_pb: int, matches_main: int, matches_pb: int,
-                            prize_tier: str, score_accuracy: float, component_accuracy: Dict) -> Optional[int]:
+
+def save_performance_tracking(prediction_id: int, draw_date: str,
+                              actual_numbers: List[int], actual_pb: int,
+                              matches_main: int, matches_pb: int,
+                              prize_tier: str, score_accuracy: float,
+                              component_accuracy: Dict) -> Optional[int]:
     """
     Saves performance tracking data for a prediction against actual draw results.
 
@@ -898,21 +998,24 @@ def save_performance_tracking(prediction_id: int, draw_date: str, actual_numbers
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO performance_tracking
                 (prediction_id, draw_date, actual_n1, actual_n2, actual_n3, actual_n4, actual_n5,
                  actual_pb, matches_main, matches_pb, prize_tier, score_accuracy, component_accuracy)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                prediction_id, draw_date, actual_numbers[0], actual_numbers[1], actual_numbers[2],
-                actual_numbers[3], actual_numbers[4], actual_pb, matches_main, matches_pb,
-                prize_tier, score_accuracy, json.dumps(component_accuracy, cls=NumpyEncoder)
-            ))
+            """, (prediction_id, draw_date, actual_numbers[0],
+                  actual_numbers[1], actual_numbers[2], actual_numbers[3],
+                  actual_numbers[4], actual_pb, matches_main, matches_pb,
+                  prize_tier, score_accuracy,
+                  json.dumps(component_accuracy, cls=NumpyEncoder)))
 
             tracking_id = cursor.lastrowid
             conn.commit()
 
-            logger.info(f"Performance tracking saved with ID {tracking_id} for prediction {prediction_id}")
+            logger.info(
+                f"Performance tracking saved with ID {tracking_id} for prediction {prediction_id}"
+            )
             return tracking_id
 
     except Exception as e:
@@ -920,8 +1023,12 @@ def save_performance_tracking(prediction_id: int, draw_date: str, actual_numbers
         return None
 
 
-def save_adaptive_weights(weight_set_name: str, weights: Dict[str, float], performance_score: float,
-                         optimization_algorithm: str, dataset_hash: str, is_active: bool = False) -> Optional[int]:
+def save_adaptive_weights(weight_set_name: str,
+                          weights: Dict[str, float],
+                          performance_score: float,
+                          optimization_algorithm: str,
+                          dataset_hash: str,
+                          is_active: bool = False) -> Optional[int]:
     """
     Saves adaptive weight configuration.
 
@@ -944,21 +1051,24 @@ def save_adaptive_weights(weight_set_name: str, weights: Dict[str, float], perfo
             if is_active:
                 cursor.execute("UPDATE adaptive_weights SET is_active = FALSE")
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO adaptive_weights
                 (weight_set_name, probability_weight, diversity_weight, historical_weight,
                  risk_adjusted_weight, performance_score, optimization_algorithm, dataset_hash, is_active)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                weight_set_name, weights.get('probability', 0.4), weights.get('diversity', 0.25),
-                weights.get('historical', 0.2), weights.get('risk_adjusted', 0.15),
-                performance_score, optimization_algorithm, dataset_hash, is_active
-            ))
+            """, (weight_set_name, weights.get('probability', 0.4),
+                  weights.get('diversity', 0.25), weights.get(
+                      'historical', 0.2), weights.get('risk_adjusted',
+                                                      0.15), performance_score,
+                  optimization_algorithm, dataset_hash, is_active))
 
             weights_id = cursor.lastrowid
             conn.commit()
 
-            logger.info(f"Adaptive weights saved with ID {weights_id}: {weight_set_name}")
+            logger.info(
+                f"Adaptive weights saved with ID {weights_id}: {weight_set_name}"
+            )
             return weights_id
 
     except Exception as e:
@@ -1006,9 +1116,11 @@ def get_active_adaptive_weights() -> Optional[Dict]:
         return None
 
 
-def save_pattern_analysis(pattern_type: str, pattern_description: str, pattern_data: Dict,
-                         success_rate: float, frequency: int, confidence_score: float,
-                         date_range_start: str, date_range_end: str) -> Optional[int]:
+def save_pattern_analysis(pattern_type: str, pattern_description: str,
+                          pattern_data: Dict, success_rate: float,
+                          frequency: int, confidence_score: float,
+                          date_range_start: str,
+                          date_range_end: str) -> Optional[int]:
     """
     Saves pattern analysis results.
 
@@ -1028,20 +1140,22 @@ def save_pattern_analysis(pattern_type: str, pattern_description: str, pattern_d
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO pattern_analysis
                 (pattern_type, pattern_description, pattern_data, success_rate, frequency,
                  confidence_score, date_range_start, date_range_end)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                pattern_type, pattern_description, json.dumps(pattern_data, cls=NumpyEncoder),
-                success_rate, frequency, confidence_score, date_range_start, date_range_end
-            ))
+            """, (pattern_type, pattern_description,
+                  json.dumps(pattern_data,
+                             cls=NumpyEncoder), success_rate, frequency,
+                  confidence_score, date_range_start, date_range_end))
 
             pattern_id = cursor.lastrowid
             conn.commit()
 
-            logger.info(f"Pattern analysis saved with ID {pattern_id}: {pattern_type}")
+            logger.info(
+                f"Pattern analysis saved with ID {pattern_id}: {pattern_type}")
             return pattern_id
 
     except Exception as e:
@@ -1049,8 +1163,9 @@ def save_pattern_analysis(pattern_type: str, pattern_description: str, pattern_d
         return None
 
 
-def save_reliable_play(numbers: List[int], powerball: int, reliability_score: float,
-                      performance_history: Dict, win_rate: float, avg_score: float) -> Optional[int]:
+def save_reliable_play(numbers: List[int], powerball: int,
+                       reliability_score: float, performance_history: Dict,
+                       win_rate: float, avg_score: float) -> Optional[int]:
     """
     Saves or updates a reliable play combination.
 
@@ -1070,7 +1185,8 @@ def save_reliable_play(numbers: List[int], powerball: int, reliability_score: fl
             cursor = conn.cursor()
 
             # Check if this combination already exists
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, times_generated FROM reliable_plays
                 WHERE n1 = ? AND n2 = ? AND n3 = ? AND n4 = ? AND n5 = ? AND pb = ?
             """, tuple(numbers + [powerball]))
@@ -1079,30 +1195,30 @@ def save_reliable_play(numbers: List[int], powerball: int, reliability_score: fl
 
             if existing:
                 # Update existing record
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE reliable_plays
                     SET reliability_score = ?, performance_history = ?, win_rate = ?,
                         avg_score = ?, times_generated = ?, last_generated = CURRENT_TIMESTAMP,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                """, (
-                    reliability_score, json.dumps(performance_history, cls=NumpyEncoder),
-                    win_rate, avg_score, existing[1] + 1, existing[0]
-                ))
+                """, (reliability_score,
+                      json.dumps(performance_history, cls=NumpyEncoder),
+                      win_rate, avg_score, existing[1] + 1, existing[0]))
                 play_id = existing[0]
                 logger.info(f"Updated reliable play ID {play_id}")
             else:
                 # Insert new record
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO reliable_plays
                     (n1, n2, n3, n4, n5, pb, reliability_score, performance_history,
                      win_rate, avg_score, times_generated, last_generated)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, (
-                    numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], powerball,
-                    reliability_score, json.dumps(performance_history, cls=NumpyEncoder),
-                    win_rate, avg_score, 1
-                ))
+                """, (numbers[0], numbers[1], numbers[2], numbers[3],
+                      numbers[4], powerball, reliability_score,
+                      json.dumps(performance_history,
+                                 cls=NumpyEncoder), win_rate, avg_score, 1))
                 play_id = cursor.lastrowid
                 logger.info(f"Saved new reliable play ID {play_id}")
 
@@ -1114,7 +1230,8 @@ def save_reliable_play(numbers: List[int], powerball: int, reliability_score: fl
         return None
 
 
-def get_reliable_plays(limit: int = 20, min_reliability_score: float = 0.7) -> pd.DataFrame:
+def get_reliable_plays(limit: int = 20,
+                       min_reliability_score: float = 0.7) -> pd.DataFrame:
     """
     Retrieves reliable plays ranked by reliability score.
 
@@ -1135,7 +1252,9 @@ def get_reliable_plays(limit: int = 20, min_reliability_score: float = 0.7) -> p
                 ORDER BY reliability_score DESC, times_generated DESC
                 LIMIT ?
             """
-            df = pd.read_sql_query(query, conn, params=(min_reliability_score, limit))
+            df = pd.read_sql_query(query,
+                                   conn,
+                                   params=(min_reliability_score, limit))
             logger.info(f"Retrieved {len(df)} reliable plays")
             return df
     except Exception as e:
@@ -1143,9 +1262,11 @@ def get_reliable_plays(limit: int = 20, min_reliability_score: float = 0.7) -> p
         return pd.DataFrame()
 
 
-def save_model_feedback(feedback_type: str, component_name: str, original_value: float,
-                       adjusted_value: float, adjustment_reason: str, performance_impact: float,
-                       dataset_hash: str, model_version: str) -> Optional[int]:
+def save_model_feedback(feedback_type: str, component_name: str,
+                        original_value: float, adjusted_value: float,
+                        adjustment_reason: str, performance_impact: float,
+                        dataset_hash: str,
+                        model_version: str) -> Optional[int]:
     """
     Saves model feedback for adaptive learning.
 
@@ -1165,20 +1286,21 @@ def save_model_feedback(feedback_type: str, component_name: str, original_value:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO model_feedback
                 (feedback_type, component_name, original_value, adjusted_value,
                  adjustment_reason, performance_impact, dataset_hash, model_version)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                feedback_type, component_name, original_value, adjusted_value,
-                adjustment_reason, performance_impact, dataset_hash, model_version
-            ))
+            """, (feedback_type, component_name, original_value,
+                  adjusted_value, adjustment_reason, performance_impact,
+                  dataset_hash, model_version))
 
             feedback_id = cursor.lastrowid
             conn.commit()
 
-            logger.info(f"Model feedback saved with ID {feedback_id}: {feedback_type}")
+            logger.info(
+                f"Model feedback saved with ID {feedback_id}: {feedback_type}")
             return feedback_id
 
     except Exception as e:
@@ -1201,7 +1323,8 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
             cursor = conn.cursor()
 
             # Get overall performance metrics
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT
                     COUNT(*) as total_predictions,
                     AVG(score_accuracy) as avg_accuracy,
@@ -1211,47 +1334,59 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
                 FROM performance_tracking pt
                 JOIN predictions_log pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
-            """, (days_back,))
+            """, (days_back, ))
 
             overall_stats = cursor.fetchone()
 
             # Get prize tier distribution
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT prize_tier, COUNT(*) as count
                 FROM performance_tracking pt
                 JOIN predictions_log pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
                 GROUP BY prize_tier
                 ORDER BY count DESC
-            """, (days_back,))
+            """, (days_back, ))
 
             prize_distribution = dict(cursor.fetchall())
 
             # Get component accuracy trends
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT DATE(pt.created_at) as date, AVG(score_accuracy) as avg_accuracy
                 FROM performance_tracking pt
                 JOIN predictions_log pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
                 GROUP BY DATE(pt.created_at)
                 ORDER BY date
-            """, (days_back,))
+            """, (days_back, ))
 
             accuracy_trends = dict(cursor.fetchall())
 
             analytics = {
-                'period_days': days_back,
-                'total_predictions': overall_stats[0] if overall_stats[0] else 0,
-                'avg_accuracy': overall_stats[1] if overall_stats[1] else 0.0,
-                'avg_main_matches': overall_stats[2] if overall_stats[2] else 0.0,
-                'avg_pb_matches': overall_stats[3] if overall_stats[3] else 0.0,
-                'winning_predictions': overall_stats[4] if overall_stats[4] else 0,
-                'win_rate': (overall_stats[4] / overall_stats[0] * 100) if overall_stats[0] > 0 else 0.0,
-                'prize_distribution': prize_distribution,
-                'accuracy_trends': accuracy_trends
+                'period_days':
+                days_back,
+                'total_predictions':
+                overall_stats[0] if overall_stats[0] else 0,
+                'avg_accuracy':
+                overall_stats[1] if overall_stats[1] else 0.0,
+                'avg_main_matches':
+                overall_stats[2] if overall_stats[2] else 0.0,
+                'avg_pb_matches':
+                overall_stats[3] if overall_stats[3] else 0.0,
+                'winning_predictions':
+                overall_stats[4] if overall_stats[4] else 0,
+                'win_rate': (overall_stats[4] / overall_stats[0] *
+                             100) if overall_stats[0] > 0 else 0.0,
+                'prize_distribution':
+                prize_distribution,
+                'accuracy_trends':
+                accuracy_trends
             }
 
-            logger.info(f"Retrieved performance analytics for {days_back} days")
+            logger.info(
+                f"Retrieved performance analytics for {days_back} days")
             return analytics
 
     except Exception as e:
@@ -1272,9 +1407,10 @@ def get_prediction_details(prediction_id: int) -> Optional[Dict[str, Any]]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT json_details_path FROM predictions_log WHERE id = ?
-            """, (prediction_id,))
+            """, (prediction_id, ))
 
             result = cursor.fetchone()
             if not result:
@@ -1293,7 +1429,8 @@ def get_prediction_details(prediction_id: int) -> Optional[Dict[str, Any]]:
                 return None
 
     except Exception as e:
-        logger.error(f"Error retrieving prediction details for ID {prediction_id}: {e}")
+        logger.error(
+            f"Error retrieving prediction details for ID {prediction_id}: {e}")
         return None
 
 
@@ -1316,8 +1453,10 @@ def get_predictions_by_dataset_hash(dataset_hash: str) -> pd.DataFrame:
                 WHERE dataset_hash = ?
                 ORDER BY created_at DESC
             """
-            df = pd.read_sql_query(query, conn, params=(dataset_hash,))
-            logger.info(f"Retrieved {len(df)} predictions for dataset hash {dataset_hash}")
+            df = pd.read_sql_query(query, conn, params=(dataset_hash, ))
+            logger.info(
+                f"Retrieved {len(df)} predictions for dataset hash {dataset_hash}"
+            )
             return df
     except Exception as e:
         logger.error(f"Error retrieving predictions by dataset hash: {e}")
@@ -1348,7 +1487,8 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
             cursor = conn.cursor()
 
             # ULTRA STRICT FILTER: Solo predicciones REALES del pipeline con validación exhaustiva
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT DISTINCT
                     pd.draw_date as target_date,
                     COUNT(pl.id) as total_predictions
@@ -1365,7 +1505,7 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 HAVING COUNT(pl.id) > 0
                 ORDER BY pd.draw_date DESC
                 LIMIT ?
-            """, (limit_dates,))
+            """, (limit_dates, ))
 
             date_groups = cursor.fetchall()
 
@@ -1373,8 +1513,18 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
 
             # Spanish month names for formatting
             spanish_months = {
-                1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
-                7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'
+                1: 'Ene',
+                2: 'Feb',
+                3: 'Mar',
+                4: 'Abr',
+                5: 'May',
+                6: 'Jun',
+                7: 'Jul',
+                8: 'Ago',
+                9: 'Sep',
+                10: 'Oct',
+                11: 'Nov',
+                12: 'Dic'
             }
 
             for date_row in date_groups:
@@ -1382,7 +1532,8 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 total_predictions = date_row[1]
 
                 # Get all predictions for this target drawing date
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT
                         id, timestamp, n1, n2, n3, n4, n5, powerball,
                         score_total, model_version, dataset_hash,
@@ -1391,7 +1542,7 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                     FROM predictions_log
                     WHERE COALESCE(target_draw_date, DATE(created_at)) = ?
                     ORDER BY score_total DESC
-                """, (target_date,))
+                """, (target_date, ))
 
                 predictions_data = cursor.fetchall()
 
@@ -1403,17 +1554,23 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 best_prize_description = "No matches"
 
                 for pred_row in predictions_data:
-                    prediction_numbers = [pred_row[2], pred_row[3], pred_row[4], pred_row[5], pred_row[6]]
+                    prediction_numbers = [
+                        pred_row[2], pred_row[3], pred_row[4], pred_row[5],
+                        pred_row[6]
+                    ]
                     prediction_pb = pred_row[7]
-                    prediction_target_date = pred_row[11] or target_date  # target_draw_date is now index 11
-                    prediction_created_at = pred_row[12]  # created_at is now index 12
+                    prediction_target_date = pred_row[
+                        11] or target_date  # target_draw_date is now index 11
+                    prediction_created_at = pred_row[
+                        12]  # created_at is now index 12
 
                     # Find matching official result for the TARGET drawing date (not creation date)
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT n1, n2, n3, n4, n5, pb
                         FROM powerball_draws
                         WHERE draw_date = ?
-                    """, (prediction_target_date,))
+                    """, (prediction_target_date, ))
 
                     official_result = cursor.fetchone()
 
@@ -1424,16 +1581,21 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                     prize_description = "No matches"
 
                     if official_result:
-                        winning_numbers = [official_result[0], official_result[1], official_result[2],
-                                         official_result[3], official_result[4]]
+                        winning_numbers = [
+                            official_result[0], official_result[1],
+                            official_result[2], official_result[3],
+                            official_result[4]
+                        ]
                         winning_pb = official_result[5]
 
                         # Count main number matches
-                        matches_main = len(set(prediction_numbers) & set(winning_numbers))
+                        matches_main = len(
+                            set(prediction_numbers) & set(winning_numbers))
                         powerball_match = prediction_pb == winning_pb
 
                         # Calculate prize
-                        prize_amount, prize_description = calculate_prize_amount(matches_main, powerball_match)
+                        prize_amount, prize_description = calculate_prize_amount(
+                            matches_main, powerball_match)
 
                     # Update statistics
                     total_prize += prize_amount
@@ -1451,8 +1613,10 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                         "numbers": prediction_numbers,
                         "powerball": prediction_pb,
                         "score": float(pred_row[8]),
-                        "model_version": pred_row[9],  # model_version is correct at index 9
-                        "dataset_hash": pred_row[10],  # dataset_hash is correct at index 10
+                        "model_version":
+                        pred_row[9],  # model_version is correct at index 9
+                        "dataset_hash":
+                        pred_row[10],  # dataset_hash is correct at index 10
                         "target_draw_date": prediction_target_date,
                         "created_at": prediction_created_at,
                         "matches_main": matches_main,
@@ -1484,26 +1648,41 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                     total_prize_display = "$0"
 
                 # Calculate win rate
-                win_rate = (winning_predictions / total_predictions * 100) if total_predictions > 0 else 0.0
+                win_rate = (winning_predictions / total_predictions *
+                            100) if total_predictions > 0 else 0.0
 
                 grouped_result = {
-                    "date": target_date,
-                    "formatted_date": formatted_date,
-                    "total_plays": total_predictions,
-                    "winning_plays": winning_predictions,
-                    "win_rate_percentage": f"{win_rate:.1f}%",
-                    "best_prize": best_prize_description,
-                    "best_prize_amount": best_prize_amount,
-                    "total_prize_amount": total_prize,
-                    "total_prize_display": total_prize_display,
-                    "predictions": predictions,
-                    "is_target_draw_date": True,
-                    "context": f"Predictions generated for drawing on {formatted_date}"
+                    "date":
+                    target_date,
+                    "formatted_date":
+                    formatted_date,
+                    "total_plays":
+                    total_predictions,
+                    "winning_plays":
+                    winning_predictions,
+                    "win_rate_percentage":
+                    f"{win_rate:.1f}%",
+                    "best_prize":
+                    best_prize_description,
+                    "best_prize_amount":
+                    best_prize_amount,
+                    "total_prize_amount":
+                    total_prize,
+                    "total_prize_display":
+                    total_prize_display,
+                    "predictions":
+                    predictions,
+                    "is_target_draw_date":
+                    True,
+                    "context":
+                    f"Predictions generated for drawing on {formatted_date}"
                 }
 
                 grouped_results.append(grouped_result)
 
-            logger.info(f"Retrieved {len(grouped_results)} grouped prediction dates with {sum(g['total_plays'] for g in grouped_results)} total predictions")
+            logger.info(
+                f"Retrieved {len(grouped_results)} grouped prediction dates with {sum(g['total_plays'] for g in grouped_results)} total predictions"
+            )
             return grouped_results
 
     except Exception as e:
@@ -1511,7 +1690,9 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
         return []
 
 
-def calculate_prize_amount(main_matches: int, powerball_match: bool, jackpot_amount: float = 100000000) -> tuple:
+def calculate_prize_amount(main_matches: int,
+                           powerball_match: bool,
+                           jackpot_amount: float = 100000000) -> tuple:
     """
     Calcula el premio basado en coincidencias según las reglas oficiales de Powerball.
 
@@ -1578,7 +1759,7 @@ def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
                 LIMIT ?
             """
 
-            cursor.execute(query, (limit,))
+            cursor.execute(query, (limit, ))
             results = cursor.fetchall()
 
             comparisons = []
@@ -1590,7 +1771,9 @@ def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
 
                 # Extraer datos del resultado oficial
                 if row[8]:  # Si hay resultado oficial
-                    actual_numbers = [row[9], row[10], row[11], row[12], row[13]]
+                    actual_numbers = [
+                        row[9], row[10], row[11], row[12], row[13]
+                    ]
                     actual_pb = row[14]
                     draw_date = row[8]
 
@@ -1605,7 +1788,8 @@ def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
 
                     # Calcular premio
                     main_matches = len(matched_numbers)
-                    prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_matched)
+                    prize_amount, prize_description = calculate_prize_amount(
+                        main_matches, powerball_matched)
 
                     comparison = {
                         "prediction": {
@@ -1629,15 +1813,19 @@ def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
 
                     comparisons.append(comparison)
 
-            logger.info(f"Retrieved {len(comparisons)} prediction comparisons with prize calculations")
+            logger.info(
+                f"Retrieved {len(comparisons)} prediction comparisons with prize calculations"
+            )
             return comparisons
 
     except Exception as e:
-        logger.error(f"Error retrieving predictions with results comparison: {e}")
+        logger.error(
+            f"Error retrieving predictions with results comparison: {e}")
         return []
 
 
-def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> List[Dict]:
+def get_grouped_predictions_with_results_comparison(
+        limit_groups: int = 5) -> List[Dict]:
     """
     Obtiene predicciones agrupadas por resultado oficial para el diseño híbrido.
     Cada grupo contiene un resultado oficial con sus 5 predicciones ADAPTIVE correspondientes.
@@ -1656,12 +1844,13 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
             cursor = conn.cursor()
 
             # Obtener los resultados oficiales más recientes (sin restricción de predicciones)
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT pd.draw_date, pd.n1, pd.n2, pd.n3, pd.n4, pd.n5, pd.pb
                 FROM powerball_draws pd
                 ORDER BY pd.draw_date DESC
                 LIMIT ?
-            """, (limit_groups,))
+            """, (limit_groups, ))
 
             official_results = cursor.fetchall()
 
@@ -1671,11 +1860,15 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
 
             for result_row in official_results:
                 draw_date = result_row[0]
-                winning_numbers = [result_row[1], result_row[2], result_row[3], result_row[4], result_row[5]]
+                winning_numbers = [
+                    result_row[1], result_row[2], result_row[3], result_row[4],
+                    result_row[5]
+                ]
                 winning_powerball = result_row[6]
 
                 # Intentar obtener predicciones reales para este resultado oficial
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT
                         pl.id, pl.timestamp, pl.n1, pl.n2, pl.n3, pl.n4, pl.n5, pl.powerball,
                         pt.matches_main, pt.matches_pb, pt.prize_tier
@@ -1684,13 +1877,15 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                     WHERE pt.draw_date = ?
                     ORDER BY pl.created_at ASC
                     LIMIT 5
-                """, (draw_date,))
+                """, (draw_date, ))
 
                 predictions_data = cursor.fetchall()
 
                 # Si no hay predicciones reales, omitir este grupo completamente
                 if not predictions_data:
-                    logger.debug(f"No real predictions found for draw date {draw_date}, skipping group")
+                    logger.debug(
+                        f"No real predictions found for draw date {draw_date}, skipping group"
+                    )
                     continue
 
                 # Procesar cada predicción del grupo
@@ -1700,7 +1895,10 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                 winning_predictions = 0
 
                 for i, pred_row in enumerate(predictions_data):
-                    prediction_numbers = [pred_row[2], pred_row[3], pred_row[4], pred_row[5], pred_row[6]]
+                    prediction_numbers = [
+                        pred_row[2], pred_row[3], pred_row[4], pred_row[5],
+                        pred_row[6]
+                    ]
                     prediction_pb = pred_row[7]
                     prediction_date = pred_row[1]
 
@@ -1718,8 +1916,10 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                     powerball_match = prediction_pb == winning_powerball
 
                     # Calcular premio
-                    main_matches = sum(1 for match in number_matches if match["is_match"])
-                    prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_match)
+                    main_matches = sum(1 for match in number_matches
+                                       if match["is_match"])
+                    prize_amount, prize_description = calculate_prize_amount(
+                        main_matches, powerball_match)
 
                     # Formatear premio para display
                     if prize_amount >= 1000000:
@@ -1761,11 +1961,13 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                 avg_matches = total_matches / num_predictions if num_predictions > 0 else 0
 
                 # Win rate: porcentaje de predicciones que ganaron algún premio
-                win_rate = (winning_predictions / num_predictions * 100) if num_predictions > 0 else 0
+                win_rate = (winning_predictions / num_predictions *
+                            100) if num_predictions > 0 else 0
 
                 # Formatear total de premios de manera más realista
                 # Si hay jackpots, mostrar solo el número de jackpots en lugar de sumar cantidades enormes
-                jackpot_count = sum(1 for p in predictions if p["prize_amount"] >= 100000000)
+                jackpot_count = sum(1 for p in predictions
+                                    if p["prize_amount"] >= 100000000)
                 if jackpot_count > 0:
                     if jackpot_count == 1:
                         total_prize_display = "1 JACKPOT"
@@ -1781,22 +1983,30 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                     total_prize_display = "$0"
 
                 # Encontrar el mejor resultado de manera más clara
-                best_prediction = max(predictions, key=lambda p: (p["total_matches"], p["powerball_match"], p["prize_amount"]))
-                if best_prediction["total_matches"] == 5 and best_prediction["powerball_match"]:
+                best_prediction = max(
+                    predictions,
+                    key=lambda p: (p["total_matches"], p["powerball_match"], p[
+                        "prize_amount"]))
+                if best_prediction["total_matches"] == 5 and best_prediction[
+                        "powerball_match"]:
                     best_result = "JACKPOT"
                 elif best_prediction["total_matches"] == 5:
                     best_result = "5 Numbers"
-                elif best_prediction["total_matches"] == 4 and best_prediction["powerball_match"]:
+                elif best_prediction["total_matches"] == 4 and best_prediction[
+                        "powerball_match"]:
                     best_result = "4 + PB"
                 elif best_prediction["total_matches"] == 4:
                     best_result = "4 Numbers"
-                elif best_prediction["total_matches"] == 3 and best_prediction["powerball_match"]:
+                elif best_prediction["total_matches"] == 3 and best_prediction[
+                        "powerball_match"]:
                     best_result = "3 + PB"
                 elif best_prediction["total_matches"] == 3:
                     best_result = "3 Numbers"
-                elif best_prediction["total_matches"] == 2 and best_prediction["powerball_match"]:
+                elif best_prediction["total_matches"] == 2 and best_prediction[
+                        "powerball_match"]:
                     best_result = "2 + PB"
-                elif best_prediction["total_matches"] == 1 and best_prediction["powerball_match"]:
+                elif best_prediction["total_matches"] == 1 and best_prediction[
+                        "powerball_match"]:
                     best_result = "1 + PB"
                 elif best_prediction["powerball_match"]:
                     best_result = "PB Only"
@@ -1804,11 +2014,16 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                     best_result = "No Match"
 
                 group_data = {
-                    "draw_date": draw_date,
-                    "winning_numbers": winning_numbers,
-                    "winning_powerball": winning_powerball,
-                    "prediction_date": predictions[0]["prediction_date"] if predictions else None,
-                    "predictions": predictions,
+                    "draw_date":
+                    draw_date,
+                    "winning_numbers":
+                    winning_numbers,
+                    "winning_powerball":
+                    winning_powerball,
+                    "prediction_date":
+                    predictions[0]["prediction_date"] if predictions else None,
+                    "predictions":
+                    predictions,
                     "summary": {
                         "total_prize": total_prize,
                         "total_prize_display": total_prize_display,
@@ -1822,17 +2037,22 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
 
                 grouped_comparisons.append(group_data)
 
-            logger.info(f"Retrieved {len(grouped_comparisons)} grouped prediction comparisons with {sum(len(g['predictions']) for g in grouped_comparisons)} total predictions")
+            logger.info(
+                f"Retrieved {len(grouped_comparisons)} grouped prediction comparisons with {sum(len(g['predictions']) for g in grouped_comparisons)} total predictions"
+            )
             return grouped_comparisons
 
     except Exception as e:
-        logger.error(f"Error retrieving grouped predictions with results comparison: {e}")
+        logger.error(
+            f"Error retrieving grouped predictions with results comparison: {e}"
+        )
         return []
 
 
 # ========================================================================
 # HYBRID CONFIGURATION SYSTEM - SIMPLE & ROBUST
 # ========================================================================
+
 
 def migrate_config_from_file() -> bool:
     """
@@ -1850,7 +2070,9 @@ def migrate_config_from_file() -> bool:
             config_count = cursor.fetchone()[0]
 
             if config_count > 0:
-                logger.info("Configuration already exists in database, skipping migration")
+                logger.info(
+                    "Configuration already exists in database, skipping migration"
+                )
                 return True
 
         # Leer configuración del archivo
@@ -1859,7 +2081,9 @@ def migrate_config_from_file() -> bool:
         config_path = os.path.join(current_dir, '..', 'config', 'config.ini')
 
         if not os.path.exists(config_path):
-            logger.warning(f"Config file not found at {config_path}, using default values")
+            logger.warning(
+                f"Config file not found at {config_path}, using default values"
+            )
             return _create_default_config_in_db()
 
         config.read(config_path)
@@ -1870,7 +2094,8 @@ def migrate_config_from_file() -> bool:
 
             for section_name in config.sections():
                 for key, value in config.items(section_name):
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT OR REPLACE INTO system_config (section, key, value)
                         VALUES (?, ?, ?)
                     """, (section_name, key, value))
@@ -1883,7 +2108,8 @@ def migrate_config_from_file() -> bool:
 
             conn.commit()
 
-        logger.info("Configuration successfully migrated from config.ini to database")
+        logger.info(
+            "Configuration successfully migrated from config.ini to database")
         return True
 
     except Exception as e:
@@ -1924,7 +2150,8 @@ def _create_default_config_in_db() -> bool:
 
             for section_name, section_data in default_config.items():
                 for key, value in section_data.items():
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT OR REPLACE INTO system_config (section, key, value)
                         VALUES (?, ?, ?)
                     """, (section_name, key, value))
@@ -1960,7 +2187,8 @@ def load_config_from_db() -> Dict[str, Any]:
             config_rows = cursor.fetchall()
 
             if not config_rows:
-                logger.warning("No configuration found in database, using file fallback")
+                logger.warning(
+                    "No configuration found in database, using file fallback")
                 return _load_config_from_file()
 
             # Convertir a estructura de diccionario
@@ -2019,13 +2247,15 @@ def save_config_to_db(config_data: Dict[str, Any]) -> bool:
             for section_name, section_data in config_data.items():
                 if isinstance(section_data, dict):
                     for key, value in section_data.items():
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             INSERT OR REPLACE INTO system_config (section, key, value, updated_at)
                             VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                         """, (section_name, key, str(value)))
                 else:
                     # Valor directo (no anidado)
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT OR REPLACE INTO system_config (section, key, value, updated_at)
                         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                     """, ('general', section_name, str(section_data)))
@@ -2055,7 +2285,8 @@ def get_config_value(section: str, key: str, default: Any = None) -> Any:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT value FROM system_config
                 WHERE section = ? AND key = ?
             """, (section, key))
@@ -2108,6 +2339,7 @@ def is_config_initialized() -> bool:
 # FASE 2: FUNCIONES DE VALIDACIÓN DE FECHAS
 # ========================================================================
 
+
 def _validate_target_draw_date(date_str: str) -> bool:
     """
     Valida que target_draw_date tenga el formato correcto.
@@ -2139,7 +2371,8 @@ def _is_valid_drawing_date(date_str: str) -> bool:
     return DateManager.is_valid_drawing_date(date_str)
 
 
-def _sanitize_prediction_data(prediction_data: Dict[str, Any], allow_simulated: bool = False) -> Dict[str, Any]:
+def _sanitize_prediction_data(prediction_data: Dict[str, Any],
+                              allow_simulated: bool = False) -> Dict[str, Any]:
     """
     Sanitiza y valida todos los campos de una predicción antes de guardar.
 
@@ -2155,7 +2388,8 @@ def _sanitize_prediction_data(prediction_data: Dict[str, Any], allow_simulated: 
 
     # Validar y corregir timestamp usando DateManager consistente
     if 'timestamp' not in sanitized_data or not sanitized_data['timestamp']:
-        sanitized_data['timestamp'] = DateManager.get_current_et_time().isoformat()
+        sanitized_data['timestamp'] = DateManager.get_current_et_time(
+        ).isoformat()
 
     # Validar números principales (deben estar entre 1-69)
     if 'numbers' in sanitized_data:
@@ -2168,7 +2402,8 @@ def _sanitize_prediction_data(prediction_data: Dict[str, Any], allow_simulated: 
                     if 1 <= num_int <= 69:
                         valid_numbers.append(num_int)
                     else:
-                        logger.warning(f"Number {num} is outside valid range 1-69")
+                        logger.warning(
+                            f"Number {num} is outside valid range 1-69")
                         return None  # Datos inválidos
                 except (ValueError, TypeError):
                     logger.error(f"Invalid number format: {num}")
@@ -2187,7 +2422,8 @@ def _sanitize_prediction_data(prediction_data: Dict[str, Any], allow_simulated: 
                 return None
             sanitized_data['powerball'] = pb
         except (ValueError, TypeError):
-            logger.error(f"Invalid powerball format: {sanitized_data['powerball']}")
+            logger.error(
+                f"Invalid powerball format: {sanitized_data['powerball']}")
             return None
 
     # Validar score_total
@@ -2198,18 +2434,24 @@ def _sanitize_prediction_data(prediction_data: Dict[str, Any], allow_simulated: 
                 logger.warning(f"Score {score} is outside typical range 0-1")
             sanitized_data['score_total'] = score
         except (ValueError, TypeError):
-            logger.error(f"Invalid score format: {sanitized_data['score_total']}")
+            logger.error(
+                f"Invalid score format: {sanitized_data['score_total']}")
             return None
 
     # Validar model_version
-    if 'model_version' not in sanitized_data or not sanitized_data['model_version']:
-        sanitized_data['model_version'] = '1.0.0-pipeline'  # Default pipeline version
+    if 'model_version' not in sanitized_data or not sanitized_data[
+            'model_version']:
+        sanitized_data[
+            'model_version'] = '1.0.0-pipeline'  # Default pipeline version
 
     # Validar dataset_hash
-    if 'dataset_hash' not in sanitized_data or not sanitized_data['dataset_hash']:
+    if 'dataset_hash' not in sanitized_data or not sanitized_data[
+            'dataset_hash']:
         # Generar hash por defecto basado en timestamp
         import hashlib
-        timestamp_str = str(sanitized_data.get('timestamp', datetime.now().isoformat()))
+        timestamp_str = str(
+            sanitized_data.get('timestamp',
+                               datetime.now().isoformat()))
         default_hash = hashlib.md5(timestamp_str.encode()).hexdigest()[:16]
         sanitized_data['dataset_hash'] = default_hash
 
