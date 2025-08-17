@@ -1,40 +1,43 @@
-
 import asyncio
 import uuid
 from datetime import datetime
 from loguru import logger
 from typing import Dict, Any, Optional
+import numpy as np
 
 from src.intelligent_generator import IntelligentGenerator, FeatureEngineer
 from src.adaptive_feedback import AdaptivePlayScorer
 from src.loader import get_data_loader
-from src.database import save_prediction_log, get_db_connection
+from src.database import save_prediction_log, get_db_connection, update_pipeline_execution
+from src.date_utils import DateManager
 
 class PipelineOrchestrator:
     """
     Main pipeline orchestrator for managing full ML pipeline execution
     """
-    
+
     def __init__(self):
         """Initialize pipeline orchestrator with all required components"""
         logger.info("Initializing PipelineOrchestrator...")
-        
+
         # Initialize execution state tracking
         self._is_running = False
         self._current_execution_id = None
-        
+        self.current_step = ""
+        self.steps_completed = 0
+
         try:
             # Initialize data loader
             self.data_loader = get_data_loader()
-            
+
             # Initialize predictors and generators
             from src.predictor import Predictor
             self.predictor = Predictor()
-            
+
             # Load historical data
             historical_data = self.data_loader.load_historical_data()
             self.intelligent_generator = IntelligentGenerator(historical_data)
-            
+
             # Initialize adaptive feedback system (optional)
             try:
                 from src.adaptive_feedback import initialize_adaptive_system
@@ -42,89 +45,113 @@ class PipelineOrchestrator:
             except Exception as adaptive_error:
                 logger.warning(f"Adaptive system initialization failed: {adaptive_error}")
                 self.adaptive_system = None
-            
+
             logger.info("PipelineOrchestrator initialized successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize PipelineOrchestrator: {e}")
             raise
-    
+
     def is_running(self) -> bool:
         """
         Check if pipeline is currently running
-        
+
         Returns:
             bool: True if pipeline is currently executing, False otherwise
         """
         return self._is_running
-    
+
     def get_current_execution_id(self) -> Optional[str]:
         """
         Get current execution ID if pipeline is running
-        
+
         Returns:
             str: Current execution ID or None if not running
         """
         return self._current_execution_id if self._is_running else None
 
+    async def _update_execution_status(self):
+        """Update the status of the current pipeline execution."""
+        if self._current_execution_id:
+            update_pipeline_execution(self._current_execution_id, {
+                "steps_completed": self.steps_completed,
+                "current_step": self.current_step,
+                "status": "running"
+            })
+
+    async def _run_step_async(self, step_name: str, step_coro) -> bool:
+        """Helper to run a pipeline step and update status."""
+        self.current_step = step_name
+        self.steps_completed += 1
+        await self._update_execution_status()
+        logger.info(f"🚀 Starting step {self.steps_completed}/5: {step_name}")
+        success = await step_coro()
+        if success:
+            logger.info(f"✅ Step {self.steps_completed} ({step_name}) completed successfully.")
+        else:
+            logger.error(f"❌ Step {self.steps_completed} ({step_name}) failed.")
+        return success
+
     async def run_full_pipeline_async(self, execution_id: str, num_predictions: int = 100) -> Dict[str, Any]:
         """
         Run the optimized ML pipeline asynchronously (5 steps instead of 7)
-        
+
         Args:
             execution_id: Unique execution identifier
             num_predictions: Number of predictions to generate
-            
+
         Returns:
             Dict containing pipeline execution results
         """
         # Set running state
         self._is_running = True
         self._current_execution_id = execution_id
-        
-        # Initialize step tracking
-        from src.database import update_pipeline_execution
-        steps_completed = 0
-        
-        # Use centralized DateManager for consistent ET timestamps
-        from src.date_utils import DateManager
+        self.steps_completed = 0
+
         start_time = DateManager.get_current_et_time()
         logger.info(f"Starting optimized pipeline execution {execution_id} with {num_predictions} predictions")
-        
+
         try:
-            # Step 1: Data Update & Validation
-            logger.info("Pipeline Step 1/5: Data Update & Validation")
-            data_result = await self._update_and_validate_data()
-            steps_completed = 1
-            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "data_update_validation"})
-            
+            # Step 1: Data Update & Evaluation
+            logger.info("🔄 Step 1/5: Data Update & Evaluation - Downloading latest data and evaluating previous predictions...")
+            self.current_step = "Data Update & Evaluation"
+            self.steps_completed = 1
+            await self._update_execution_status()
+
+            data_success = await self._run_data_update_and_evaluation()
+
+
             # Step 2: Model Prediction (Ensemble Only)
-            logger.info("Pipeline Step 2/5: Model Prediction")
+            logger.info("🚀 Step 2/5: Model Prediction - Running ensemble model prediction...")
+            self.current_step = "Model Prediction"
+            self.steps_completed = 2
+            await self._update_execution_status()
             model_result = await self._run_model_prediction()
-            steps_completed = 2
-            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "model_prediction"})
-            
+
             # Step 3: Scoring & Selection
-            logger.info("Pipeline Step 3/5: Scoring & Selection")
+            logger.info("🚀 Step 3/5: Scoring & Selection - Applying optimized scoring and selection...")
+            self.current_step = "Scoring & Selection"
+            self.steps_completed = 3
+            await self._update_execution_status()
             scoring_result = await self._score_and_select()
-            steps_completed = 3
-            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "scoring_selection"})
-            
+
             # Step 4: Prediction Generation
-            logger.info("Pipeline Step 4/5: Prediction Generation")
+            logger.info("🚀 Step 4/5: Prediction Generation - Generating new predictions using intelligent generator...")
+            self.current_step = "Prediction Generation"
+            self.steps_completed = 4
+            await self._update_execution_status()
             predictions = await self._generate_predictions_optimized(num_predictions, scoring_result)
-            steps_completed = 4
-            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "prediction_generation"})
-            
+
             # Step 5: Save & Serve
-            logger.info("Pipeline Step 5/5: Save & Serve")
+            logger.info("🚀 Step 5/5: Save & Serve - Saving generated predictions and preparing for serving...")
+            self.current_step = "Save & Serve"
+            self.steps_completed = 5
+            await self._update_execution_status()
             save_result = await self._save_and_serve(predictions)
-            steps_completed = 5
-            update_pipeline_execution(execution_id, {"steps_completed": steps_completed, "current_step": "save_serve"})
-            
+
             end_time = DateManager.get_current_et_time()
             execution_time = end_time - start_time
-            
+
             # Update final status in database
             update_pipeline_execution(execution_id, {
                 "status": "completed",
@@ -132,7 +159,7 @@ class PipelineOrchestrator:
                 "end_time": end_time.isoformat(),
                 "current_step": "completed"
             })
-            
+
             results = {
                 "status": "completed",
                 "execution_time": str(execution_time),
@@ -141,36 +168,37 @@ class PipelineOrchestrator:
                 "num_predictions_generated": len(predictions),
                 "steps_completed": 5,
                 "total_steps": 5,
-                "pipeline_version": "v6.1_optimized",
+                "pipeline_version": "v6.2_evaluation",
                 "results": {
-                    "data_update_validation": data_result,
+                    "data_update_validation": {"status": "success" if data_success else "failed"}, # Simplified for combined step
                     "model_prediction": model_result,
                     "scoring_selection": scoring_result,
                     "predictions": predictions[:10],  # Return first 10 for preview
                     "save_serve": save_result
                 }
             }
-            
+
             logger.info(f"Pipeline execution completed successfully in {execution_time}")
             return results
-            
+
         except Exception as e:
-            logger.error(f"Pipeline execution failed at step {steps_completed}: {e}")
+            logger.error(f"Pipeline execution failed at step {self.steps_completed}: {e}")
             error_time = DateManager.get_current_et_time()
-            
+
             # Update database with failure state
             update_pipeline_execution(execution_id, {
                 "status": "failed",
-                "steps_completed": steps_completed,
+                "steps_completed": self.steps_completed,
                 "error_message": str(e),
-                "end_time": error_time.isoformat()
+                "end_time": error_time.isoformat(),
+                "current_step": self.current_step if self.current_step else "initialization"
             })
-            
+
             return {
                 "status": "failed",
                 "error": str(e),
-                "steps_completed": steps_completed,
-                "total_steps": 7,
+                "steps_completed": self.steps_completed,
+                "total_steps": 5,
                 "execution_time": str(error_time - start_time),
                 "start_time": start_time.isoformat(),
                 "end_time": error_time.isoformat()
@@ -179,17 +207,26 @@ class PipelineOrchestrator:
             # Reset execution state
             self._is_running = False
             self._current_execution_id = None
-    
-    async def _update_data(self) -> Dict[str, Any]:
+
+    async def _update_data(self) -> bool:
         """Update database from source"""
         try:
-            from src.loader import update_database_from_source
-            await asyncio.get_event_loop().run_in_executor(None, update_database_from_source)
-            return {"status": "success", "message": "Database updated successfully"}
+            from src.loader import PowerballDataLoader
+            loader = PowerballDataLoader()
+            result = await asyncio.to_thread(loader.update_data)
+
+            if result.get('success', False):
+                new_records = result.get('new_records', 0)
+                logger.info(f"✅ Data update completed. New records: {new_records}")
+                return True
+            else:
+                logger.error(f"❌ Data update failed: {result.get('error', 'Unknown error')}")
+                return False
+
         except Exception as e:
-            logger.error(f"Data update failed: {e}")
-            return {"status": "error", "message": str(e)}
-    
+            logger.error(f"❌ Data update step failed: {e}")
+            return False
+
     async def _run_adaptive_analysis(self) -> Dict[str, Any]:
         """Run adaptive feedback analysis"""
         try:
@@ -204,7 +241,7 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.error(f"Adaptive analysis failed: {e}")
             return {"status": "error", "message": str(e)}
-    
+
     async def _optimize_weights(self) -> Dict[str, Any]:
         """Optimize model weights"""
         try:
@@ -214,7 +251,7 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.error(f"Weight optimization failed: {e}")
             return {"status": "error", "message": str(e)}
-    
+
     async def _validate_historical(self) -> Dict[str, Any]:
         """Validate against historical data"""
         try:
@@ -224,46 +261,45 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.error(f"Historical validation failed: {e}")
             return {"status": "error", "message": str(e)}
-    
+
     async def _generate_predictions(self, num_predictions: int) -> list:
         """Generate predictions using the ML pipeline"""
         try:
             predictions = []
-            
+
             # Generate predictions in batches to avoid blocking
             batch_size = 25
             for i in range(0, num_predictions, batch_size):
                 batch_end = min(i + batch_size, num_predictions)
                 batch_size_actual = batch_end - i
-                
+
                 # Generate batch in executor
                 batch_predictions = await asyncio.get_event_loop().run_in_executor(
                     None, self._generate_prediction_batch, batch_size_actual, i
                 )
                 predictions.extend(batch_predictions)
-                
+
                 # Small delay to yield control
                 if i + batch_size < num_predictions:
                     await asyncio.sleep(0.01)
-            
+
             logger.info(f"Generated {len(predictions)} predictions successfully")
             return predictions
-            
+
         except Exception as e:
             logger.error(f"Prediction generation failed: {e}")
             raise
-    
+
     def _generate_prediction_batch(self, batch_size: int, start_index: int) -> list:
         """Generate a batch of predictions synchronously"""
         batch_predictions = []
-        
+
         for i in range(batch_size):
             try:
                 # Use intelligent generator to create prediction
                 prediction = self.intelligent_generator.generate_play()
-                
+
                 # Add metadata with consistent DateManager timestamp
-                from src.date_utils import DateManager
                 prediction_data = {
                     "numbers": prediction.get("numbers", []),
                     "powerball": prediction.get("powerball", 1),
@@ -275,26 +311,26 @@ class PipelineOrchestrator:
                     "execution_source": "pipeline_execution",
                     "authorized": True
                 }
-                
+
                 batch_predictions.append(prediction_data)
-                
+
             except Exception as e:
                 logger.error(f"Failed to generate prediction {start_index + i + 1}: {e}")
                 continue
-        
+
         return batch_predictions
-    
+
     async def _analyze_performance(self) -> Dict[str, Any]:
         """Analyze pipeline performance"""
         try:
             # Get database connection and analyze recent predictions
             from src.database import get_db_connection, get_prediction_history
-            
+
             # Analyze prediction distribution and quality metrics
             recent_predictions = await asyncio.get_event_loop().run_in_executor(
                 None, get_prediction_history, 100
             )
-            
+
             analysis_result = {
                 "total_predictions_analyzed": len(recent_predictions),
                 "prediction_quality_score": 0.85,  # Placeholder metric
@@ -302,20 +338,20 @@ class PipelineOrchestrator:
                 "data_freshness": "current",
                 "performance_status": "optimal"
             }
-            
+
             logger.info(f"Performance analysis completed: {len(recent_predictions)} predictions analyzed")
             return {"status": "success", "analysis": analysis_result}
-            
+
         except Exception as e:
             logger.error(f"Performance analysis failed: {e}")
             return {"status": "error", "message": str(e)}
-    
+
     async def _update_and_validate_data(self) -> Dict[str, Any]:
         """Combined data update and basic validation"""
         try:
             from src.loader import update_database_from_source
             await asyncio.get_event_loop().run_in_executor(None, update_database_from_source)
-            
+
             # Basic validation - check if we have recent data
             from src.database import get_db_connection
             conn = get_db_connection()
@@ -323,9 +359,9 @@ class PipelineOrchestrator:
             cursor.execute("SELECT COUNT(*) FROM powerball_numbers WHERE date >= date('now', '-30 days')")
             recent_count = cursor.fetchone()[0]
             conn.close()
-            
+
             return {
-                "status": "success", 
+                "status": "success",
                 "message": "Data updated and validated",
                 "recent_records": recent_count,
                 "validation_passed": recent_count > 0
@@ -333,7 +369,7 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.error(f"Data update/validation failed: {e}")
             return {"status": "error", "message": str(e)}
-    
+
     async def _run_model_prediction(self) -> Dict[str, Any]:
         """Run ensemble model prediction only"""
         try:
@@ -353,7 +389,7 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.error(f"Model prediction failed: {e}")
             return {"status": "error", "message": str(e)}
-    
+
     async def _score_and_select(self) -> Dict[str, Any]:
         """Optimized scoring and selection"""
         try:
@@ -368,46 +404,45 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.error(f"Scoring and selection failed: {e}")
             return {"status": "error", "message": str(e)}
-    
+
     async def _generate_predictions_optimized(self, num_predictions: int, scoring_result: Dict) -> list:
         """Optimized prediction generation using intelligent generator"""
         try:
             predictions = []
-            
+
             # Use intelligent generator directly for faster processing
             batch_size = 50  # Larger batches for efficiency
             for i in range(0, num_predictions, batch_size):
                 batch_end = min(i + batch_size, num_predictions)
                 batch_size_actual = batch_end - i
-                
+
                 # Generate batch using intelligent generator
                 batch_predictions = await asyncio.get_event_loop().run_in_executor(
                     None, self._generate_batch_intelligent, batch_size_actual, i
                 )
                 predictions.extend(batch_predictions)
-                
+
                 # Minimal delay for responsiveness
                 if i + batch_size < num_predictions:
                     await asyncio.sleep(0.005)
-            
+
             logger.info(f"Generated {len(predictions)} optimized predictions")
             return predictions
-            
+
         except Exception as e:
             logger.error(f"Optimized prediction generation failed: {e}")
             raise
-    
+
     def _generate_batch_intelligent(self, batch_size: int, start_index: int) -> list:
         """Generate batch using intelligent generator for speed"""
         batch_predictions = []
-        
+
         for i in range(batch_size):
             try:
                 # Use intelligent generator directly
                 prediction = self.intelligent_generator.generate_play()
-                
+
                 # Streamlined metadata
-                from src.date_utils import DateManager
                 prediction_data = {
                     "numbers": prediction.get("numbers", []),
                     "powerball": prediction.get("powerball", 1),
@@ -418,20 +453,20 @@ class PipelineOrchestrator:
                     "rank": start_index + i + 1,
                     "pipeline_version": "v6.1_optimized"
                 }
-                
+
                 batch_predictions.append(prediction_data)
-                
+
             except Exception as e:
                 logger.error(f"Failed to generate prediction {start_index + i + 1}: {e}")
                 continue
-        
+
         return batch_predictions
-    
+
     async def _save_and_serve(self, predictions: list) -> Dict[str, Any]:
         """Combined save and serve preparation"""
         try:
             saved_count = 0
-            
+
             # Save predictions efficiently
             for prediction in predictions:
                 try:
@@ -442,20 +477,58 @@ class PipelineOrchestrator:
                 except Exception as e:
                     logger.error(f"Failed to save prediction: {e}")
                     continue
-            
+
             # Prepare for frontend serving
             top_predictions = predictions[:10]  # Top 10 for frontend
-            
+
             return {
-                "status": "success", 
+                "status": "success",
                 "saved_predictions": saved_count,
                 "total_predictions": len(predictions),
                 "top_predictions_ready": len(top_predictions),
                 "frontend_compatible": True
             }
-            
+
         except Exception as e:
             logger.error(f"Save and serve failed: {e}")
             return {"status": "error", "message": str(e)}
+
+    async def _run_data_update_and_evaluation(self) -> bool:
+        """Run data update and prediction evaluation step."""
+        try:
+            # First: Update data
+            from src.loader import PowerballDataLoader
+
+            loader = PowerballDataLoader()
+            result = await asyncio.to_thread(loader.update_data)
+
+            if not result.get('success', False):
+                logger.error(f"❌ Data update failed: {result.get('error', 'Unknown error')}")
+                return False
+
+            new_records = result.get('new_records', 0)
+            logger.info(f"✅ Data update completed. New records: {new_records}")
+
+            # Second: Evaluate previous predictions if we have new drawing data
+            if new_records > 0:
+                logger.info("🔍 Evaluating previous predictions against new drawing results...")
+                from src.prediction_evaluator import run_prediction_evaluation
+
+                eval_result = await asyncio.to_thread(run_prediction_evaluation)
+
+                if 'error' not in eval_result:
+                    evaluated_count = eval_result.get('total_predictions_evaluated', 0)
+                    total_prizes = eval_result.get('total_prize_amount', 0.0)
+                    logger.info(f"✅ Prediction evaluation completed: {evaluated_count} predictions evaluated, ${total_prizes:.2f} total prizes")
+                else:
+                    logger.warning(f"⚠️ Prediction evaluation had issues: {eval_result['error']}")
+            else:
+                logger.info("ℹ️ No new drawing data, skipping prediction evaluation")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Data update and evaluation step failed: {e}")
+            return False
 
 logger.info("PipelineOrchestrator module loaded successfully")

@@ -1,4 +1,3 @@
-
 """
 SHIOL+ Prediction API Endpoints
 ==============================
@@ -6,7 +5,7 @@ SHIOL+ Prediction API Endpoints
 All prediction-related API endpoints separated from main API file.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from loguru import logger
@@ -16,6 +15,7 @@ from src.predictor import Predictor
 from src.intelligent_generator import IntelligentGenerator, DeterministicGenerator
 from src.database import save_prediction_log, get_prediction_history
 import src.database as db
+from src.auth import User, get_current_user # Assuming auth module and User model exist
 
 # Fix for calculate_next_drawing_date function
 def calculate_next_drawing_date():
@@ -24,12 +24,12 @@ def calculate_next_drawing_date():
     today = datetime.now()
     # Powerball drawings: Monday (0), Wednesday (2), Saturday (5)
     drawing_days = [0, 2, 5]
-    
+
     for i in range(7):  # Check next 7 days
         check_date = today + timedelta(days=i)
         if check_date.weekday() in drawing_days:
             return check_date.strftime('%Y-%m-%d')
-    
+
     # Fallback to next Monday
     days_until_monday = (7 - today.weekday()) % 7
     if days_until_monday == 0:
@@ -134,18 +134,18 @@ async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, descriptio
                     # Validate this is a real prediction from pipeline
                     model_version = str(pred.get("model_version", ""))
                     dataset_hash = str(pred.get("dataset_hash", ""))
-                    
+
                     # REJECT simulated, test, or fallback data completely
                     if (model_version in ["fallback", "test", "simulated", "1.0.0-test"] or
                         dataset_hash in ["simulated", "test", "fallback"] or
                         len(dataset_hash) < 10):  # Reject short/invalid hashes
                         logger.debug(f"Rejecting non-pipeline prediction: model={model_version}, hash={dataset_hash}")
                         continue
-                    
+
                     numbers = [int(pred.get(f"n{j}", 0)) for j in range(1, 6)]
                     powerball = int(pred.get("powerball", 0))
                     total_score = float(pred.get("score_total", 0.0))
-                    
+
                     # Validate number ranges
                     if not all(1 <= num <= 69 for num in numbers) or not (1 <= powerball <= 26):
                         logger.debug(f"Rejecting prediction with invalid number ranges")
@@ -219,3 +219,89 @@ async def get_diverse_predictions(num_plays: int = Query(5, ge=1, le=10)):
             "reason": "System now only supports full pipeline execution for prediction generation"
         }
     )
+
+
+@prediction_router.get("/evaluation-results")
+async def get_evaluation_results(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user)
+):
+    """Get evaluation results showing predictions with their prize outcomes."""
+    try:
+        from src.database import get_db_connection
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get evaluated predictions with their results
+            cursor.execute("""
+                SELECT 
+                    pl.id, pl.timestamp, pl.n1, pl.n2, pl.n3, pl.n4, pl.n5, pl.powerball,
+                    pl.score_total, pl.target_draw_date, pl.matches_wb, pl.matches_pb,
+                    pl.prize_amount, pl.prize_description, pl.evaluation_date,
+                    pd.n1 as actual_n1, pd.n2 as actual_n2, pd.n3 as actual_n3,
+                    pd.n4 as actual_n4, pd.n5 as actual_n5, pd.pb as actual_pb
+                FROM predictions_log pl
+                LEFT JOIN powerball_draws pd ON pl.target_draw_date = pd.draw_date
+                WHERE pl.evaluated = TRUE
+                ORDER BY pl.evaluation_date DESC, pl.score_total DESC
+                LIMIT ?
+            """, (limit,))
+
+            results = cursor.fetchall()
+
+            evaluation_results = []
+            for row in results:
+                result = {
+                    "prediction_id": row[0],
+                    "generated_at": row[1],
+                    "prediction": {
+                        "numbers": [row[2], row[3], row[4], row[5], row[6]],
+                        "powerball": row[7],
+                        "score": row[8],
+                        "target_date": row[9]
+                    },
+                    "evaluation": {
+                        "matches_main": row[10],
+                        "matches_powerball": bool(row[11]),
+                        "prize_amount": row[12],
+                        "prize_description": row[13],
+                        "evaluation_date": row[14]
+                    },
+                    "actual_result": {
+                        "numbers": [row[15], row[16], row[17], row[18], row[19]] if row[15] else None,
+                        "powerball": row[20] if row[20] else None
+                    } if row[15] else None
+                }
+                evaluation_results.append(result)
+
+            # Get summary statistics
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN prize_amount > 0 THEN 1 END) as winning,
+                    SUM(prize_amount) as total_prizes,
+                    MAX(prize_amount) as best_prize
+                FROM predictions_log
+                WHERE evaluated = TRUE
+            """)
+
+            stats = cursor.fetchone()
+            summary = {
+                "total_evaluated": stats[0],
+                "winning_predictions": stats[1],
+                "win_rate_percentage": round((stats[1] / stats[0] * 100) if stats[0] > 0 else 0, 1),
+                "total_prize_amount": stats[2] or 0.0,
+                "best_prize_amount": stats[3] or 0.0
+            }
+
+            return {
+                "evaluation_results": evaluation_results,
+                "summary": summary,
+                "count": len(evaluation_results),
+                "method": "evaluation_results"
+            }
+
+    except Exception as e:
+        logger.error(f"Error getting evaluation results: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting evaluation results: {str(e)}")

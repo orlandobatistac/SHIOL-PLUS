@@ -409,7 +409,13 @@ def _create_prediction_tables(cursor):
             dataset_hash TEXT NOT NULL,
             json_details_path TEXT,
             target_draw_date DATE,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            evaluated BOOLEAN DEFAULT FALSE,
+            matches_wb INTEGER DEFAULT 0,
+            matches_pb BOOLEAN DEFAULT FALSE,
+            prize_amount REAL DEFAULT 0.0,
+            prize_description TEXT DEFAULT 'Not evaluated',
+            evaluation_date DATETIME
         )
     """)
 
@@ -427,8 +433,28 @@ def _create_prediction_tables(cursor):
                 WHERE target_draw_date IS NULL
             """)
             logger.info("target_draw_date column added and populated")
+
+        # Migration for evaluation columns
+        evaluation_columns = ['evaluated', 'matches_wb', 'matches_pb', 'prize_amount', 'prize_description', 'evaluation_date']
+        for col in evaluation_columns:
+            if col not in columns:
+                logger.info(f"Adding {col} column to predictions_log table...")
+                if col == 'evaluated':
+                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN evaluated BOOLEAN DEFAULT FALSE")
+                elif col == 'matches_wb':
+                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN matches_wb INTEGER DEFAULT 0")
+                elif col == 'matches_pb':
+                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN matches_pb BOOLEAN DEFAULT FALSE")
+                elif col == 'prize_amount':
+                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN prize_amount REAL DEFAULT 0.0")
+                elif col == 'prize_description':
+                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN prize_description TEXT DEFAULT 'Not evaluated'")
+                elif col == 'evaluation_date':
+                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN evaluation_date DATETIME")
+                logger.info(f"{col} column added successfully")
+                
     except sqlite3.Error as e:
-        logger.error(f"Error during target_draw_date migration: {e}")
+        logger.error(f"Error during migrations: {e}")
 
 
 def _create_feedback_tables(cursor):

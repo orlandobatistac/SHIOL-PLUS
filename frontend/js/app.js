@@ -1150,6 +1150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Numbers</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Powerball</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">AI Score</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Prize Won</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Method</th>
                                 </tr>
                             </thead>
@@ -1173,6 +1174,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                         </td>
                                         <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                                             ${((pred.total_score || pred.score_total || 0) * 100).toFixed(1)}%
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                                            ${pred.prize_won ? `$${pred.prize_won.toLocaleString()}` : 'No Prize'}
                                         </td>
                                         <td class="px-4 py-3">
                                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
@@ -1653,11 +1657,11 @@ document.addEventListener('DOMContentLoaded', () => {
         thead.className = 'bg-gray-50 dark:bg-gray-900';
 
         const headerRow = document.createElement('tr');
-        const headers = ['Rank', 'Numbers', 'PB', 'AI Score', 'Tier', 'Method'];
+        const headers = ['Rank', 'Numbers', 'PB', 'AI Score', 'Prize Won', 'Method'];
 
         headers.forEach(headerText => {
             const th = document.createElement('th');
-            th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider';
+            th.className = 'px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase';
             th.textContent = headerText;
             headerRow.appendChild(th);
         });
@@ -1674,7 +1678,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Rank cell
             const rankCell = document.createElement('td');
-            rankCell.className = 'px-6 py-4 whitespace-nowrap';
+            rankCell.className = 'px-4 py-3 whitespace-nowrap';
 
             const rankContainer = document.createElement('div');
             rankContainer.className = 'flex items-center';
@@ -1688,7 +1692,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Numbers cell
             const numbersCell = document.createElement('td');
-            numbersCell.className = 'px-6 py-4 whitespace-nowrap';
+            numbersCell.className = 'px-4 py-3 whitespace-nowrap';
 
             const numbersContainer = document.createElement('div');
             numbersContainer.className = 'flex space-x-1';
@@ -1704,7 +1708,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Powerball cell
             const pbCell = document.createElement('td');
-            pbCell.className = 'px-6 py-4 whitespace-nowrap';
+            pbCell.className = 'px-4 py-3 whitespace-nowrap';
 
             const pbSpan = document.createElement('span');
             pbSpan.className = 'powerball-number small bg-red-600 text-white';
@@ -1714,7 +1718,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Score cell
             const scoreCell = document.createElement('td');
-            scoreCell.className = 'px-6 py-4 whitespace-nowrap';
+            scoreCell.className = 'px-4 py-3 whitespace-nowrap';
 
             const scoreMain = document.createElement('div');
             scoreMain.className = 'text-sm font-medium text-gray-900 dark:text-white';
@@ -1727,26 +1731,21 @@ document.addEventListener('DOMContentLoaded', () => {
             scoreCell.appendChild(scoreMain);
             scoreCell.appendChild(scoreBase);
 
-            // Tier cell
-            const tierCell = document.createElement('td');
-            tierCell.className = 'px-6 py-4 whitespace-nowrap';
-
-            const tierSpan = document.createElement('span');
-            tierSpan.className = `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTierColor(pred.tier)}`;
-            tierSpan.textContent = pred.tier;
-
-            tierCell.appendChild(tierSpan);
+            // Prize Won cell
+            const prizeCell = document.createElement('td');
+            prizeCell.className = 'px-4 py-3 whitespace-nowrap text-sm text-green-700 dark:text-green-300 font-semibold';
+            prizeCell.textContent = pred.prize_won ? `$${pred.prize_won.toLocaleString()}` : 'No Prize';
 
             // Method cell
             const methodCell = document.createElement('td');
-            methodCell.className = 'px-6 py-4 whitespace-nowrap';
+            methodCell.className = 'px-4 py-3 whitespace-nowrap';
             methodCell.innerHTML = getMethodBadge(pred.ai_method); // This is safe as getMethodBadge returns predefined HTML
 
             row.appendChild(rankCell);
             row.appendChild(numbersCell);
             row.appendChild(pbCell);
             row.appendChild(scoreCell);
-            row.appendChild(tierCell);
+            row.appendChild(prizeCell);
             row.appendChild(methodCell);
 
             tbody.appendChild(row);
