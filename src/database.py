@@ -1405,11 +1405,6 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
 
             grouped_comparisons = []
 
-            meses_espanol = {
-                1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
-                7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'
-            }
-
             for result_row in official_results:
                 draw_date = result_row[0]
                 winning_numbers = [result_row[1], result_row[2], result_row[3], result_row[4], result_row[5]]
