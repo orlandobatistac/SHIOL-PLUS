@@ -3,7 +3,7 @@ run = "uvicorn src.api:app --host 0.0.0.0 --port 3000"
 
 [nix]
 channel = "stable-25_05"
-packages = ["cargo", "glibcLocales", "libiconv", "rustc"]
+packages = ["cargo", "glibcLocales", "libiconv", "rustc", "sqlite"]
 
 [deployment]
 run = ["sh", "-c", "uvicorn src.api:app --host 0.0.0.0 --port 3000"]
