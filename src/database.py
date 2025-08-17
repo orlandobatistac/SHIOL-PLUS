@@ -7,16 +7,20 @@ import json
 import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, Any, List
+
+
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle numpy types."""
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super(NumpyEncoder, self).default(obj)
+    
+    def default(self, o):
+        """Override default method with correct parameter name."""
+        if isinstance(o, np.integer):
+            return int(o)
+        elif isinstance(o, np.floating):
+            return float(o)
+        elif isinstance(o, np.ndarray):
+            return o.tolist()
+        return super(NumpyEncoder, self).default(o)
 
 def get_db_path() -> str:
     """Reads the database file path from the configuration file."""
@@ -53,15 +57,25 @@ def calculate_next_drawing_date() -> str:
 
     Returns:
         str: Next drawing date in YYYY-MM-DD format
+        
+    Raises:
+        ImportError: If DateManager module cannot be imported
     """
-    from src.date_utils import DateManager
+    try:
+        from src.date_utils import DateManager
+        
+        # Use native DateManager time without corrections
+        current_et = DateManager.get_current_et_time()
+        next_date = DateManager.calculate_next_drawing_date(reference_date=current_et)
 
-    # Use native DateManager time without corrections
-    current_et = DateManager.get_current_et_time()
-    next_date = DateManager.calculate_next_drawing_date(reference_date=current_et)
-
-    logger.debug(f"Next drawing date calculated: {next_date} (from ET time: {current_et.strftime('%Y-%m-%d %H:%M')})")
-    return next_date
+        logger.debug(f"Next drawing date calculated: {next_date} (from ET time: {current_et.strftime('%Y-%m-%d %H:%M')})")
+        return next_date
+    except ImportError as e:
+        logger.error(f"Failed to import DateManager: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Error calculating next drawing date: {e}")
+        raise
 
 def get_db_connection() -> sqlite3.Connection:
     """
@@ -69,6 +83,9 @@ def get_db_connection() -> sqlite3.Connection:
 
     Returns:
         sqlite3.Connection: A connection object to the database.
+        
+    Raises:
+        sqlite3.Error: If database connection fails
     """
     db_path = get_db_path()
     try:
@@ -78,6 +95,9 @@ def get_db_connection() -> sqlite3.Connection:
     except sqlite3.Error as e:
         logger.error(f"Error connecting to database at {db_path}: {e}")
         raise
+    except Exception as e:
+        logger.error(f"Unexpected error connecting to database: {e}")
+        raise sqlite3.Error(f"Database connection failed: {e}") from e
 
 # ========================================================================
 # PIPELINE EXECUTION FUNCTIONS - SQLITE
@@ -122,8 +142,14 @@ def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
             logger.info(f"Pipeline execution {execution_id} saved to SQLite")
             return execution_id
 
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error saving pipeline execution: {e}")
+        return None
+    except json.JSONEncodeError as e:
+        logger.error(f"JSON encoding error in pipeline execution: {e}")
+        return None
     except Exception as e:
-        logger.error(f"Error saving pipeline execution to SQLite: {e}")
+        logger.error(f"Unexpected error saving pipeline execution: {e}")
         return None
 
 def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) -> bool:
@@ -203,8 +229,11 @@ def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) ->
                 logger.warning(f"Pipeline execution {execution_id} not found for update")
                 return False
 
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error updating pipeline execution: {e}")
+        return False
     except Exception as e:
-        logger.error(f"Error updating pipeline execution in SQLite: {e}")
+        logger.error(f"Unexpected error updating pipeline execution: {e}")
         return False
 
 def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
@@ -254,8 +283,11 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
             logger.info(f"Retrieved {len(executions)} pipeline executions from SQLite")
             return executions
 
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error getting pipeline execution history: {e}")
+        return []
     except Exception as e:
-        logger.error(f"Error getting pipeline execution history from SQLite: {e}")
+        logger.error(f"Unexpected error getting pipeline execution history: {e}")
         return []
 
 def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
@@ -636,11 +668,13 @@ def bulk_insert_draws(df: pd.DataFrame):
         with get_db_connection() as conn:
             df.to_sql('powerball_draws', conn, if_exists='append', index=False)
             logger.info(f"Successfully inserted {len(df)} rows into the database.")
-    except sqlite3.IntegrityError:
-        logger.warning("Attempted to insert duplicate dates. Using slower upsert method.")
+    except sqlite3.IntegrityError as e:
+        logger.warning(f"Integrity constraint violation during bulk insert: {e}. Using upsert method.")
         _upsert_draws(df)
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error during bulk insert: {e}")
     except Exception as e:
-        logger.error(f"Error during bulk insert: {e}")
+        logger.error(f"Unexpected error during bulk insert: {e}")
 
 def _upsert_draws(df: pd.DataFrame):
     """Slower, row-by-row insert/replace for handling duplicates."""
@@ -654,8 +688,10 @@ def _upsert_draws(df: pd.DataFrame):
                 """, tuple(row))
             conn.commit()
             logger.info(f"Successfully upserted {len(df)} rows.")
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error during upsert: {e}")
     except Exception as e:
-         logger.error(f"Error during upsert: {e}")
+        logger.error(f"Unexpected error during upsert: {e}")
 
 
 def get_all_draws() -> pd.DataFrame:
@@ -670,8 +706,14 @@ def get_all_draws() -> pd.DataFrame:
             df = pd.read_sql_query("SELECT * FROM powerball_draws ORDER BY draw_date ASC", conn, parse_dates=['draw_date'])
             logger.info(f"Successfully loaded {len(df)} rows from the database.")
             return df
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error retrieving draws data: {e}")
+        return pd.DataFrame()
+    except pd.errors.DatabaseError as e:
+        logger.error(f"Pandas database error: {e}")
+        return pd.DataFrame()
     except Exception as e:
-        logger.error(f"Could not retrieve data from database: {e}")
+        logger.error(f"Unexpected error retrieving draws data: {e}")
         return pd.DataFrame()
 
 
