@@ -6,7 +6,40 @@ import os
 import json
 import numpy as np
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
+
+
+def calculate_prize_amount(main_matches: int, powerball_match: bool) -> Tuple[float, str]:
+    """
+    Calculate prize amount based on main number matches and powerball match.
+    
+    Args:
+        main_matches: Number of main numbers matched (0-5)
+        powerball_match: Whether powerball was matched
+        
+    Returns:
+        Tuple of (prize_amount, prize_description)
+    """
+    if main_matches == 5 and powerball_match:
+        return 100_000_000.0, "Jackpot"
+    elif main_matches == 5:
+        return 1_000_000.0, "Match 5"
+    elif main_matches == 4 and powerball_match:
+        return 50_000.0, "Match 4 + PB"
+    elif main_matches == 4:
+        return 100.0, "Match 4"
+    elif main_matches == 3 and powerball_match:
+        return 100.0, "Match 3 + PB"
+    elif main_matches == 3:
+        return 7.0, "Match 3"
+    elif main_matches == 2 and powerball_match:
+        return 7.0, "Match 2 + PB"
+    elif main_matches == 1 and powerball_match:
+        return 4.0, "Match 1 + PB"
+    elif powerball_match:
+        return 4.0, "Match PB"
+    else:
+        return 0.0, "No matches"
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -1192,51 +1225,10 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                         powerball_match = prediction_pb == winning_pb
 
                         try:
-                            try:
-                                try:
-                                    try:
-                                        try:
-                                            try:
-                                                if matches_main < 3 and not powerball_match:
-                                                    prize_amount, prize_description = (0, "No prize")
-                                                else:
-                                                    try:
-                                                        try:
-                                                            prize_amount, prize_description = (0, "No prize")
-                                                            if matches_main >= 3 or powerball_match:
-                                                                try:
-                                                                    try:
-                                                                        prize_amount, prize_description = calculate_prize_amount(matches_main, powerball_match)
-                                                                    except Exception as e:
-                                                                        logger.error(f"Failed to calculate prize amount: {e}")
-                                                                        prize_amount, prize_description = 0, "Error calculating prize"
-                                                                except Exception as e:
-                                                                    logger.error(f"Failed to calculate prize amount: {e}")
-                                                                    prize_amount, prize_description = 0, "Error calculating prize"    
-                                                        except Exception as e:
-                                                            logger.error(f"Failed to calculate prize amount: {e}")
-                                                            prize_amount, prize_description = 0, "Error calculating prize"
-                                                    except Exception as inner_calc_error:
-                                                        logger.error(f"Inner error during prize calculation: {inner_calc_error}")
-                                                        prize_amount, prize_description = 0, "Calculation error"
-                                            except Exception as calc_error:
-                                                logger.error(f"Error calculating prize: {calc_error}")
-                                                prize_amount, prize_description = 0, "Error calculating prize"
-                                        except Exception as e:
-                                            logger.error(f"Error when calculating prize amount: {e}")
-                                            prize_amount, prize_description = 0, "Error calculating prize"
-                                    except Exception as e:
-                                        logger.error(f"Error calculating prize amount inside try block: {e}")
-                                        prize_amount, prize_description = 0, "Error in inner block"
-                                except Exception as e:
-                                    logger.error(f"Error during prize calculation: {e}")
-                                    prize_amount, prize_description = 0, "Error"
-                            except Exception as e:
-                                logger.error(f"Error calculating prize amount: {e}")
-                                prize_amount, prize_description = 0, "Error"
+                            prize_amount, prize_description = calculate_prize_amount(matches_main, powerball_match)
                         except Exception as e:
                             logger.error(f"Error calculating prize amount: {e}")
-                            prize_amount, prize_description = 0, "Error"
+                            prize_amount, prize_description = 0.0, "Error calculating prize"
 
                     total_prize += prize_amount
                     if prize_amount > 0:
@@ -1355,14 +1347,10 @@ def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
                     powerball_matched = prediction_pb == actual_pb
                     main_matches = len(matched_numbers)
                     try:
-                        try:
-                            prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_matched)
-                        except Exception as prize_calc_error:
-                            logger.error(f"Prize calculation failed: {prize_calc_error}")
-                            prize_amount, prize_description = 0, "Calculation Error"
+                        prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_matched)
                     except Exception as e:
                         logger.error(f"Error calculating prize amount: {e}")
-                        prize_amount, prize_description = 0, "Error calculating prize"
+                        prize_amount, prize_description = 0.0, "Error calculating prize"
 
                     comparison = {
                         "prediction": {
@@ -1463,12 +1451,10 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                     powerball_match = prediction_pb == winning_powerball
                     main_matches = sum(1 for match in number_matches if match["is_match"])
                     try:
-                        prize_amount, prize_description = (0, "No prize")
-                        if main_matches >= 3 or powerball_match:
-                            prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_match)
+                        prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_match)
                     except Exception as calc_error:
                         logger.error(f"Prize calculation failed: {calc_error}")
-                        prize_amount, prize_description = 0, "Calculation error"
+                        prize_amount, prize_description = 0.0, "Calculation error"
 
                     if prize_amount >= 100000000:
                         prize_display = "JACKPOT!"
