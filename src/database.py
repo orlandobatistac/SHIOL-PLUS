@@ -18,8 +18,8 @@ from pathlib import Path
 import asyncio
 import traceback
 
-# Import PostgreSQL database class
-from src.database_postgresql import PostgreSQLDatabase, postgresql_db
+# Import PostgreSQL database instance
+from src.database_postgresql import postgresql_db
 
 
 # Custom JSON encoder to handle numpy types
