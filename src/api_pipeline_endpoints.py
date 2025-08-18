@@ -52,6 +52,7 @@ async def get_pipeline_status_endpoint(current_user: User = Depends(get_current_
 
         # Get recent execution history
         execution_history = await _get_execution_history(limit=10)
+        logger.info(f"Retrieved {len(execution_history)} recent executions for status")
 
         # Get last generated plays if available
         generated_plays = await _get_last_generated_plays()
@@ -574,6 +575,84 @@ async def get_pipeline_history():
                 "has_evaluation_data": execution.get("has_evaluation_data", False)
             }
             formatted_executions.append(formatted_execution)
+
+        return {
+            "executions": formatted_executions[:30],  # Return last 30 executions
+            "total_executions": len(formatted_executions),
+            "database_source": "sqlite",
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting pipeline history: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting pipeline history: {str(e)}")
+
+@pipeline_router.get("/execution-history")
+async def get_execution_history(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user)
+):
+    """Get pipeline execution history with enhanced details"""
+    try:
+        # Get execution history from database
+        executions = get_pipeline_execution_history(limit=limit)
+
+        logger.info(f"Retrieved {len(executions)} executions from database")
+
+        if not executions:
+            logger.warning("No pipeline executions found in database")
+            # Return empty structure but don't fail
+            return {
+                "executions": [],
+                "total_executions": 0,
+                "database_source": "sqlite",
+                "timestamp": datetime.now().isoformat(),
+                "debug_info": "No executions found in pipeline_executions table"
+            }
+
+        # Format executions for frontend
+        formatted_executions = []
+        for execution in executions:
+            formatted_execution = {
+                "execution_id": execution.get("execution_id", "unknown"),
+                "status": execution.get("status", "unknown"),
+                "start_time": execution.get("start_time"),
+                "end_time": execution.get("end_time"),
+                "trigger_type": execution.get("trigger_type", "manual"),
+                "trigger_source": execution.get("trigger_source", "dashboard"),
+                "current_step": execution.get("current_step"),
+                "steps_completed": execution.get("steps_completed", 0),
+                "total_steps": execution.get("total_steps", 7),
+                "num_predictions": execution.get("num_predictions", 100),
+                "error": execution.get("error"),
+                "subprocess_success": execution.get("subprocess_success", False),
+                "created_at": execution.get("created_at"),
+                "has_evaluation_data": False  # Will be set based on actual data
+            }
+
+            # Check if execution has evaluation data
+            if execution.get("status") == "completed":
+                try:
+                    from src.database import get_db_connection
+                    with get_db_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            SELECT COUNT(*) FROM predictions_log 
+                            WHERE evaluated = 1 
+                            AND target_draw_date IS NOT NULL
+                            AND created_at >= ? 
+                            AND created_at <= ?
+                        """, (execution.get("start_time"), execution.get("end_time") or datetime.now().isoformat()))
+
+                        evaluation_count = cursor.fetchone()[0]
+                        formatted_execution["has_evaluation_data"] = evaluation_count > 0
+
+                except Exception as e:
+                    logger.warning(f"Could not check evaluation data for execution {execution.get('execution_id')}: {e}")
+
+            formatted_executions.append(formatted_execution)
+
+        logger.info(f"Formatted {len(formatted_executions)} executions for frontend")
 
         return {
             "executions": formatted_executions[:30],  # Return last 30 executions

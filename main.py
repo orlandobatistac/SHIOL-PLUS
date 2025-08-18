@@ -135,10 +135,10 @@ class PipelineOrchestrator:
         """
         # Production timeout: 15 minutes maximum
         import signal
-        
+
         def timeout_handler(signum, frame):
             raise TimeoutError("Pipeline execution timeout after 15 minutes")
-        
+
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(900)  # 15 minutes timeout
         logger.info("=" * 60)
@@ -161,7 +161,7 @@ class PipelineOrchestrator:
         try:
             # Check available resources before starting
             self._check_system_resources()
-            
+
             # STEP 1: Data Update & Drawing Detection (LIGHTWEIGHT)
             logger.info("STEP 1/6: Data Update & Drawing Detection (Resource-Optimized)")
             pipeline_results['data_update'] = self._execute_step('data_update', self.step_data_update)
@@ -213,7 +213,7 @@ class PipelineOrchestrator:
             execution_time = datetime.now() - self.execution_start_time if self.execution_start_time else None
             error_msg = f"Pipeline execution timeout: {str(e)}"
             logger.error(error_msg)
-            
+
             return {
                 'status': 'timeout',
                 'error': error_msg,
@@ -364,23 +364,23 @@ class PipelineOrchestrator:
         """Check system resources and warn about constraints in Replit environment."""
         try:
             import psutil
-            
+
             # Check memory usage
             memory = psutil.virtual_memory()
             cpu_percent = psutil.cpu_percent(interval=1)
-            
+
             logger.info(f"System resources: Memory {memory.percent:.1f}%, CPU {cpu_percent:.1f}%")
-            
+
             # Warn if resources are high (Replit has limited resources)
             if memory.percent > 80:
                 logger.warning("HIGH MEMORY USAGE: Pipeline may run slowly or timeout")
             if cpu_percent > 80:
                 logger.warning("HIGH CPU USAGE: Pipeline may run slowly or timeout")
-                
+
             # Replit-specific resource management
             if memory.percent > 90:
                 raise RuntimeError("Insufficient memory to run full pipeline safely")
-                
+
         except ImportError:
             logger.warning("psutil not available - cannot monitor system resources")
         except Exception as e:
@@ -599,47 +599,32 @@ class PipelineOrchestrator:
 
     def step_historical_validation(self) -> Dict[str, Any]:
         """
-        Step 5: Historical Validation - Validate predictions against historical data.
-
-        Returns:
-            Dict with historical validation results
+        Step 5: Historical Validation - Evaluate predictions against known results in database
         """
+        logger.info("Starting prediction evaluation step...")
+
         try:
-            # Ensure adaptive system is initialized
-            if self.adaptive_system is None:
-                if self.historical_data is None:
-                    self.historical_data = get_all_draws()
-                self.adaptive_system = initialize_adaptive_system(self.historical_data)
+            from src.prediction_evaluator import PredictionEvaluator
 
-            # Get adaptive validator
-            adaptive_validator = self.adaptive_system['adaptive_validator']
-
-            # Run adaptive validation with learning enabled
-            validation_csv_path = adaptive_validator.adaptive_validate_predictions(enable_learning=True)
+            # Initialize evaluator and run evaluation
+            evaluator = PredictionEvaluator()
+            evaluation_results = evaluator.evaluate_predictions()
 
             result = {
-                'validation_completed': validation_csv_path is not None,
-                'validation_file': validation_csv_path,
-                'learning_enabled': True
+                'evaluation_completed': True,
+                'predictions_evaluated': evaluation_results.get('predictions_evaluated', 0),
+                'predictions_with_prizes': evaluation_results.get('predictions_with_prizes', 0),
+                'total_prize_amount': evaluation_results.get('total_prize_amount', 0),
+                'best_prize': evaluation_results.get('best_prize', 0),
+                'learning_enabled': True,
+                'database_updated': True
             }
 
-            if validation_csv_path:
-                # Try to get validation statistics
-                try:
-                    validation_df = pd.read_csv(validation_csv_path)
-                    result.update({
-                        'total_validations': len(validation_df),
-                        'winning_predictions': len(validation_df[validation_df['prize_category'] != 'Non-winning']),
-                        'validation_summary': validation_df['prize_category'].value_counts().to_dict()
-                    })
-                except Exception as e:
-                    logger.warning(f"Could not read validation statistics: {e}")
-
-            logger.info(f"Historical validation completed: {validation_csv_path}")
+            logger.info(f"Prediction evaluation completed: {evaluation_results}")
             return result
 
         except Exception as e:
-            logger.error(f"Historical validation step failed: {e}")
+            logger.error(f"Prediction evaluation step failed: {e}")
             raise
 
     def step_performance_analysis(self) -> Dict[str, Any]:
@@ -1217,8 +1202,8 @@ Server mode:
                 "triggered_by": "user_dashboard"
             }
             result = orchestrator.run_full_pipeline(
-                num_predictions=50, 
-                execution_source="manual_dashboard", 
+                num_predictions=50,
+                execution_source="manual_dashboard",
                 trigger_details=simulated_trigger_details
             )
         else:
