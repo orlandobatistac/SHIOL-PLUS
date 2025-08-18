@@ -395,7 +395,7 @@ async def trigger_pipeline_execution(
                     status_code=409,
                     content={"detail": "Pipeline is already running"}
                 )
-            
+
             # Additional check: verify no recent executions in last 30 seconds
             from src.database import get_db_connection
             try:
@@ -407,7 +407,7 @@ async def trigger_pipeline_execution(
                         AND datetime(start_time) > datetime('now', '-30 seconds')
                     """)
                     recent_count = cursor.fetchone()[0]
-                    
+
                     if recent_count > 0:
                         logger.warning(f"Prevented duplicate pipeline execution - {recent_count} recent executions found")
                         return JSONResponse(
@@ -561,26 +561,26 @@ async def get_execution_evaluation(execution_id: str):
     """Get evaluation results for a specific pipeline execution"""
     try:
         from src.database import get_evaluated_predictions_for_execution
-        
+
         # Get evaluation data for this execution
         evaluation_data = get_evaluated_predictions_for_execution(execution_id)
-        
+
         if not evaluation_data:
             raise HTTPException(status_code=404, detail="No evaluation data found for this execution")
-        
+
         # Calculate summary statistics
         total_predictions = len(evaluation_data['predictions'])
         winning_predictions = len([p for p in evaluation_data['predictions'] if p.get('prize_amount', 0) > 0])
         total_prizes = sum(p.get('prize_amount', 0) for p in evaluation_data['predictions'])
         best_prize = max((p.get('prize_amount', 0) for p in evaluation_data['predictions']), default=0)
-        
+
         # Calculate win rate and average matches
         win_rate = (winning_predictions / total_predictions * 100) if total_predictions > 0 else 0
         avg_matches = sum(p.get('matches', 0) for p in evaluation_data['predictions']) / total_predictions if total_predictions > 0 else 0
-        
+
         # Get only winners for the prize winners table
         prize_winners = [p for p in evaluation_data['predictions'] if p.get('prize_amount', 0) > 0]
-        
+
         response_data = {
             "execution_id": execution_id,
             "evaluation_summary": {
@@ -596,9 +596,9 @@ async def get_execution_evaluation(execution_id: str):
             "prize_winners": prize_winners,
             "timestamp": datetime.now().isoformat()
         }
-        
+
         return convert_numpy_types(response_data)
-        
+
     except HTTPException as e:
         raise e
     except Exception as e:

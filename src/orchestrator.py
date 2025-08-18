@@ -71,26 +71,43 @@ class PipelineOrchestrator:
         return self._current_execution_id if self._is_running else None
 
     async def _update_execution_status(self):
-        """Update the status of the current pipeline execution."""
+        """Update the status of the current pipeline execution with error handling."""
         if self._current_execution_id:
-            update_pipeline_execution(self._current_execution_id, {
-                "steps_completed": self.steps_completed,
-                "current_step": self.current_step,
-                "status": "running"
-            })
+            try:
+                update_pipeline_execution(self._current_execution_id, {
+                    "steps_completed": self.steps_completed,
+                    "current_step": self.current_step,
+                    "status": "running",
+                    "updated_at": DateManager.get_current_et_time().isoformat()
+                })
+            except Exception as e:
+                logger.warning(f"Failed to update execution status: {e}")
 
     async def _run_step_async(self, step_name: str, step_coro) -> bool:
-        """Helper to run a pipeline step and update status."""
-        self.current_step = step_name
-        self.steps_completed += 1
-        await self._update_execution_status()
-        logger.info(f"🚀 Starting step {self.steps_completed}/5: {step_name}")
-        success = await step_coro()
-        if success:
-            logger.info(f"✅ Step {self.steps_completed} ({step_name}) completed successfully.")
-        else:
-            logger.error(f"❌ Step {self.steps_completed} ({step_name}) failed.")
-        return success
+        """Helper to run a pipeline step and update status with robust error handling."""
+        try:
+            self.current_step = step_name
+            await self._update_execution_status()
+            logger.info(f"🚀 Starting step {self.steps_completed + 1}/5: {step_name}")
+            
+            # Execute step with timeout protection
+            success = await asyncio.wait_for(step_coro(), timeout=1800)  # 30 min timeout per step
+            
+            if success:
+                self.steps_completed += 1
+                await self._update_execution_status()
+                logger.info(f"✅ Step {self.steps_completed} ({step_name}) completed successfully.")
+            else:
+                logger.error(f"❌ Step {self.steps_completed + 1} ({step_name}) failed.")
+                
+            return success
+            
+        except asyncio.TimeoutError:
+            logger.error(f"⏰ Step {step_name} timed out after 30 minutes")
+            return False
+        except Exception as e:
+            logger.error(f"💥 Step {step_name} failed with exception: {e}")
+            return False
 
     async def run_full_pipeline_async(self, execution_id: str, num_predictions: int = 100) -> Dict[str, Any]:
         """
@@ -134,27 +151,28 @@ class PipelineOrchestrator:
 
         try:
             # Step 1: Data Update & Evaluation
-            logger.info("🔄 Step 1/5: Data Update & Evaluation - Downloading latest data and evaluating previous predictions...")
-            self.current_step = "Data Update & Evaluation"
-            self.steps_completed = 1
-            await self._update_execution_status()
-
-            data_success = await self._run_data_update_and_evaluation()
-
+            success = await self._run_step_async("Data Update & Evaluation", 
+                lambda: self._run_data_update_and_evaluation())
+            if not success:
+                raise Exception("Data update and evaluation failed")
 
             # Step 2: Model Prediction (Ensemble Only)
-            logger.info("🚀 Step 2/5: Model Prediction - Running ensemble model prediction...")
-            self.current_step = "Model Prediction"
-            self.steps_completed = 2
-            await self._update_execution_status()
             model_result = await self._run_model_prediction()
+            if model_result.get("status") != "success":
+                raise Exception(f"Model prediction failed: {model_result.get('message', 'Unknown error')}")
+            
+            self.steps_completed += 1
+            self.current_step = "Model Prediction"
+            await self._update_execution_status()
 
             # Step 3: Scoring & Selection
-            logger.info("🚀 Step 3/5: Scoring & Selection - Applying optimized scoring and selection...")
-            self.current_step = "Scoring & Selection"
-            self.steps_completed = 3
-            await self._update_execution_status()
             scoring_result = await self._score_and_select()
+            if scoring_result.get("status") != "success":
+                raise Exception(f"Scoring and selection failed: {scoring_result.get('message', 'Unknown error')}")
+            
+            self.steps_completed += 1
+            self.current_step = "Scoring & Selection"
+            await self._update_execution_status()
 
             # Step 4: Prediction Generation
             success = await self._run_step_async("Prediction Generation", 
