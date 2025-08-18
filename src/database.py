@@ -1057,10 +1057,10 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
                 """
                 SELECT
                     COUNT(*) as total_predictions,
-                    AVG(score_accuracy) as avg_accuracy,
-                    AVG(matches_main) as avg_main_matches,
-                    AVG(matches_pb) as avg_pb_matches,
-                    COUNT(CASE WHEN prize_tier != 'Non-winning' THEN 1 END) as winning_predictions
+                    AVG(pt.score_accuracy) as avg_accuracy,
+                    AVG(pt.matches_main) as avg_main_matches,
+                    AVG(pt.matches_pb) as avg_pb_matches,
+                    COUNT(CASE WHEN pt.prize_tier != 'Non-winning' THEN 1 END) as winning_predictions
                 FROM performance_tracking pt
                 JOIN predictions_log pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
@@ -1070,11 +1070,11 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
 
             cursor.execute(
                 """
-                SELECT prize_tier, COUNT(*) as count
+                SELECT pt.prize_tier, COUNT(*) as count
                 FROM performance_tracking pt
                 JOIN predictions_log pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
-                GROUP BY prize_tier
+                GROUP BY pt.prize_tier
                 ORDER BY count DESC
             """, (days_back,))
 
@@ -1082,7 +1082,7 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
 
             cursor.execute(
                 """
-                SELECT DATE(pt.created_at) as date, AVG(score_accuracy) as avg_accuracy
+                SELECT DATE(pt.created_at) as date, AVG(pt.score_accuracy) as avg_accuracy
                 FROM performance_tracking pt
                 JOIN predictions_log pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
