@@ -394,6 +394,28 @@ async def trigger_pipeline_execution(
                     status_code=409,
                     content={"detail": "Pipeline is already running"}
                 )
+            
+            # Additional check: verify no recent executions in last 30 seconds
+            from src.database import get_db_connection
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM pipeline_executions 
+                        WHERE status IN ('starting', 'running') 
+                        AND datetime(start_time) > datetime('now', '-30 seconds')
+                    """)
+                    recent_count = cursor.fetchone()[0]
+                    
+                    if recent_count > 0:
+                        logger.warning(f"Prevented duplicate pipeline execution - {recent_count} recent executions found")
+                        return JSONResponse(
+                            status_code=409,
+                            content={"detail": "Pipeline execution already started recently"}
+                        )
+            except Exception as db_error:
+                logger.warning(f"Could not check recent executions: {db_error}")
+                # Continue with execution if database check fails
 
         # Validate num_predictions
         if not (1 <= num_predictions <= 200):

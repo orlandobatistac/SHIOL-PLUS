@@ -107,6 +107,113 @@ async def get_deterministic_prediction():
         }
     )
 
+@prediction_router.get("/evaluation-by-date/{date}")
+async def get_evaluation_by_date(date: str):
+    """Get evaluation results for predictions on a specific date"""
+    try:
+        from src.database import get_db_connection
+        from datetime import datetime
+        
+        # Validate date format
+        try:
+            datetime.strptime(date, '%Y-%m-%d')
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get evaluation summary for the date
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_predictions,
+                    COUNT(CASE WHEN evaluated = 1 THEN 1 END) as predictions_evaluated,
+                    COUNT(CASE WHEN evaluated = 1 AND prize_amount > 0 THEN 1 END) as winning_predictions,
+                    SUM(CASE WHEN evaluated = 1 THEN prize_amount ELSE 0 END) as total_prizes_won,
+                    MAX(CASE WHEN evaluated = 1 THEN prize_amount ELSE 0 END) as best_prize,
+                    AVG(CASE WHEN evaluated = 1 THEN matches_main ELSE 0 END) as average_matches
+                FROM predictions_log pl
+                WHERE COALESCE(pl.target_draw_date, DATE(pl.created_at)) = ?
+                    AND pl.model_version NOT IN ('fallback', 'test', 'simulated')
+                    AND pl.dataset_hash NOT IN ('simulated', 'test', 'fallback')
+            """, (date,))
+            
+            summary_row = cursor.fetchone()
+            
+            if not summary_row or summary_row[0] == 0:
+                raise HTTPException(status_code=404, detail="No predictions found for this date")
+            
+            total_predictions, predictions_evaluated, winning_predictions, total_prizes_won, best_prize, average_matches = summary_row
+            
+            win_rate = (winning_predictions / predictions_evaluated * 100) if predictions_evaluated > 0 else 0
+            
+            # Get prize winners for the date
+            cursor.execute("""
+                SELECT 
+                    pl.numbers,
+                    pl.powerball,
+                    pl.prize_amount as prize_won,
+                    pl.matches_main || CASE WHEN pl.powerball_match = 1 THEN ' + PB' ELSE '' END as matches,
+                    pl.rank
+                FROM predictions_log pl
+                WHERE COALESCE(pl.target_draw_date, DATE(pl.created_at)) = ?
+                    AND pl.evaluated = 1 
+                    AND pl.prize_amount > 0
+                    AND pl.model_version NOT IN ('fallback', 'test', 'simulated')
+                ORDER BY pl.prize_amount DESC, pl.matches_main DESC
+                LIMIT 20
+            """, (date,))
+            
+            winners_rows = cursor.fetchall()
+            
+            prize_winners = []
+            for row in winners_rows:
+                try:
+                    numbers_str = row[0]
+                    if isinstance(numbers_str, str):
+                        # Parse JSON array or comma-separated string
+                        if numbers_str.startswith('['):
+                            import json
+                            numbers = json.loads(numbers_str)
+                        else:
+                            numbers = [int(n.strip()) for n in numbers_str.split(',')]
+                    else:
+                        numbers = [1, 2, 3, 4, 5]  # fallback
+                    
+                    prize_winners.append({
+                        'numbers': numbers,
+                        'powerball': row[1],
+                        'prize_won': row[2],
+                        'matches': row[3],
+                        'rank': row[4] or len(prize_winners) + 1
+                    })
+                except Exception as parse_error:
+                    logger.warning(f"Could not parse winner data: {parse_error}")
+                    continue
+            
+            evaluation_summary = {
+                'target_draw_date': date,
+                'total_predictions': total_predictions,
+                'predictions_evaluated': predictions_evaluated,
+                'winning_predictions': winning_predictions,
+                'total_prizes_won': total_prizes_won or 0,
+                'best_prize': best_prize or 0,
+                'win_rate': win_rate,
+                'average_matches': average_matches or 0
+            }
+            
+            return {
+                'evaluation_summary': evaluation_summary,
+                'prize_winners': prize_winners,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error getting evaluation by date {date}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting evaluation data: {str(e)}")
+
 
 @prediction_router.get("/predict/smart")
 async def get_smart_predictions(limit: int = Query(100, ge=1, le=100, description="Number of Smart AI predictions")):

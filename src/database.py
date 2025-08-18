@@ -1258,7 +1258,10 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 """
                 SELECT DISTINCT
                     pd.draw_date as target_date,
-                    COUNT(pl.id) as total_predictions
+                    COUNT(pl.id) as total_predictions,
+                    COUNT(CASE WHEN pl.evaluated = 1 AND pl.prize_amount > 0 THEN 1 END) as winning_predictions,
+                    COUNT(CASE WHEN pl.evaluated = 1 THEN 1 END) as evaluated_predictions,
+                    SUM(CASE WHEN pl.evaluated = 1 THEN pl.prize_amount ELSE 0 END) as total_prizes
                 FROM powerball_draws pd
                 INNER JOIN predictions_log pl ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
                 WHERE pl.created_at IS NOT NULL 
