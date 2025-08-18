@@ -152,18 +152,16 @@ class PipelineOrchestrator:
             scoring_result = await self._score_and_select()
 
             # Step 4: Prediction Generation
-            logger.info("🚀 Step 4/5: Prediction Generation - Generating new predictions using intelligent generator...")
-            self.current_step = "Prediction Generation"
-            self.steps_completed = 4
-            await self._update_execution_status()
-            predictions = await self._generate_predictions_optimized(num_predictions, scoring_result)
+            success = await self._run_step_async("Prediction Generation", 
+                lambda: self._generate_predictions_optimized_step(num_predictions, scoring_result))
+            if not success:
+                raise Exception("Prediction generation failed")
 
-            # Step 5: Save & Serve
-            logger.info("🚀 Step 5/5: Save & Serve - Saving generated predictions and preparing for serving...")
-            self.current_step = "Save & Serve"
-            self.steps_completed = 5
-            await self._update_execution_status()
-            save_result = await self._save_and_serve(predictions)
+            # Step 5: Save & Serve  
+            success = await self._run_step_async("Save & Serve",
+                lambda: self._save_and_serve_step())
+            if not success:
+                raise Exception("Save and serve failed")
 
             end_time = DateManager.get_current_et_time()
             execution_time = end_time - start_time
@@ -176,20 +174,25 @@ class PipelineOrchestrator:
                 "current_step": "completed"
             })
 
+            # Get results from stored attributes
+            predictions_count = len(self.predictions) if hasattr(self, 'predictions') else 0
+            preview_predictions = self.predictions[:10] if hasattr(self, 'predictions') else []
+            save_result = self.save_result if hasattr(self, 'save_result') else {"status": "unknown"}
+            
             results = {
                 "status": "completed",
                 "execution_time": str(execution_time),
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
-                "num_predictions_generated": len(predictions),
+                "num_predictions_generated": predictions_count,
                 "steps_completed": 5,
                 "total_steps": 5,
-                "pipeline_version": "v6.2_evaluation",
+                "pipeline_version": "v6.2_single_execution",
                 "results": {
-                    "data_update_validation": {"status": "success" if data_success else "failed"}, # Simplified for combined step
+                    "data_update_validation": {"status": "success" if data_success else "failed"},
                     "model_prediction": model_result,
                     "scoring_selection": scoring_result,
-                    "predictions": predictions[:10],  # Return first 10 for preview
+                    "predictions": preview_predictions,
                     "save_serve": save_result
                 }
             }
@@ -477,6 +480,29 @@ class PipelineOrchestrator:
                 continue
 
         return batch_predictions
+
+    async def _generate_predictions_optimized_step(self, num_predictions: int, scoring_result: Dict) -> bool:
+        """Single execution wrapper for prediction generation"""
+        try:
+            self.predictions = await self._generate_predictions_optimized(num_predictions, scoring_result)
+            logger.info(f"Generated {len(self.predictions)} predictions successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Prediction generation failed: {e}")
+            return False
+    
+    async def _save_and_serve_step(self) -> bool:
+        """Single execution wrapper for save and serve"""
+        try:
+            if not hasattr(self, 'predictions'):
+                logger.error("No predictions available to save")
+                return False
+            
+            self.save_result = await self._save_and_serve(self.predictions)
+            return self.save_result.get("status") == "success"
+        except Exception as e:
+            logger.error(f"Save and serve failed: {e}")
+            return False
 
     async def _save_and_serve(self, predictions: list) -> Dict[str, Any]:
         """Combined save and serve preparation"""

@@ -390,6 +390,7 @@ async def trigger_pipeline_execution(
             # Check for existing running pipeline execution
             current_status = await _get_current_pipeline_status()
             if current_status.get("status") == "running":
+                logger.warning(f"Blocked duplicate pipeline execution attempt by user {current_user.username}")
                 return JSONResponse(
                     status_code=409,
                     content={"detail": "Pipeline is already running"}
