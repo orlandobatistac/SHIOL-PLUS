@@ -18,6 +18,10 @@ class PipelineOrchestrator:
 
     def __init__(self):
         """Initialize pipeline orchestrator with all required components"""
+        # DEPRECATED WARNING: This orchestrator will be removed
+        logger.warning("🚨 DEPRECATED: orchestrator.py pipeline is deprecated. Use main.py pipeline instead.")
+        logger.warning("This orchestrator will be removed in the next version. Please switch to main.py.")
+
         logger.info("Initializing PipelineOrchestrator...")
 
         # Initialize execution state tracking
@@ -27,6 +31,11 @@ class PipelineOrchestrator:
         self.steps_completed = 0
 
         try:
+            # Generate execution ID if not provided (UNIFIED FORMAT)
+            import uuid
+            if not hasattr(self, 'current_execution_id'):
+                self.current_execution_id = f"exec_{str(uuid.uuid4())[:8]}"
+
             # Initialize data loader
             self.data_loader = get_data_loader()
 
@@ -89,19 +98,19 @@ class PipelineOrchestrator:
             self.current_step = step_name
             await self._update_execution_status()
             logger.info(f"🚀 Starting step {self.steps_completed + 1}/5: {step_name}")
-            
+
             # Execute step with timeout protection
             success = await asyncio.wait_for(step_coro(), timeout=1800)  # 30 min timeout per step
-            
+
             if success:
                 self.steps_completed += 1
                 await self._update_execution_status()
                 logger.info(f"✅ Step {self.steps_completed} ({step_name}) completed successfully.")
             else:
                 logger.error(f"❌ Step {self.steps_completed + 1} ({step_name}) failed.")
-                
+
             return success
-            
+
         except asyncio.TimeoutError:
             logger.error(f"⏰ Step {step_name} timed out after 30 minutes")
             return False
@@ -124,7 +133,7 @@ class PipelineOrchestrator:
         if self._is_running:
             logger.warning(f"Pipeline already running with ID: {self._current_execution_id}")
             raise ValueError(f"Pipeline execution already in progress: {self._current_execution_id}")
-        
+
         self._is_running = True
         self._current_execution_id = execution_id
         self.steps_completed = 0
@@ -135,7 +144,7 @@ class PipelineOrchestrator:
 
         # Check if execution record already exists, if not create it
         from src.database import save_pipeline_execution, get_pipeline_execution_by_id
-        
+
         existing_execution = get_pipeline_execution_by_id(execution_id)
         if not existing_execution:
             # Create new execution record
@@ -173,7 +182,7 @@ class PipelineOrchestrator:
             model_result = await self._run_model_prediction()
             if model_result.get("status") != "success":
                 raise Exception(f"Model prediction failed: {model_result.get('message', 'Unknown error')}")
-            
+
             self.steps_completed += 1
             self.current_step = "Model Prediction"
             await self._update_execution_status()
@@ -182,7 +191,7 @@ class PipelineOrchestrator:
             scoring_result = await self._score_and_select()
             if scoring_result.get("status") != "success":
                 raise Exception(f"Scoring and selection failed: {scoring_result.get('message', 'Unknown error')}")
-            
+
             self.steps_completed += 1
             self.current_step = "Scoring & Selection"
             await self._update_execution_status()
@@ -215,7 +224,7 @@ class PipelineOrchestrator:
             predictions_count = len(self.predictions) if hasattr(self, 'predictions') else 0
             preview_predictions = self.predictions[:10] if hasattr(self, 'predictions') else []
             save_result = self.save_result if hasattr(self, 'save_result') else {"status": "unknown"}
-            
+
             results = {
                 "status": "completed",
                 "execution_time": str(execution_time),
@@ -527,14 +536,14 @@ class PipelineOrchestrator:
         except Exception as e:
             logger.error(f"Prediction generation failed: {e}")
             return False
-    
+
     async def _save_and_serve_step(self) -> bool:
         """Single execution wrapper for save and serve"""
         try:
             if not hasattr(self, 'predictions'):
                 logger.error("No predictions available to save")
                 return False
-            
+
             self.save_result = await self._save_and_serve(self.predictions)
             return self.save_result.get("status") == "success"
         except Exception as e:

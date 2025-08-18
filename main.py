@@ -159,10 +159,10 @@ class PipelineOrchestrator:
         logger.info(f"Execution source: {execution_source}")
 
         try:
-            # Generate execution ID if not provided
+            # Generate execution ID if not provided (UNIFIED FORMAT)
             import uuid
             if not hasattr(self, 'current_execution_id'):
-                self.current_execution_id = f"main_{str(uuid.uuid4())[:8]}"
+                self.current_execution_id = f"exec_{str(uuid.uuid4())[:8]}"
             
             # Execution record will be managed by orchestrator to avoid duplicates
             logger.info(f"Pipeline execution {self.current_execution_id} starting from main.py")
@@ -1083,6 +1083,13 @@ Server mode:
         help='Run comprehensive system diagnostics and health check'
     )
 
+    parser.add_argument(
+        '--predictions',
+        type=int,
+        default=50,
+        help='Number of predictions to generate (default: 50)'
+    )
+
     args = parser.parse_args()
 
     try:
@@ -1212,7 +1219,15 @@ Server mode:
                 print("Step completed successfully!")
             return
 
-        # Run full pipeline with proper parameters
+        # Run full pipeline with proper parameters (UNIFIED APPROACH)
+        # Get execution ID from environment if set by API
+        import os
+        if os.environ.get('PIPELINE_EXECUTION_ID'):
+            orchestrator.current_execution_id = os.environ.get('PIPELINE_EXECUTION_ID')
+            
+        # Use predictions argument
+        num_predictions = args.predictions
+        
         # Set trigger_details for dashboard execution if available, otherwise use defaults
         if args.server or args.api: # If server is started, it might be triggered by dashboard/external call
             # In a real scenario, 'trigger_details' would be passed from the API handler
@@ -1229,15 +1244,16 @@ Server mode:
                 "triggered_by": "user_dashboard"
             }
             result = orchestrator.run_full_pipeline(
-                num_predictions=50,
+                num_predictions=num_predictions,
                 execution_source="manual_dashboard",
                 trigger_details=simulated_trigger_details
             )
         else:
             # Default to scheduled pipeline if not running in server mode
+            execution_source = os.environ.get('PIPELINE_EXECUTION_SOURCE', 'scheduled_pipeline')
             result = orchestrator.run_full_pipeline(
-                num_predictions=50,
-                execution_source="scheduled_pipeline"
+                num_predictions=num_predictions,
+                execution_source=execution_source
             )
 
 

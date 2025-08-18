@@ -8,6 +8,7 @@ import asyncio
 import uuid
 from typing import Optional, Dict, Any
 from pathlib import Path
+import traceback # Import traceback for error logging
 
 from src.predictor import Predictor
 from src.intelligent_generator import IntelligentGenerator, DeterministicGenerator
@@ -33,7 +34,7 @@ from src.api_dashboard_endpoints import dashboard_frontend_router, set_dashboard
 
 # --- Pipeline Monitoring Global Variables ---
 # Global variables for pipeline monitoring
-pipeline_orchestrator = None
+pipeline_orchestrator = None # This is now effectively unused due to the change
 pipeline_executions = {}  # Track running pipeline executions
 pipeline_logs = []  # Store recent pipeline logs
 
@@ -59,165 +60,156 @@ async def trigger_full_pipeline_automatically():
             logger.warning(f"Pipeline already running (ID: {running_executions[0].get('execution_id')}), skipping automatic execution.")
             return
 
-        if pipeline_orchestrator:
-            # Get current scheduler configuration
-            current_time = datetime.now()
-            current_day = current_time.strftime('%A').lower()
-            current_time_str = current_time.strftime('%H:%M')
+        # Get current scheduler configuration
+        current_time = datetime.now()
+        current_day = current_time.strftime('%A').lower()
+        current_time_str = current_time.strftime('%H:%M')
 
-            # Expected scheduler configuration (from scheduler setup)
-            expected_days = ['monday', 'wednesday', 'saturday']
-            expected_time = '23:30'
-            timezone = 'America/New_York'
+        # Expected scheduler configuration (from scheduler setup)
+        expected_days = ['monday', 'wednesday', 'saturday']
+        expected_time = '23:30'
+        timezone = 'America/New_York'
 
-            # Check if execution matches schedule
-            matches_schedule = (
-                current_day in expected_days and
-                abs((current_time.hour * 60 + current_time.minute) - (23 * 60 + 30)) <= 5  # 5 minute tolerance
-            )
+        # Check if execution matches schedule
+        matches_schedule = (
+            current_day in expected_days and
+            abs((current_time.hour * 60 + current_time.minute) - (23 * 60 + 30)) <= 5  # 5 minute tolerance
+        )
 
-            # Trigger the full pipeline execution with enhanced metadata
-            execution_id = str(uuid.uuid4())[:8]
-            pipeline_executions[execution_id] = {
-                "execution_id": execution_id,
-                "status": "starting",
-                "start_time": current_time.isoformat(),
-                "current_step": "automated_trigger",
-                "steps_completed": 0,
-                "total_steps": 7,  # Always 7 steps for full pipeline
-                "num_predictions": 50,  # Standard 50 predictions
-                "requested_steps": None,  # Full pipeline, all steps
-                "error": None,
-                "trigger_type": "automatic_scheduler",
-                "execution_source": "automatic_scheduler",
-                "trigger_details": {
-                    "type": "scheduled",
-                    "scheduled_config": {
-                        "days": expected_days,
-                        "time": expected_time,
-                        "timezone": timezone
-                    },
-                    "actual_execution": {
-                        "day": current_day,
-                        "time": current_time_str,
-                        "matches_schedule": matches_schedule
-                    },
-                    "triggered_by": "automatic_scheduler"
-                }
+        # Trigger the full pipeline execution with enhanced metadata
+        execution_id = str(uuid.uuid4())[:8]
+        pipeline_executions[execution_id] = {
+            "execution_id": execution_id,
+            "status": "starting",
+            "start_time": current_time.isoformat(),
+            "current_step": "automated_trigger",
+            "steps_completed": 0,
+            "total_steps": 7,  # Always 7 steps for full pipeline
+            "num_predictions": 50,  # Standard 50 predictions
+            "requested_steps": None,  # Full pipeline, all steps
+            "error": None,
+            "trigger_type": "automatic_scheduler",
+            "execution_source": "automatic_scheduler",
+            "trigger_details": {
+                "type": "scheduled",
+                "scheduled_config": {
+                    "days": expected_days,
+                    "time": expected_time,
+                    "timezone": timezone
+                },
+                "actual_execution": {
+                    "day": current_day,
+                    "time": current_time_str,
+                    "matches_schedule": matches_schedule
+                },
+                "triggered_by": "automatic_scheduler"
             }
+        }
 
-            # Run the full 6-step pipeline in background with 50 predictions using robust subprocess
-            asyncio.create_task(run_full_pipeline_background(execution_id, 50))
-            logger.info(f"Automatic pipeline execution started with ID: {execution_id} - Full 6-step pipeline (scheduled: {matches_schedule})")
-        else:
-            logger.warning("Pipeline orchestrator not available to trigger pipeline.")
+        # Run the full 6-step pipeline in background with 50 predictions using robust subprocess
+        asyncio.create_task(run_full_pipeline_background(execution_id, 50))
+        logger.info(f"Automatic pipeline execution started with ID: {execution_id} - Full 6-step pipeline (scheduled: {matches_schedule})")
+
     except Exception as e:
         logger.error(f"Error triggering automatic full pipeline: {e}")
 
-async def run_full_pipeline_background(execution_id: str, num_predictions: int):
+async def run_full_pipeline_background(execution_id: str, num_predictions: int = 50):
     """
-    Run the full pipeline in background using subprocess for production reliability.
-
-    Args:
-        execution_id: Unique execution identifier
-        num_predictions: Number of predictions to generate
+    UNIFIED PIPELINE: Run the full pipeline using main.py subprocess for maximum stability
     """
-    import subprocess
-    logger.info(f"Starting background pipeline execution {execution_id} with {num_predictions} predictions")
-
     try:
-        # Update execution status to running (orchestrator will handle DB updates)
-        pipeline_executions[execution_id]["status"] = "running" 
-        pipeline_executions[execution_id]["current_step"] = "pipeline_execution"
-        
-        logger.info(f"Pipeline execution {execution_id} status updated to running")
+        logger.info(f"Starting UNIFIED pipeline execution {execution_id} via main.py subprocess")
 
-        # Build command - main.py ahora acepta argumentos
+        # Update status to running
+        pipeline_executions[execution_id] = {
+            **pipeline_executions.get(execution_id, {}),
+            "status": "running",
+            "start_time": datetime.now().isoformat(),
+            "current_step": "subprocess_initialization"
+        }
+
+        # Execute main.py in subprocess for stability (UNIFIED APPROACH)
+        import subprocess
+        import os
+
         cmd = [
-            "python", "main.py"
+            "python", "main.py",
+            "--predictions", str(num_predictions)
         ]
 
-        logger.info(f"Executing pipeline command: {' '.join(cmd)}")
+        # Set environment variable for execution tracking
+        env = os.environ.copy()
+        env['PIPELINE_EXECUTION_ID'] = execution_id
+        env['PIPELINE_EXECUTION_SOURCE'] = 'api_dashboard'
 
-        # Execute pipeline with proper timeout (15 minutes for Replit production)
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=900,  # 15 minutes timeout optimized for Replit
-                cwd=os.getcwd()
-            )
+        logger.info(f"Executing UNIFIED pipeline via subprocess: {' '.join(cmd)}")
 
-            # Update execution status based on result
-            if result.returncode == 0:
-                pipeline_executions[execution_id].update({
-                    "status": "completed", 
-                    "end_time": datetime.now().isoformat(),
-                    "subprocess_success": True,
-                    "steps_completed": 6,  # Pipeline has 6 steps
-                    "stdout": result.stdout[-2000:] if result.stdout else "",  # Limit stdout size
-                    "stderr": result.stderr[-1000:] if result.stderr else ""   # Limit stderr size
-                })
-                logger.info(f"Pipeline execution {execution_id} completed successfully")
-            else:
-                error_details = result.stderr[-1000:] if result.stderr else "No error details available"
-                pipeline_executions[execution_id].update({
-                    "status": "failed",
-                    "end_time": datetime.now().isoformat(),
-                    "subprocess_success": False,
-                    "error": f"Pipeline failed with return code {result.returncode}: {error_details[:200]}",
-                    "stderr": error_details,
-                    "stdout": result.stdout[-1000:] if result.stdout else ""
-                })
-                logger.error(f"Pipeline execution {execution_id} failed with return code {result.returncode}")
-                logger.error(f"STDERR: {error_details}")
+        # Execute with timeout (30 minutes for Replit production)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=1800,  # 30 minutes timeout
+            cwd=os.getcwd(),
+            env=env
+        )
 
-        except subprocess.TimeoutExpired:
-            pipeline_executions[execution_id].update({
-                "status": "timeout",
-                "end_time": datetime.now().isoformat(),
-                "subprocess_success": False,
-                "error": "Pipeline execution timed out after 15 minutes"
-            })
-            logger.error(f"Pipeline execution {execution_id} timed out")
+        success = result.returncode == 0
 
-        except Exception as subprocess_error:
-            pipeline_executions[execution_id].update({
-                "status": "failed",
-                "end_time": datetime.now().isoformat(),
-                "subprocess_success": False,
-                "error": f"Subprocess execution failed: {str(subprocess_error)}"
-            })
-            logger.error(f"Pipeline subprocess execution failed: {subprocess_error}")
+        # Update execution status based on result
+        pipeline_executions[execution_id] = {
+            **pipeline_executions.get(execution_id, {}),
+            "status": "completed" if success else "failed",
+            "end_time": datetime.now().isoformat(),
+            "subprocess_success": success,
+            "return_code": result.returncode,
+            "stdout": result.stdout[-1000:] if result.stdout else "",  # Last 1000 chars
+            "stderr": result.stderr[-1000:] if result.stderr else "",   # Last 1000 chars
+        }
+
+        if success:
+            logger.info(f"UNIFIED pipeline execution {execution_id} completed successfully")
+        else:
+            logger.error(f"UNIFIED pipeline execution {execution_id} failed with return code {result.returncode}")
+            if result.stderr:
+                logger.error(f"Pipeline stderr: {result.stderr[-500:]}")
+
+    except subprocess.TimeoutExpired:
+        error_msg = f"UNIFIED pipeline execution {execution_id} timed out after 30 minutes"
+        logger.error(error_msg)
+
+        pipeline_executions[execution_id] = {
+            **pipeline_executions.get(execution_id, {}),
+            "status": "timeout",
+            "error": error_msg,
+            "end_time": datetime.now().isoformat()
+        }
 
     except Exception as e:
-        logger.error(f"Background pipeline execution failed: {e}")
-        pipeline_executions[execution_id].update({
-            "status": "failed",
-            "end_time": datetime.now().isoformat(),
-            "error": str(e),
-            "subprocess_success": False
-        })
+        error_msg = f"UNIFIED pipeline execution {execution_id} failed: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
-    # Update execution record in database with final status
-    try:
-        save_pipeline_execution_record(pipeline_executions[execution_id])
-        logger.info(f"Updated pipeline execution {execution_id} in database with final status: {pipeline_executions[execution_id]['status']}")
-    except Exception as db_error:
-        logger.error(f"Failed to update execution record in database: {db_error}")
+        # Update execution status to failed
+        pipeline_executions[execution_id] = {
+            **pipeline_executions.get(execution_id, {}),
+            "status": "failed",
+            "error": error_msg,
+            "end_time": datetime.now().isoformat(),
+            "traceback": traceback.format_exc()
+        }
 
 
 def save_pipeline_execution_record(execution_data: dict):
     """
     Save pipeline execution record to the database.
-    
+
     Args:
         execution_data: Dictionary containing execution information
     """
     try:
         from src.database import save_pipeline_execution
-        
+
         # Ensure all required fields are present with defaults
         record = {
             'execution_id': execution_data.get('execution_id'),
@@ -232,39 +224,35 @@ def save_pipeline_execution_record(execution_data: dict):
             'subprocess_success': execution_data.get('subprocess_success', False),
             'current_step': execution_data.get('current_step')
         }
-        
+
         # Save to database
         save_pipeline_execution(record)
         logger.info(f"Saved execution record {record['execution_id']} to database")
-        
+
     except Exception as e:
         logger.error(f"Error saving pipeline execution record: {e}")
         raise
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global pipeline_orchestrator
+    global pipeline_orchestrator # This global variable is no longer used for pipeline execution
     # On startup
     logger.info("Application startup...")
 
-    # Initialize pipeline orchestrator - CRITICAL COMPONENT
+    # Initialize pipeline orchestrator - CRITICAL COMPONENT (No longer needed for execution)
     try:
         from src.orchestrator import PipelineOrchestrator
-        pipeline_orchestrator = PipelineOrchestrator()
+        pipeline_orchestrator = PipelineOrchestrator() # This initialization is now redundant for pipeline execution
         app.state.orchestrator = pipeline_orchestrator
-        logger.info("Pipeline orchestrator initialized successfully")
+        logger.info("Pipeline orchestrator initialized (status: DEPRECATED FOR EXECUTION)")
     except ImportError as import_error:
-        logger.critical(f"CRITICAL ERROR: PipelineOrchestrator class not found - {import_error}")
-        logger.critical("Check src/orchestrator.py file exists and contains PipelineOrchestrator class")
+        logger.warning(f"PipelineOrchestrator class not found - {import_error} (expected due to new architecture)")
         pipeline_orchestrator = None
         app.state.orchestrator = None
-        raise RuntimeError(f"Pipeline orchestrator import failed: {import_error}")
     except Exception as e:
-        logger.critical(f"CRITICAL ERROR: Failed to initialize pipeline orchestrator - {e}")
-        logger.critical("Pipeline system cannot function without orchestrator")
+        logger.warning(f"Failed to initialize pipeline orchestrator - {e} (expected due to new architecture)")
         pipeline_orchestrator = None
         app.state.orchestrator = None
-        raise RuntimeError(f"Pipeline orchestrator initialization failed: {e}")
 
     # Schedule pipeline execution optimally:
     # 1. Full pipeline only on actual drawing days (Monday, Wednesday, Saturday)
