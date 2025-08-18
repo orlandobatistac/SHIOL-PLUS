@@ -77,22 +77,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Timezone Conversion Functions ---
-    // Assuming this function correctly formats dates for display in ET
+    // Function to correctly format dates for display in ET timezone
     function displayFormattedDate(dateString) {
         if (!dateString || dateString === 'N/A') return 'N/A';
 
         try {
             let date;
-            // Attempt to parse ISO format
+            
+            // Parse ISO format with timezone handling
             if (dateString.includes('T')) {
                 date = new Date(dateString);
             }
-            // Attempt to parse YYYY-MM-DD HH:MM:SS format
+            // Parse YYYY-MM-DD HH:MM:SS format
             else if (dateString.includes('-') && dateString.includes(':')) {
-                // Replace space with T for better parsing, or handle format directly
-                date = new Date(dateString.replace(' ', 'T'));
+                // Assume UTC if no timezone specified, then convert to ET
+                date = new Date(dateString.replace(' ', 'T') + (dateString.includes('Z') ? '' : 'Z'));
             }
-            // Fallback for other formats or if parsing fails
+            // Fallback for other formats
             else {
                 date = new Date(dateString);
             }
@@ -100,30 +101,41 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check if the date parsed correctly
             if (isNaN(date.getTime())) {
                 console.warn('Invalid date parsed:', dateString);
-                return dateString; // Return original if parsing failed
+                return dateString;
             }
 
-            // Format for display: MM/DD/YYYY H:MM AM/PM ET
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const year = date.getFullYear();
+            // Convert to ET timezone using toLocaleString
+            const etOptions = {
+                timeZone: 'America/New_York',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            };
 
-            let hours = date.getHours();
-            let minutes = String(date.getMinutes()).padStart(2, '0');
+            const etDateStr = date.toLocaleString('en-US', etOptions);
+            
+            // Parse the result and reformat to match expected format
+            const etDate = new Date(etDateStr);
+            const month = String(etDate.getMonth() + 1).padStart(2, '0');
+            const day = String(etDate.getDate()).padStart(2, '0');
+            const year = etDate.getFullYear();
+
+            let hours = etDate.getHours();
+            let minutes = String(etDate.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'PM' : 'AM';
 
             // Convert to 12-hour format
             hours = hours % 12;
-            hours = hours ? hours : 12; // 0 should be 12
+            hours = hours ? hours : 12;
 
-            const formattedTime = `${hours}:${minutes} ${ampm}`;
-            const formattedDate = `${month}/${day}/${year} ${formattedTime} ET`;
-
-            return formattedDate;
+            return `${month}/${day}/${year} ${hours}:${minutes} ${ampm} ET`;
 
         } catch (error) {
             console.warn('Error formatting date for ET display:', dateString, error);
-            return dateString; // Return original if conversion fails
+            return dateString;
         }
     }
 
@@ -371,19 +383,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const startTimeDisplay = execution.start_time_formatted || 'N/A';
             const endTimeDisplay = execution.end_time_formatted || 'N/A';
 
-            // FIXED: Use duration from API if available, otherwise calculate
+            // Calculate duration properly
             let duration = 'N/A';
             if (execution.duration) {
                 duration = execution.duration;
-            } else if (execution.status === 'running') {
+            } else if (execution.status === 'running' || execution.status === 'starting') {
                 duration = 'In progress...';
             } else if (execution.start_time && execution.end_time) {
-                const startTimeObj = new Date(execution.start_time);
-                const endTimeObj = new Date(execution.end_time);
-                const durationMs = endTimeObj - startTimeObj;
-                const minutes = Math.floor(durationMs / 60000);
-                const seconds = Math.floor((durationMs % 60000) / 1000);
-                duration = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                try {
+                    const startTimeObj = new Date(execution.start_time);
+                    const endTimeObj = new Date(execution.end_time);
+                    
+                    if (!isNaN(startTimeObj.getTime()) && !isNaN(endTimeObj.getTime())) {
+                        const durationMs = endTimeObj - startTimeObj;
+                        if (durationMs >= 0) {
+                            const minutes = Math.floor(durationMs / 60000);
+                            const seconds = Math.floor((durationMs % 60000) / 1000);
+                            duration = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error calculating duration:', e);
+                    duration = 'N/A';
+                }
             }
 
             const status = execution.status || 'unknown';
@@ -444,9 +466,9 @@ document.addEventListener('DOMContentLoaded', () => {
             stepsCell.className = 'px-4 py-3';
 
             const stepsContainer = document.createElement('div');
-            // FIXED: Use total_steps from API response (correct count)
+            // Use total_steps from API response (main.py uses 6 steps)
             let stepsCompleted = execution.steps_completed || 0;
-            let totalSteps = execution.total_steps || 5; // Use API value, fallback to 5
+            let totalSteps = execution.total_steps || 6; // main.py has 6 steps
 
             // Fix: If execution is completed but steps_completed is 0, set to total steps
             if (status === 'completed' && stepsCompleted === 0) {
@@ -455,7 +477,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Fix: If execution failed, show actual progress or at least 1 step
             if (status === 'failed' && stepsCompleted === 0) {
-                stepsCompleted = 1; // At least started
+                stepsCompleted = Math.min(1, totalSteps); // At least started
+            }
+
+            // Ensure stepsCompleted doesn't exceed totalSteps
+            if (stepsCompleted > totalSteps) {
+                stepsCompleted = totalSteps;
             }
 
             const stepsText = document.createElement('div');

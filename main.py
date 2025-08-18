@@ -164,8 +164,21 @@ class PipelineOrchestrator:
             if not hasattr(self, 'current_execution_id'):
                 self.current_execution_id = f"exec_{str(uuid.uuid4())[:8]}"
             
-            # Execution record will be managed by orchestrator to avoid duplicates
-            logger.info(f"Pipeline execution {self.current_execution_id} starting from main.py")
+            # Save initial execution record to database
+            from src.database import save_pipeline_execution
+            initial_record = {
+                'execution_id': self.current_execution_id,
+                'status': 'starting',
+                'start_time': self.execution_start_time.isoformat(),
+                'trigger_type': execution_source,
+                'trigger_source': execution_source,
+                'steps_completed': 0,
+                'total_steps': 6,
+                'num_predictions': num_predictions,
+                'current_step': 'initialization'
+            }
+            save_pipeline_execution(initial_record)
+            logger.info(f"Pipeline execution {self.current_execution_id} started and saved to database")
 
             # Check available resources before starting
             self._check_system_resources()
@@ -288,6 +301,18 @@ class PipelineOrchestrator:
                 'execution_time': str(execution_time),
                 'timestamp': datetime.now().isoformat()
             }
+
+            # Update step completion in database
+            if hasattr(self, 'current_execution_id'):
+                try:
+                    from src.database import update_pipeline_execution
+                    steps_completed = len([s for s in self.pipeline_status.values() if s.get('status') == 'success'])
+                    update_pipeline_execution(self.current_execution_id, {
+                        'steps_completed': steps_completed,
+                        'current_step': step_name
+                    })
+                except Exception as e:
+                    logger.warning(f"Could not update step completion in database: {e}")
 
             logger.info(f"✓ {step_name} completed successfully in {execution_time}")
 

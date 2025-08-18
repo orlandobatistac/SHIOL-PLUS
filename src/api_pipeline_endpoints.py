@@ -211,7 +211,7 @@ async def _get_execution_history(limit: int = 10) -> List[Dict[str, Any]]:
                 'trigger_source': execution.get('trigger_source', 'unknown'),
                 'current_step': execution.get('current_step'),
                 'steps_completed': execution.get('steps_completed', 0),
-                "total_steps": 5,  # OPTIMIZED: Pipeline now has 5 steps
+                "total_steps": 6,  # CORRECTED: main.py has 6 steps
                 'num_predictions': execution.get('num_predictions', 100),
                 'error': execution.get('error'),
                 'subprocess_success': execution.get('subprocess_success', False),
@@ -366,7 +366,7 @@ async def get_scheduler_status():
 
 @pipeline_router.get("/scheduler/jobs")
 async def get_scheduler_jobs():
-    """Get detailed information about all scheduled jobs"""
+    """Get detailed information about scheduled jobs"""
     try:
         jobs_info = await _get_detailed_scheduler_jobs()
         return {"jobs": jobs_info, "total_count": len(jobs_info)}
@@ -495,7 +495,7 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
             enhanced_execution['steps_completed'] = 0
 
         # Ensure total_steps is set to correct value
-        enhanced_execution['total_steps'] = 5  # OPTIMIZED: Pipeline now has 5 steps
+        enhanced_execution['total_steps'] = 6  # CORRECTED: main.py has 6 steps
 
         # Pre-format dates for frontend display
         start_time_formatted = 'N/A'
@@ -629,12 +629,12 @@ async def get_pipeline_history():
                 "trigger_type": execution.get('trigger_type', 'unknown'),
                 "trigger_source": execution.get('trigger_source', 'unknown'),
                 "steps_completed": execution.get('steps_completed', 0),
-                "total_steps": 5,  # OPTIMIZED: Pipeline now has 5 steps
+                "total_steps": 6,  # CORRECTED: main.py has 6 steps
                 "num_predictions": execution.get('num_predictions', 0),
                 "error": execution.get('error'),
                 "subprocess_success": execution.get('subprocess_success', False),
                 "duration": _calculate_execution_duration(execution.get('start_time'), execution.get('end_time')),
-                "progress_percentage": (execution.get('steps_completed', 0) / 5) * 100 if 5 > 0 else 0,  # Use 5 steps
+                "progress_percentage": (execution.get('steps_completed', 0) / 6) * 100 if 6 > 0 else 0,  # Use 6 steps
                 "has_evaluation_data": execution.get("has_evaluation_data", False)
             }
             formatted_executions.append(formatted_execution)
