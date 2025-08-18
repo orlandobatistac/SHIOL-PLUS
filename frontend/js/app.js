@@ -367,14 +367,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         sortedExecutions.forEach((execution, index) => {
-            const startTimeDisplay = displayFormattedDate(execution.start_time);
-            const endTimeDisplay = execution.end_time ? displayFormattedDate(execution.end_time) : 'N/A';
-            const startTimeObj = execution.start_time ? new Date(execution.start_time) : null;
+            // FIXED: Use pre-formatted dates from API that are already in ET
+            const startTimeDisplay = execution.start_time_formatted || 'N/A';
+            const endTimeDisplay = execution.end_time_formatted || 'N/A';
 
+            // FIXED: Use duration from API if available, otherwise calculate
             let duration = 'N/A';
-            if (execution.status === 'running') {
+            if (execution.duration) {
+                duration = execution.duration;
+            } else if (execution.status === 'running') {
                 duration = 'In progress...';
-            } else if (startTimeObj && execution.end_time) {
+            } else if (execution.start_time && execution.end_time) {
+                const startTimeObj = new Date(execution.start_time);
                 const endTimeObj = new Date(execution.end_time);
                 const durationMs = endTimeObj - startTimeObj;
                 const minutes = Math.floor(durationMs / 60000);
@@ -440,9 +444,9 @@ document.addEventListener('DOMContentLoaded', () => {
             stepsCell.className = 'px-4 py-3';
 
             const stepsContainer = document.createElement('div');
-            // Use actual steps data with proper defaults - FIXED: 7 steps total
+            // FIXED: Use total_steps from API response (correct count)
             let stepsCompleted = execution.steps_completed || 0;
-            let totalSteps = 7; // CORRECTED: Pipeline has 7 steps
+            let totalSteps = execution.total_steps || 5; // Use API value, fallback to 5
 
             // Fix: If execution is completed but steps_completed is 0, set to total steps
             if (status === 'completed' && stepsCompleted === 0) {
@@ -723,7 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!triggerPipelineBtn) return;
 
         const stepsCompleted = execution.steps_completed || 0;
-        const totalSteps = 5; // OPTIMIZED: Pipeline has 5 steps as per v6.2
+        const totalSteps = execution.total_steps || 5; // Use API value
         const currentStep = execution.current_step || 'processing';
 
         // Update button text with progress
@@ -1085,7 +1089,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const summarySection = document.createElement('div');
             summarySection.className = 'mb-6 bg-gray-50 dark:bg-gray-900 rounded-lg p-4';
 
-            const formatDateTime = (dateStr) => {
+            const formatDateTime = (dateStr, formattedVersion) => {
+                // FIXED: Use pre-formatted date from API if available (already in ET)
+                if (formattedVersion && formattedVersion !== 'N/A') {
+                    return formattedVersion;
+                }
                 if (!dateStr) return 'Not available';
                 try {
                     return displayFormattedDate(dateStr);
@@ -1117,15 +1125,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">Progress:</span><br>
-                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.steps_completed || (executionDetails.status === 'completed' ? 6 : 0)}/6 steps</span>
+                        <span class="text-gray-900 dark:text-gray-100">${executionDetails.steps_completed || (executionDetails.status === 'completed' ? (executionDetails.total_steps || 5) : 0)}/${executionDetails.total_steps || 5} steps</span>
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">Start Time:</span><br>
-                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.start_time)}</span>
+                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.start_time, executionDetails.start_time_formatted)}</span>
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">End Time:</span><br>
-                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.end_time)}</span>
+                        <span class="text-gray-900 dark:text-gray-100">${formatDateTime(executionDetails.end_time, executionDetails.end_time_formatted)}</span>
                     </div>
                     <div>
                         <span class="font-medium text-gray-700 dark:text-gray-300">Trigger:</span><br>
