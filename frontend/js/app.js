@@ -2203,7 +2203,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="text-red-600 dark:text-red-400 text-sm">${summary.error}</span>
                     </div>
                 ` : ''}
-            `;</old_str>
+            `;
+
+            // Prize winners table section</old_str>
 
             // Prize winners table section
             const winnersSection = document.createElement('div');
