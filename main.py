@@ -164,22 +164,8 @@ class PipelineOrchestrator:
             if not hasattr(self, 'current_execution_id'):
                 self.current_execution_id = f"main_{str(uuid.uuid4())[:8]}"
             
-            # Save initial execution record to database
-            from src.database import save_pipeline_execution
-            initial_execution_data = {
-                'execution_id': self.current_execution_id,
-                'status': 'starting',
-                'start_time': self.execution_start_time.isoformat(),
-                'trigger_type': execution_source,
-                'trigger_source': 'main_pipeline',
-                'current_step': 'initialization',
-                'steps_completed': 0,
-                'total_steps': 6,
-                'num_predictions': num_predictions,
-                'execution_details': trigger_details or {}
-            }
-            save_pipeline_execution(initial_execution_data)
-            logger.info(f"Pipeline execution {self.current_execution_id} registered in database")
+            # Execution record will be managed by orchestrator to avoid duplicates
+            logger.info(f"Pipeline execution {self.current_execution_id} starting from main.py")
 
             # Check available resources before starting
             self._check_system_resources()

@@ -126,16 +126,11 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int):
     logger.info(f"Starting background pipeline execution {execution_id} with {num_predictions} predictions")
 
     try:
-        # Update execution status to running and save to database immediately
+        # Update execution status to running (orchestrator will handle DB updates)
         pipeline_executions[execution_id]["status"] = "running" 
         pipeline_executions[execution_id]["current_step"] = "pipeline_execution"
         
-        # Save to database immediately so it appears in Execution History
-        try:
-            save_pipeline_execution_record(pipeline_executions[execution_id])
-            logger.info(f"Saved pipeline execution {execution_id} to database with status: running")
-        except Exception as db_error:
-            logger.error(f"Failed to save initial execution record: {db_error}")
+        logger.info(f"Pipeline execution {execution_id} status updated to running")
 
         # Build command - main.py ahora acepta argumentos
         cmd = [

@@ -428,26 +428,17 @@ async def trigger_pipeline_execution(
         # Generate execution ID
         execution_id = str(uuid.uuid4())[:8]
 
-        # Create execution metadata
+        # Store only minimal data in memory - let orchestrator create DB record
         current_time = datetime.now()
         pipeline_executions[execution_id] = {
             "execution_id": execution_id,
             "status": "starting",
             "start_time": current_time.isoformat(),
-            "current_step": "manual_trigger",
-            "steps_completed": 0,
-            "total_steps": 5,  # OPTIMIZED: Pipeline now has 5 steps
-            "num_predictions": num_predictions,
-            "error": None,
             "trigger_type": "manual_dashboard",
-            "execution_source": "manual_dashboard",
-            "trigger_details": {
-                "type": "manual",
-                "triggered_by": f"user_{current_user.username}",
-                "trigger_time": current_time.isoformat(),
-                "num_predictions_requested": num_predictions,
-                "force_execution": force
-            }
+            "trigger_source": "manual_dashboard",
+            "num_predictions": num_predictions,
+            "triggered_by": f"user_{current_user.username}",
+            "force_execution": force
         }
 
         # Start background pipeline execution

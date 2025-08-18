@@ -133,21 +133,34 @@ class PipelineOrchestrator:
         start_time = DateManager.get_current_et_time()
         logger.info(f"Starting optimized pipeline execution {execution_id} with {num_predictions} predictions")
 
-        # Save initial execution record to database
-        from src.database import save_pipeline_execution
-        initial_execution_data = {
-            'execution_id': execution_id,
-            'status': 'starting',
-            'start_time': start_time.isoformat(),
-            'trigger_type': 'pipeline_execution',
-            'trigger_source': 'orchestrator',
-            'current_step': 'initialization',
-            'steps_completed': 0,
-            'total_steps': 5,
-            'num_predictions': num_predictions,
-            'execution_details': {'pipeline_version': 'v6.2_optimized'}
-        }
-        save_pipeline_execution(initial_execution_data)
+        # Check if execution record already exists, if not create it
+        from src.database import save_pipeline_execution, get_pipeline_execution_by_id
+        
+        existing_execution = get_pipeline_execution_by_id(execution_id)
+        if not existing_execution:
+            # Create new execution record
+            initial_execution_data = {
+                'execution_id': execution_id,
+                'status': 'starting',
+                'start_time': start_time.isoformat(),
+                'trigger_type': 'pipeline_execution',
+                'trigger_source': 'orchestrator',
+                'current_step': 'initialization',
+                'steps_completed': 0,
+                'total_steps': 5,
+                'num_predictions': num_predictions,
+                'execution_details': {'pipeline_version': 'v6.2_optimized'}
+            }
+            save_pipeline_execution(initial_execution_data)
+            logger.info(f"Created new pipeline execution record {execution_id}")
+        else:
+            # Update existing record to running status
+            update_pipeline_execution(execution_id, {
+                'status': 'running',
+                'current_step': 'initialization',
+                'start_time': start_time.isoformat()
+            })
+            logger.info(f"Updated existing pipeline execution record {execution_id}")
 
         try:
             # Step 1: Data Update & Evaluation

@@ -128,15 +128,23 @@ def get_db_connection() -> sqlite3.Connection:
 
 
 def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
-    """Save pipeline execution to SQLite database."""
+    """Save pipeline execution to SQLite database with duplicate prevention."""
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             execution_id = execution_data.get('execution_id')
 
+            # Check if execution already exists
+            cursor.execute("SELECT id FROM pipeline_executions WHERE execution_id = ?", (execution_id,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                logger.warning(f"Pipeline execution {execution_id} already exists, skipping duplicate creation")
+                return execution_id
+
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO pipeline_executions (
+                INSERT INTO pipeline_executions (
                     execution_id, status, start_time, trigger_type, trigger_source,
                     current_step, steps_completed, total_steps, num_predictions,
                     execution_details
@@ -146,12 +154,12 @@ def save_pipeline_execution(execution_data: Dict[str, Any]) -> Optional[str]:
                 execution_data.get('status', 'starting'),
                 execution_data.get('start_time'),
                 execution_data.get('trigger_type', 'unknown'),
-                execution_data.get('execution_source', 'unknown'),
+                execution_data.get('trigger_source', 'unknown'),
                 execution_data.get('current_step'),
                 execution_data.get('steps_completed', 0),
-                execution_data.get('total_steps', 7),
+                execution_data.get('total_steps', 5),
                 execution_data.get('num_predictions', 100),
-                json.dumps(execution_data.get('trigger_details', {}), cls=NumpyEncoder)
+                json.dumps(execution_data.get('execution_details', {}), cls=NumpyEncoder)
             ))
 
             conn.commit()
