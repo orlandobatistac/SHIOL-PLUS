@@ -427,6 +427,21 @@ def _create_prediction_tables(cursor):
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS validation_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prediction_id INTEGER NOT NULL,
+            draw_date DATE NOT NULL,
+            matches INTEGER NOT NULL,
+            prize_amount REAL NOT NULL,
+            prize_description TEXT NOT NULL,
+            actual_numbers TEXT NOT NULL,
+            actual_powerball INTEGER NOT NULL,
+            evaluated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (prediction_id) REFERENCES predictions_log (id)
+        )
+    """)
+
     # Migration for target_draw_date column
     try:
         cursor.execute("PRAGMA table_info(predictions_log)")
@@ -569,7 +584,9 @@ def _create_indexes(cursor):
         ("idx_pipeline_executions_status", "pipeline_executions", "status"),
         ("idx_pipeline_executions_start_time", "pipeline_executions", "start_time DESC"),
         ("idx_pipeline_executions_trigger_type", "pipeline_executions", "trigger_type"),
-        ("idx_pipeline_executions_execution_id", "pipeline_executions", "execution_id")
+        ("idx_pipeline_executions_execution_id", "pipeline_executions", "execution_id"),
+        ("idx_validation_results_prediction_id", "validation_results", "prediction_id"),
+        ("idx_validation_results_draw_date", "validation_results", "draw_date")
     ]
 
     for index_name, table_name, columns in indexes:
