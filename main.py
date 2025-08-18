@@ -649,7 +649,7 @@ class PipelineOrchestrator:
 
             # Initialize evaluator and run evaluation
             evaluator = PredictionEvaluator()
-            evaluation_results = evaluator.evaluate_predictions()
+            evaluation_results = evaluator.evaluate_recent_predictions(days_back=7)
 
             result = {
                 'evaluation_completed': True,
