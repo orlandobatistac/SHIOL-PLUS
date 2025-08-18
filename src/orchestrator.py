@@ -103,10 +103,15 @@ class PipelineOrchestrator:
         Returns:
             Dict containing pipeline execution results
         """
-        # Set running state
+        # Set running state with proper initialization
+        if self._is_running:
+            logger.warning(f"Pipeline already running with ID: {self._current_execution_id}")
+            raise ValueError(f"Pipeline execution already in progress: {self._current_execution_id}")
+        
         self._is_running = True
         self._current_execution_id = execution_id
         self.steps_completed = 0
+        self.current_step = "initializing"
 
         start_time = DateManager.get_current_et_time()
         logger.info(f"Starting optimized pipeline execution {execution_id} with {num_predictions} predictions")
@@ -170,6 +175,7 @@ class PipelineOrchestrator:
             update_pipeline_execution(execution_id, {
                 "status": "completed",
                 "steps_completed": 5,
+                "total_steps": 5,
                 "end_time": end_time.isoformat(),
                 "current_step": "completed"
             })

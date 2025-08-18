@@ -723,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!triggerPipelineBtn) return;
 
         const stepsCompleted = execution.steps_completed || 0;
-        const totalSteps = 7; // CORRECTED: Pipeline has 7 steps
+        const totalSteps = 5; // OPTIMIZED: Pipeline has 5 steps as per v6.2
         const currentStep = execution.current_step || 'processing';
 
         // Update button text with progress

@@ -10,7 +10,7 @@ run = ["sh", "-c", "uvicorn src.api:app --host 0.0.0.0 --port 3000"]
 deploymentTarget = "cloudrun"
 
 [workflows]
-runButton = "Start SHIOL+ Server"
+runButton = "Start Optimized Server"
 
 [[workflows.workflow]]
 name = "Run Server"
@@ -63,6 +63,32 @@ args = "sleep 1"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "uvicorn src.api:app --host 0.0.0.0 --port 3000 --reload"
+
+[[workflows.workflow]]
+name = "Start Optimized Server"
+author = 45170021
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"uvicorn.*src.api:app\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "sleep 2"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "uvicorn src.api:app --host 0.0.0.0 --port 3000 --reload --workers 1"
+
+[[workflows.workflow]]
+name = "Validate Pipeline"
+author = 45170021
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python scripts/validate_pipeline.py"
 
 [[ports]]
 localPort = 3000
