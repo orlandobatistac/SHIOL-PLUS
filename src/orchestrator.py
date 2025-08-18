@@ -111,6 +111,22 @@ class PipelineOrchestrator:
         start_time = DateManager.get_current_et_time()
         logger.info(f"Starting optimized pipeline execution {execution_id} with {num_predictions} predictions")
 
+        # Save initial execution record to database
+        from src.database import save_pipeline_execution
+        initial_execution_data = {
+            'execution_id': execution_id,
+            'status': 'starting',
+            'start_time': start_time.isoformat(),
+            'trigger_type': 'pipeline_execution',
+            'trigger_source': 'orchestrator',
+            'current_step': 'initialization',
+            'steps_completed': 0,
+            'total_steps': 5,
+            'num_predictions': num_predictions,
+            'execution_details': {'pipeline_version': 'v6.2_optimized'}
+        }
+        save_pipeline_execution(initial_execution_data)
+
         try:
             # Step 1: Data Update & Evaluation
             logger.info("🔄 Step 1/5: Data Update & Evaluation - Downloading latest data and evaluating previous predictions...")

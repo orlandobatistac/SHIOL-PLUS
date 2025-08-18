@@ -159,6 +159,28 @@ class PipelineOrchestrator:
         logger.info(f"Execution source: {execution_source}")
 
         try:
+            # Generate execution ID if not provided
+            import uuid
+            if not hasattr(self, 'current_execution_id'):
+                self.current_execution_id = f"main_{str(uuid.uuid4())[:8]}"
+            
+            # Save initial execution record to database
+            from src.database import save_pipeline_execution
+            initial_execution_data = {
+                'execution_id': self.current_execution_id,
+                'status': 'starting',
+                'start_time': self.execution_start_time.isoformat(),
+                'trigger_type': execution_source,
+                'trigger_source': 'main_pipeline',
+                'current_step': 'initialization',
+                'steps_completed': 0,
+                'total_steps': 6,
+                'num_predictions': num_predictions,
+                'execution_details': trigger_details or {}
+            }
+            save_pipeline_execution(initial_execution_data)
+            logger.info(f"Pipeline execution {self.current_execution_id} registered in database")
+
             # Check available resources before starting
             self._check_system_resources()
 
@@ -193,6 +215,15 @@ class PipelineOrchestrator:
             # Generate final summary
             pipeline_summary = self._generate_pipeline_summary(pipeline_results, execution_time)
 
+            # Update final execution status in database
+            from src.database import update_pipeline_execution
+            update_pipeline_execution(self.current_execution_id, {
+                'status': 'completed',
+                'end_time': datetime.now().isoformat(),
+                'steps_completed': pipeline_summary.get('successful_steps', 0),
+                'current_step': 'completed'
+            })
+
             logger.info("=" * 60)
             logger.info("SHIOL+ PHASE 5 PIPELINE EXECUTION COMPLETED SUCCESSFULLY")
             logger.info(f"Total execution time: {execution_time}")
@@ -226,6 +257,16 @@ class PipelineOrchestrator:
             error_msg = f"Pipeline execution failed: {str(e)}"
             logger.error(error_msg)
             logger.error(f"Traceback: {traceback.format_exc()}")
+
+            # Update failed execution status in database
+            if hasattr(self, 'current_execution_id'):
+                from src.database import update_pipeline_execution
+                update_pipeline_execution(self.current_execution_id, {
+                    'status': 'failed',
+                    'end_time': datetime.now().isoformat(),
+                    'error_message': error_msg,
+                    'current_step': 'failed'
+                })
 
             return {
                 'status': 'failed',
