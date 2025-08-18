@@ -2197,6 +2197,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="text-gray-900 dark:text-gray-100">${summary.average_matches.toFixed(1)}</span>
                     </div>
                 </div>
+                ${summary.error ? `
+                    <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                        <span class="font-medium text-red-700 dark:text-red-300">Error:</span><br>
+                        <span class="text-red-600 dark:text-red-400 text-sm">${summary.error}</span>
+                    </div>
+                ` : ''}
             `;</old_str>
 
             // Prize winners table section
