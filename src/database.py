@@ -1141,6 +1141,87 @@ def get_prediction_details(prediction_id: int) -> Optional[Dict[str, Any]]:
         logger.error(f"Error retrieving prediction details for ID {prediction_id}: {e}")
         return None
 
+def get_evaluated_predictions_for_execution(execution_id: str) -> Optional[Dict[str, Any]]:
+    """Get evaluation results for a specific pipeline execution"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get all predictions that were evaluated for this execution
+            cursor.execute("""
+                SELECT 
+                    p.id, p.numbers, p.powerball, p.score_total, p.method,
+                    p.timestamp, p.prediction_rank,
+                    v.matches, v.prize_amount, v.prize_description,
+                    v.draw_date, v.actual_numbers, v.actual_powerball
+                FROM predictions_log p
+                LEFT JOIN validation_results v ON p.id = v.prediction_id
+                WHERE p.execution_id = ? OR p.timestamp LIKE ?
+                ORDER BY p.prediction_rank ASC, p.score_total DESC
+            """, (execution_id, f"%{execution_id}%"))
+            
+            results = cursor.fetchall()
+            
+            if not results:
+                logger.warning(f"No evaluation data found for execution {execution_id}")
+                return None
+            
+            predictions = []
+            target_draw_date = None
+            
+            for row in results:
+                prediction = {
+                    'id': row[0],
+                    'numbers': json.loads(row[1]) if row[1] else [],
+                    'powerball': row[2],
+                    'score_total': row[3],
+                    'method': row[4] or 'AI',
+                    'timestamp': row[5],
+                    'rank': row[6] or len(predictions) + 1,
+                    'matches': row[7] or 0,
+                    'prize_amount': row[8] or 0,
+                    'prize_description': row[9] or 'No Prize',
+                    'draw_date': row[10],
+                    'actual_numbers': json.loads(row[11]) if row[11] else [],
+                    'actual_powerball': row[12]
+                }
+                
+                predictions.append(prediction)
+                
+                # Set target draw date from first result
+                if not target_draw_date and row[10]:
+                    target_draw_date = row[10]
+            
+            return {
+                'execution_id': execution_id,
+                'target_draw_date': target_draw_date or 'Unknown',
+                'predictions': predictions,
+                'total_predictions': len(predictions)
+            }
+            
+    except Exception as e:
+        logger.error(f"Error getting evaluated predictions for execution {execution_id}: {e}")
+        return None
+
+def get_evaluated_predictions_count(execution_id: str) -> int:
+    """Get count of evaluated predictions for an execution"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM predictions_log p
+                LEFT JOIN validation_results v ON p.id = v.prediction_id
+                WHERE (p.execution_id = ? OR p.timestamp LIKE ?) 
+                AND v.prediction_id IS NOT NULL
+            """, (execution_id, f"%{execution_id}%"))
+            
+            result = cursor.fetchone()
+            return result[0] if result else 0
+            
+    except Exception as e:
+        logger.error(f"Error counting evaluated predictions for execution {execution_id}: {e}")
+        return 0
+
 
 def get_predictions_by_dataset_hash(dataset_hash: str) -> pd.DataFrame:
     """Retrieve all predictions associated with a specific dataset hash."""

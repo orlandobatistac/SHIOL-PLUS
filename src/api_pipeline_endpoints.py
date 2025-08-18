@@ -533,6 +533,55 @@ async def get_execution_details(execution_id: str, current_user: User = Depends(
         logger.error(f"Error getting execution details for {execution_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting execution details: {str(e)}")
 
+@pipeline_router.get("/execution/{execution_id}/evaluation")
+async def get_execution_evaluation(execution_id: str):
+    """Get evaluation results for a specific pipeline execution"""
+    try:
+        from src.database import get_evaluated_predictions_for_execution
+        
+        # Get evaluation data for this execution
+        evaluation_data = get_evaluated_predictions_for_execution(execution_id)
+        
+        if not evaluation_data:
+            raise HTTPException(status_code=404, detail="No evaluation data found for this execution")
+        
+        # Calculate summary statistics
+        total_predictions = len(evaluation_data['predictions'])
+        winning_predictions = len([p for p in evaluation_data['predictions'] if p.get('prize_amount', 0) > 0])
+        total_prizes = sum(p.get('prize_amount', 0) for p in evaluation_data['predictions'])
+        best_prize = max((p.get('prize_amount', 0) for p in evaluation_data['predictions']), default=0)
+        
+        # Calculate win rate and average matches
+        win_rate = (winning_predictions / total_predictions * 100) if total_predictions > 0 else 0
+        avg_matches = sum(p.get('matches', 0) for p in evaluation_data['predictions']) / total_predictions if total_predictions > 0 else 0
+        
+        # Get only winners for the prize winners table
+        prize_winners = [p for p in evaluation_data['predictions'] if p.get('prize_amount', 0) > 0]
+        
+        response_data = {
+            "execution_id": execution_id,
+            "evaluation_summary": {
+                "target_draw_date": evaluation_data.get('target_draw_date', 'Unknown'),
+                "total_predictions": total_predictions,
+                "predictions_evaluated": total_predictions,
+                "winning_predictions": winning_predictions,
+                "total_prizes_won": total_prizes,
+                "best_prize": best_prize,
+                "win_rate": win_rate,
+                "average_matches": avg_matches
+            },
+            "prize_winners": prize_winners,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return convert_numpy_types(response_data)
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error getting evaluation for execution {execution_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting evaluation data: {str(e)}")
+
 @pipeline_router.get("/history")
 async def get_pipeline_history():
     """Get recent pipeline execution history from SQLite database"""

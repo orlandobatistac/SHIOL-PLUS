@@ -2197,7 +2197,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="text-gray-900 dark:text-gray-100">${summary.average_matches.toFixed(1)}</span>
                     </div>
                 </div>
-            `;
+            `;</old_str>
 
             // Prize winners table section
             const winnersSection = document.createElement('div');
