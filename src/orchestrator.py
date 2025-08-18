@@ -19,8 +19,9 @@ class PipelineOrchestrator:
     def __init__(self):
         """Initialize pipeline orchestrator with all required components"""
         # DEPRECATED WARNING: This orchestrator will be removed
-        logger.warning("🚨 DEPRECATED: orchestrator.py pipeline is deprecated. Use main.py pipeline instead.")
-        logger.warning("This orchestrator will be removed in the next version. Please switch to main.py.")
+        logger.error("🚨 CRITICAL: orchestrator.py pipeline is DEPRECATED and should NOT be used.")
+        logger.error("This creates inconsistent results vs main.py pipeline. Use main.py only.")
+        logger.error("Contact admin immediately if you see this message in production.")
 
         logger.info("Initializing PipelineOrchestrator...")
 

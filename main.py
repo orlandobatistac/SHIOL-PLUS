@@ -626,11 +626,21 @@ class PipelineOrchestrator:
 
     def step_historical_validation(self) -> Dict[str, Any]:
         """
-        Step 5: Historical Validation - Evaluate predictions against known results in database
+        Step 4: Historical Validation - Evaluate predictions against known results in database
         """
         logger.info("Starting prediction evaluation step...")
 
         try:
+            # Check if we have new drawing data from step 1
+            recent_data_update = self.pipeline_status.get('data_update', {})
+            new_records = recent_data_update.get('result', {}).get('total_rows_in_database', 0)
+            
+            # Always evaluate, but log the context
+            if new_records > 0:
+                logger.info(f"🔍 New drawing data available, proceeding with evaluation of recent predictions...")
+            else:
+                logger.info("ℹ️ No new drawing data detected, but evaluating recent predictions for maintenance...")
+
             from src.prediction_evaluator import PredictionEvaluator
 
             # Initialize evaluator and run evaluation
