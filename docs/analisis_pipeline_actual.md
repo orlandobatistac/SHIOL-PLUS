@@ -1,231 +1,183 @@
-
 # Análisis del Pipeline Actual SHIOL+ v5.0
+
+## CORRECCIÓN IMPORTANTE: Pipeline Real de 6 Pasos
+
+**ACLARACIÓN**: Este documento ha sido corregido para reflejar el **pipeline real** que ejecuta el sistema, no el pipeline optimizado del orchestrator.
 
 ## Resumen Ejecutivo
 
-El sistema SHIOL+ utiliza un **pipeline optimizado de 5 pasos** diseñado para generar predicciones de lotería Powerball usando inteligencia artificial y análisis adaptativo. El sistema se ejecuta automáticamente tres veces por semana y está desplegado en Replit con acceso público.
+El sistema SHIOL+ utiliza un **pipeline completo de 6 pasos** que se ejecuta desde `main.py`. Aunque existe un pipeline optimizado de 5 pasos en `orchestrator.py`, el scheduler automático ejecuta el pipeline completo.
 
-## Arquitectura del Pipeline
+## Pipeline Real: 6 Pasos (main.py)
 
-### Pipeline Optimizado: 5 Pasos
+El scheduler ejecuta `python main.py` que implementa el pipeline completo:
 
-El sistema ha evolucionado de un pipeline original de 7 pasos a uno optimizado de 5 pasos para mejorar rendimiento y eficiencia:
-
-#### **Paso 1: Data Update & Evaluation**
-- **Método**: `_run_data_update_and_evaluation()`
+### **Paso 1: Data Update & Drawing Detection**
+- **Método**: `step_data_update()`
 - **Duración**: 2-5 minutos
 - **Función**: 
-  - Actualiza base de datos con nuevos resultados de sorteos
-  - Evalúa predicciones anteriores contra resultados reales
-  - Calcula premios ganados y estadísticas de rendimiento
-  - Detecta nuevos sorteos para procesar
+  - Actualiza base de datos con nuevos resultados usando `update_database_from_source()`
+  - Carga datos históricos para el pipeline
+  - Detecta el último sorteo disponible
+  - Prepara datos para análisis posterior
 
-#### **Paso 2: Model Prediction (Ensemble Only)**
-- **Método**: `_run_model_prediction()`
-- **Duración**: 30-60 segundos
-- **Función**:
-  - Ejecuta solo el modelo ensemble (más efectivo)
-  - Genera probabilidades para números (1-69) y powerball (1-26)
-  - Calcula métricas de entropía para confianza
-  - Omite modelos individuales por eficiencia
-
-#### **Paso 3: Scoring & Selection**
-- **Método**: `_score_and_select()`
-- **Duración**: 10-20 segundos
-- **Función**:
-  - Aplica sistema de scoring multi-criterio:
-    - **Probability** (40%): Basado en predicciones del modelo
-    - **Diversity** (25%): Balance par/impar, distribución por rangos
-    - **Historical** (20%): Frecuencias históricas y recencia
-    - **Risk-adjusted** (15%): Evita patrones obvios
-
-#### **Paso 4: Prediction Generation**
-- **Método**: `_generate_predictions_optimized()`
+### **Paso 2: Adaptive Analysis**
+- **Método**: `step_adaptive_analysis()`
 - **Duración**: 1-3 minutos
 - **Función**:
-  - Genera número solicitado de predicciones (default: 100)
-  - Usa `IntelligentGenerator` con probabilidades del modelo
-  - Procesa en lotes de 50 predicciones
-  - Aplica scoring determinístico para ranking
+  - Ejecuta `run_adaptive_analysis()` sobre últimos 30 días
+  - Inicializa sistema adaptativo si no existe
+  - Analiza rendimiento de predicciones recientes
+  - Prepara datos para optimización de pesos
 
-#### **Paso 5: Save & Serve**
-- **Método**: `_save_and_serve()`
+### **Paso 3: Weight Optimization**
+- **Método**: `step_weight_optimization()`
 - **Duración**: 30-60 segundos
 - **Función**:
-  - Guarda predicciones en base de datos
-  - Prepara top 10 predicciones para dashboard
-  - Actualiza metadatos de ejecución
-  - Optimiza datos para frontend
+  - Optimiza pesos del sistema de scoring usando algoritmo differential_evolution
+  - Analiza rendimiento actual: Probability (40%), Diversity (25%), Historical (20%), Risk-adjusted (15%)
+  - Ajusta pesos basado en resultados históricos
+  - Mejora la efectividad del scoring
 
-## Componentes del Sistema
+### **Paso 4: Historical Validation**
+- **Método**: `step_historical_validation()`
+- **Duración**: 1-2 minutos
+- **Función**:
+  - Ejecuta `PredictionEvaluator` sobre predicciones de últimos 7 días
+  - Evalúa predicciones contra resultados reales conocidos
+  - Calcula premios ganados y métricas de rendimiento
+  - Actualiza base de datos con resultados de evaluación
 
-### Core Pipeline
-- **Orchestrator** (`src/orchestrator.py`): Coordina ejecución de 5 pasos
-- **Intelligent Generator** (`src/intelligent_generator.py`): Sistema de scoring y generación
-- **Predictor** (`src/predictor.py`): Motor de predicción principal
-- **Database** (`src/database.py`): Gestión de datos SQLite optimizada
+### **Paso 5: Prediction Generation**
+- **Método**: `step_prediction_generation()`
+- **Duración**: 2-4 minutos
+- **Función**:
+  - Genera 50 predicciones Smart AI usando `predictor.predict_diverse_plays()`
+  - Calcula fecha del próximo sorteo (Lunes/Miércoles/Sábado)
+  - Aplica sistema de scoring multi-criterio optimizado
+  - Valida modelo antes de generar predicciones
+  - Ejecuta reentrenamiento automático si es necesario
 
-### APIs y Frontend
-- **API Principal** (`src/api.py`): Router principal FastAPI
-- **Public API** (`src/api_public_endpoints.py`): Endpoints públicos
-- **Dashboard API** (`src/api_dashboard_endpoints.py`): Endpoints admin
-- **Pipeline API** (`src/api_pipeline_endpoints.py`): Control de pipeline
-- **Frontend** (`frontend/`): Interfaz web completa
+### **Paso 6: Performance Analysis**
+- **Método**: `step_performance_analysis()`
+- **Duración**: 30-60 segundos
+- **Función**:
+  - Analiza métricas de rendimiento para 1, 7 y 30 días
+  - Genera insights de performance usando `get_performance_analytics()`
+  - Calcula win rate, accuracy y estadísticas generales
+  - Prepara reportes de rendimiento
 
-### Modelos y Scoring
-- **Ensemble Predictor** (`src/ensemble_predictor.py`): Sistema ensemble
-- **Model Pool Manager** (`src/model_pool_manager.py`): Gestión de modelos
-- **Adaptive Feedback** (`src/adaptive_feedback.py`): Sistema adaptativo
+## Diferencias con Pipeline del Orchestrator
 
-## Programación Automática
+### Pipeline Completo (main.py) - **EL QUE SE EJECUTA**
+- ✅ **6 pasos completos**
+- ✅ Adaptive Analysis incluido
+- ✅ Weight Optimization incluido
+- ✅ Historical Validation completa
+- ✅ Análisis de rendimiento detallado
+- ⏱️ **Tiempo total**: 8-15 minutos
 
-### Scheduler Configurado
+### Pipeline Optimizado (orchestrator.py) - **NO SE USA**
+- ⚠️ 5 pasos optimizados
+- ❌ No tiene Adaptive Analysis separado
+- ❌ No optimiza pesos independientemente
+- ❌ Validación histórica simplificada
+- ⏱️ Tiempo total: 5-10 minutos
+
+## Configuración del Scheduler
+
 ```python
-# Días y horarios de ejecución
+# En src/api.py - CONFIRMA que ejecuta main.py
 scheduler.add_job(
     func=trigger_full_pipeline_automatically,
     trigger="cron",
-    day_of_week="mon,wed,sat",  # Lunes, Miércoles, Sábado
-    hour=23, minute=29,         # 11:29 PM ET
+    day_of_week="mon,wed,sat",
+    hour=23, minute=29,
     timezone="America/New_York"
 )
+
+# trigger_full_pipeline_automatically() ejecuta:
+cmd = ["python", "main.py"]  # ← Pipeline de 6 pasos
+subprocess.run(cmd, ...)
 ```
 
-### Timing Strategy
-- **30 minutos después del sorteo** oficial (10:59 PM ET)
-- **Timezone fijo**: America/New_York con manejo DST automático
-- **Prevención de solapamiento**: Solo una ejecución a la vez
+## Flujo de Ejecución Real
 
-## Flujo de Datos
-
-### Input → Processing → Output
 ```
-Sorteos Oficiales → Data Update → Feature Engineering → 
-Ensemble Model → Multi-Criteria Scoring → Top Predictions → 
-Database Storage → API Endpoints → Frontend Display
-```
-
-### Base de Datos Optimizada
-```sql
--- Tablas principales
-powerball_draws       -- Resultados históricos
-predictions_log       -- Predicciones con scoring
-pipeline_executions   -- Historial de ejecución
-adaptive_weights      -- Pesos dinámicos de scoring
+Sorteo Powerball (10:59 PM ET)
+↓ (30 minutos después)
+Scheduler ejecuta: python main.py
+↓
+Pipeline de 6 pasos (main.py):
+1. Data Update & Drawing Detection
+2. Adaptive Analysis  
+3. Weight Optimization
+4. Historical Validation
+5. Prediction Generation
+6. Performance Analysis
+↓
+50 predicciones guardadas en base de datos
+↓
+Top 10 mostradas en dashboard
 ```
 
-## Performance Metrics
+## Componentes del Sistema
 
-### Tiempos de Ejecución
-- **Pipeline completo**: 5-10 minutos (antes: 30 minutos)
-- **Generación 100 predicciones**: 1-3 minutos
-- **API response time**: < 2 segundos
-- **Data update**: 30-60 segundos
+### Core Pipeline (EL REAL)
+- **Main Orchestrator** (`main.py`): Coordina ejecución de 6 pasos
+- **Pipeline Steps**: Métodos `step_*()` en `PipelineOrchestrator`
+- **Predictor** (`src/predictor.py`): Genera predicciones Smart AI
+- **Database** (`src/database.py`): Gestión de datos SQLite
 
-### Recursos del Sistema
-- **CPU**: 60-80% durante pipeline
-- **Memoria**: 70-90% durante generación
-- **Storage**: < 100MB base de datos completa
-- **Uptime**: > 99% disponibilidad
+### Orchestrator Alternativo (NO USADO)
+- **Async Orchestrator** (`src/orchestrator.py`): Pipeline optimizado de 5 pasos
+- **Nota**: Disponible pero no se ejecuta en producción
 
-## Endpoints Críticos
+## Tiempos de Ejecución Reales
 
-### API Pública
-- `GET /` - Interfaz principal
-- `GET /api/v1/public/next-drawing` - Cuenta regresiva
-- `GET /api/v1/public/featured-predictions` - Top predicciones
+### Pipeline Completo (main.py)
+- **Paso 1 (Data Update)**: 2-5 minutos
+- **Paso 2 (Adaptive Analysis)**: 1-3 minutos  
+- **Paso 3 (Weight Optimization)**: 30-60 segundos
+- **Paso 4 (Historical Validation)**: 1-2 minutos
+- **Paso 5 (Prediction Generation)**: 2-4 minutos
+- **Paso 6 (Performance Analysis)**: 30-60 segundos
+- **TOTAL**: 8-15 minutos
 
-### API de Control
-- `GET /api/v1/pipeline/status` - Estado del pipeline
-- `POST /api/v1/pipeline/trigger` - Ejecución manual
-- `GET /api/v1/pipeline/health` - Health check
+### Optimizaciones Implementadas
 
-### API de Predicciones
-- `GET /api/v1/predict-deterministic` - Predicción individual
-- `GET /api/v1/prediction-history` - Historial de predicciones
-
-## Configuración del Sistema
-
-### Pipeline Settings (`config/config.ini`)
-```ini
-[pipeline]
-execution_days = 0,2,5          # Lun, Mié, Sáb
-execution_time = 23:29          # 11:29 PM ET
-timezone = America/New_York
-auto_execution_enabled = true
-default_predictions_count = 100
-
-[scoring]
-probability_weight = 40
-diversity_weight = 25
-historical_weight = 20
-risk_adjusted_weight = 15
-```
+1. **Timeout de seguridad**: 15 minutos máximo (Replit)
+2. **Generación optimizada**: 50 predicciones (vs 100 anteriormente)
+3. **Validación de modelo**: Antes de generar predicciones
+4. **Reentrenamiento automático**: Si calidad del modelo es baja
+5. **Batch processing**: Procesamiento eficiente
 
 ## Estado Actual del Sistema
 
-### Componentes Operativos ✅
-- **Pipeline Orchestrator**: Funcional con 5 pasos optimizados
-- **Intelligent Generator**: Generando 100 predicciones por ejecución
-- **Database Manager**: SQLite optimizada
-- **API Server**: FastAPI en puerto 3000
-- **Dashboard Frontend**: Interfaz web completa
-- **Scheduler**: APScheduler con timezone ET
-- **Subprocess Execution**: Ejecución robusta
+### ✅ Confirmado en Producción
+- **Pipeline activo**: 6 pasos de main.py
+- **Scheduler funcionando**: Lun/Mié/Sáb 11:29 PM ET
+- **Predicciones generándose**: 50 por ejecución
+- **Dashboard actualizado**: Top 10 predicciones mostradas
+- **APIs funcionales**: Endpoints públicos y admin
 
-### Deployment en Replit
-- **URL Pública**: https://shiolplus.replit.app
-- **Puerto**: 3000 (configurado para acceso público)
-- **Servidor**: Uvicorn ASGI con auto-reload
-- **Workflows**: Configurados para reinicio automático
+### ⚠️ Pipeline Orchestrator (Disponible pero NO usado)
+- **Código**: `src/orchestrator.py` con 5 pasos optimizados
+- **Estado**: Funcional pero no ejecutado por scheduler
+- **Uso potencial**: Para ejecuciones manuales específicas
 
-## Optimizaciones Implementadas
+## Próxima Actualización Sugerida
 
-### Performance
-1. **Reducción de pasos**: 7 → 5 pasos
-2. **Ensemble only**: Solo modelo más efectivo
-3. **Batch processing**: Lotes optimizados
-4. **Async execution**: Operaciones no bloqueantes
-5. **Memory management**: Liberación proactiva
+Para evitar confusión, se recomienda:
 
-### Database
-1. **Índices optimizados**: En columnas frecuentes
-2. **Query optimization**: Consultas eficientes
-3. **Data retention**: Limpieza automática
-4. **Connection pooling**: Gestión de conexiones
-
-### Frontend
-1. **API consolidation**: Menos llamadas
-2. **Caching strategy**: Datos temporales
-3. **Progressive loading**: Carga incremental
-4. **Error handling**: Manejo robusto
-
-## Monitoreo y Logs
-
-### Sistema de Logging
-- **Archivo principal**: `logs/shiolplus.log`
-- **Niveles**: DEBUG, INFO, WARNING, ERROR, CRITICAL
-- **Rotación**: Automática por tamaño
-- **Retention**: 30 días de historial
-
-### Health Monitoring
-- **Pipeline status**: Estado en tiempo real
-- **System resources**: CPU, memoria, disco
-- **API performance**: Tiempos de respuesta
-- **Database health**: Conexiones y queries
-
-## Próximas Mejoras Planificadas
-
-### v6.0 Roadmap
-1. **Model enhancement**: Nuevos algoritmos ensemble
-2. **Real-time updates**: WebSocket para updates
-3. **Performance analytics**: Métricas avanzadas
-4. **Multi-lottery support**: Expansión a otros juegos
-5. **Mobile optimization**: Interfaz responsive mejorada
+1. **Unificar pipelines**: Decidir entre 5 o 6 pasos
+2. **Actualizar scheduler**: Para usar orchestrator.py si se prefiere el optimizado
+3. **Documentar claramente**: Cuál pipeline es el oficial
+4. **Mantener consistencia**: Entre documentación y código real
 
 ---
 
-**Documento generado**: Agosto 2025  
-**Versión del sistema**: SHIOL+ v5.0  
-**Estado**: Producción activa en Replit  
-**Próxima actualización**: v6.0 (Q4 2025)
+**Documento corregido**: Agosto 2025  
+**Pipeline documentado**: main.py (6 pasos) - EL REAL  
+**Pipeline alternativo**: orchestrator.py (5 pasos) - Disponible pero no usado  
+**Estado**: Producción activa con pipeline de 6 pasos
