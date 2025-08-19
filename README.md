@@ -1,226 +1,226 @@
 
-# SHIOL+ v6.1: Sistema de Análisis de Lotería con IA Optimizado
+# SHIOL+ v6.1: Optimized AI-Powered Lottery Analysis System
 
-Un sistema inteligente y optimizado diseñado para analizar datos históricos de Powerball y generar predicciones usando técnicas avanzadas de Machine Learning con un pipeline optimizado y una interfaz web moderna.
+An intelligent and optimized system designed to analyze historical Powerball data and generate predictions using advanced Machine Learning techniques with an optimized pipeline and modern web interface.
 
-**🌐 Demo en Vivo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
+**🌐 Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
 
-## 🚀 Descripción del Proyecto
+## 🚀 Project Description
 
-**SHIOL+ (System for Hybrid Intelligence Optimization and Learning)** es una plataforma de IA optimizada que analiza datos históricos de la lotería Powerball para identificar patrones estadísticos y generar predicciones inteligentes. El sistema combina modelos de machine learning con algoritmos adaptativos, proporcionando un pipeline completo de 7 pasos para procesamiento de datos, generación de predicciones, evaluación y análisis de rendimiento.
+**SHIOL+ (System for Hybrid Intelligence Optimization and Learning)** is an optimized AI platform that analyzes historical Powerball lottery data to identify statistical patterns and generate intelligent predictions. The system combines machine learning models with adaptive algorithms, providing a complete 7-step pipeline for data processing, prediction generation, evaluation, and performance analysis.
 
-La versión 6.1 introduce **optimización del pipeline** con un código optimizado, rendimiento mejorado y enfoque en el flujo principal de predicciones que alimenta la interfaz frontend.
+Version 6.1 introduces **optimized pipeline architecture** with streamlined code, improved performance, and focus on the main prediction flow that powers the frontend interface.
 
-> **Importante**: Esta herramienta está creada para fines educativos, de investigación y entretenimiento. La lotería es un juego de azar, y SHIOL+ **no garantiza premios o ganancias**. Siempre juega responsablemente.
+> **Important**: This tool is created for educational, research, and entertainment purposes. The lottery is a game of chance, and SHIOL+ **does not guarantee prizes or winnings**. Always play responsibly.
 
-## ✨ Características Principales
+## ✨ Key Features
 
-### 🤖 Sistema de Pipeline con IA Optimizado
-- **Pipeline Automatizado de 7 Pasos**: Actualización de datos, análisis adaptativo, optimización de pesos, generación de predicciones, evaluación, validación y análisis de rendimiento
-- **Predicciones Inteligentes**: 100 predicciones optimizadas por ejecución usando ensemble machine learning
-- **Programación Automática**: Se ejecuta 30 minutos después de cada sorteo de Powerball (Lun/Mié/Sáb a las 11:29 PM ET)
-- **Aprendizaje Adaptativo**: Mejora continua basada en datos de rendimiento histórico
-- **Evaluación con Resultados Reales**: Compara predicciones contra sorteos oficiales y calcula premios ganados
+### 🤖 Optimized AI Pipeline System
+- **Automated 7-Step Pipeline**: Data update, adaptive analysis, weight optimization, prediction generation, evaluation, validation, and performance analysis
+- **Intelligent Predictions**: 100 optimized predictions per execution using ensemble machine learning
+- **Automatic Scheduling**: Runs 30 minutes after each Powerball drawing (Mon/Wed/Sat at 11:29 PM ET)
+- **Adaptive Learning**: Continuous improvement based on historical performance data
+- **Real Results Evaluation**: Compares predictions against official drawings and calculates prizes won
 
-### 🌐 Interfaz Web Moderna
-- **Dashboard en Tiempo Real**: Estado del pipeline en vivo, visualización de predicciones y monitoreo del sistema
-- **Interfaz Pública**: Diseño limpio y responsive para ver las últimas predicciones
-- **Contador Regresivo**: Cuenta regresiva en tiempo real al próximo sorteo de Powerball
-- **Análisis de Evaluación**: Métricas de evaluación de predicciones, tasas de acierto y premios ganados
-- **API RESTful**: Suite completa de API para integración y automatización
+### 🌐 Modern Web Interface
+- **Real-Time Dashboard**: Live pipeline status, prediction visualization, and system monitoring
+- **Public Interface**: Clean and responsive design for viewing latest predictions
+- **Live Countdown**: Real-time countdown to next Powerball drawing
+- **Evaluation Analytics**: Prediction evaluation metrics, hit rates, and prizes won
+- **RESTful API**: Complete API suite for integration and automation
 
-### 📊 Motor de Predicción Inteligente
-- **Modelo Ensemble**: Múltiples algoritmos de ML trabajando juntos para máxima precisión
-- **Ingeniería de Features**: 15+ características engineered de datos históricos de lotería
-- **Pesos Dinámicos**: Optimización adaptativa de pesos basada en rendimiento reciente
-- **Validación de Calidad**: Validación automática del modelo y reentrenamiento cuando es necesario
-- **Evaluación Automática**: Sistema que evalúa predicciones contra resultados oficiales
+### 📊 Intelligent Prediction Engine
+- **Ensemble Model**: Multiple ML algorithms working together for maximum accuracy
+- **Feature Engineering**: 15+ engineered features from historical lottery data
+- **Dynamic Weights**: Adaptive weight optimization based on recent performance
+- **Quality Validation**: Automatic model validation and retraining when needed
+- **Automatic Evaluation**: System that evaluates predictions against official results
 
-### 🔧 Arquitectura del Sistema
-- **Código Optimizado**: Optimizado para rendimiento y mantenibilidad
-- **Base de Datos SQLite**: Almacenamiento eficiente con limpieza y optimización automática
-- **Backend FastAPI**: API de alto rendimiento con documentación automática
-- **Programación Automatizada**: APScheduler para ejecución confiable y consciente de zona horaria
-- **Logging Comprehensivo**: Seguimiento detallado de ejecución y manejo de errores
+### 🔧 System Architecture
+- **Optimized Code**: Streamlined for performance and maintainability
+- **SQLite Database**: Efficient storage with automatic cleanup and optimization
+- **FastAPI Backend**: High-performance API with automatic documentation
+- **Automated Scheduling**: APScheduler for reliable, timezone-aware execution
+- **Comprehensive Logging**: Detailed execution tracking and error handling
 
-## 🏃‍♂️ Inicio Rápido
+## 🏃‍♂️ Quick Start
 
-### Configuración Simple y Ejecución
+### Simple Setup and Execution
 
 ```bash
-# Instalar dependencias
+# Install dependencies
 pip install -r requirements.txt
 
-# Inicializar el sistema
+# Initialize the system
 python src/database.py
 
-# Ejecutar el pipeline completo
+# Run the complete pipeline
 python main.py
 
-# Iniciar el servidor web
+# Start the web server
 python main.py --server --host 0.0.0.0 --port 3000
 ```
 
-### Acceder al Sistema
+### Access the System
 
-Después de iniciar el servidor:
+After starting the server:
 
-- **Interfaz Pública**: `http://localhost:3000/` - Ver últimas predicciones y cuenta regresiva
-- **Demo en Vivo**: [https://shiolplus.replit.app](https://shiolplus.replit.app) - Demostración pública
+- **Public Interface**: `http://localhost:3000/` - View latest predictions and countdown
+- **Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app) - Public demonstration
 
-## 🔄 Flujo de Trabajo del Pipeline
+## 🔄 Pipeline Workflow
 
-El sistema SHIOL+ sigue un pipeline optimizado de 7 pasos:
+The SHIOL+ system follows an optimized 7-step pipeline:
 
-### Paso 1: Actualización de Datos
-- Descarga los últimos resultados de sorteos de Powerball
-- Valida y almacena nuevos datos en la base de datos SQLite
-- Carga datos históricos para análisis
+### Step 1: Data Update
+- Downloads latest Powerball drawing results
+- Validates and stores new data in SQLite database
+- Loads historical data for analysis
 
-### Paso 2: Análisis Adaptativo
-- Analiza el rendimiento de predicciones recientes
-- Identifica patrones en combinaciones ganadoras
-- Actualiza parámetros de aprendizaje adaptativo
+### Step 2: Adaptive Analysis
+- Analyzes recent prediction performance
+- Identifies patterns in winning combinations
+- Updates adaptive learning parameters
 
-### Paso 3: Optimización de Pesos
-- Optimiza pesos de scoring basado en datos de rendimiento
-- Usa algoritmo de evolución diferencial para optimización
-- Balancea factores de probabilidad, diversidad, históricos y de riesgo
+### Step 3: Weight Optimization
+- Optimizes scoring weights based on performance data
+- Uses differential evolution algorithm for optimization
+- Balances probability, diversity, historical, and risk factors
 
-### Paso 4: Generación de Predicciones ⭐
-- **Función Principal**: Genera 100 predicciones Smart AI
-- **Target Dating**: Calcula automáticamente la fecha del próximo sorteo
-- **Scoring Ensemble**: Evaluación multi-criterio de cada combinación
-- **Aseguramiento de Calidad**: Validación del modelo y reentrenamiento automático si es necesario
+### Step 4: Prediction Generation ⭐
+- **Main Function**: Generates 100 Smart AI predictions
+- **Target Dating**: Automatically calculates next drawing date
+- **Ensemble Scoring**: Multi-criteria evaluation of each combination
+- **Quality Assurance**: Model validation and automatic retraining if needed
 
-### Paso 5: Evaluación de Predicciones 🎯
-- **Evaluación Automática**: Compara predicciones contra resultados oficiales de sorteos
-- **Cálculo de Premios**: Determina premios ganados según las reglas de Powerball
-- **Actualización de Base de Datos**: Marca predicciones como evaluadas con resultados
-- **Análisis de Rendimiento**: Rastrea tasas de acierto y métricas de precisión
+### Step 5: Prediction Evaluation 🎯
+- **Automatic Evaluation**: Compares predictions against official drawing results
+- **Prize Calculation**: Determines prizes won according to Powerball rules
+- **Database Update**: Marks predictions as evaluated with results
+- **Performance Analysis**: Tracks hit rates and accuracy metrics
 
-### Paso 6: Validación Histórica
-- Valida predicciones recientes contra resultados reales
-- Alimenta resultados de vuelta al sistema de aprendizaje adaptativo
-- Proporciona métricas para optimización del sistema
+### Step 6: Historical Validation
+- Validates recent predictions against actual results
+- Feeds results back to adaptive learning system
+- Provides metrics for system optimization
 
-### Paso 7: Análisis de Rendimiento
-- Genera métricas comprehensivas de rendimiento
-- Analiza tendencias en períodos de 1, 7 y 30 días
-- Proporciona insights para optimización del sistema
+### Step 7: Performance Analysis
+- Generates comprehensive performance metrics
+- Analyzes trends over 1, 7, and 30-day periods
+- Provides insights for system optimization
 
-## 🌐 Características de la Interfaz Web
+## 🌐 Web Interface Features
 
-### Dashboard Público
-- **Cuenta Regresiva al Próximo Sorteo**: Cuenta regresiva en tiempo real con manejo de zona horaria
-- **Últimas Predicciones**: Predicciones con mayor puntuación y ratings de confianza
-- **Resultados de Evaluación**: Muestra premios ganados en predicciones evaluadas
-- **Estado del Sistema**: Salud del pipeline y tiempo de última ejecución
-- **Responsive Móvil**: Optimizado para todos los tamaños de dispositivo
+### Public Dashboard
+- **Next Drawing Countdown**: Real-time countdown with timezone handling
+- **Latest Predictions**: Top-scored predictions with confidence ratings
+- **Evaluation Results**: Shows prizes won on evaluated predictions
+- **System Status**: Pipeline health and last execution time
+- **Mobile Responsive**: Optimized for all device sizes
 
-### Endpoints de API
-- `GET /api/v1/public/featured-predictions` - Últimas predicciones de IA
-- `GET /api/v1/public/next-drawing` - Información del próximo sorteo
-- `GET /api/v1/pipeline/status` - Estado de ejecución del pipeline
-- `GET /api/v1/system/stats` - Métricas de salud del sistema
+### API Endpoints
+- `GET /api/v1/public/featured-predictions` - Latest AI predictions
+- `GET /api/v1/public/next-drawing` - Next drawing information
+- `GET /api/v1/pipeline/status` - Pipeline execution status
+- `GET /api/v1/system/stats` - System health metrics
 
-## 📈 Evaluación y Análisis de Rendimiento
+## 📈 Evaluation and Performance Analysis
 
-### Estado Actual del Sistema
-- **Base de Datos**: 36+ sorteos históricos de Powerball
-- **Modelo**: Ensemble entrenado con múltiples algoritmos de ML
-- **Predicciones**: Smart AI genera 100 predicciones por ejecución
-- **Ejecución**: Automática 30 minutos después de cada sorteo
-- **Evaluación**: Seguimiento continuo de predicciones vs resultados reales
+### Current System Status
+- **Database**: 36+ historical Powerball drawings
+- **Model**: Ensemble trained with multiple ML algorithms
+- **Predictions**: Smart AI generates 100 predictions per execution
+- **Execution**: Automatic 30 minutes after each drawing
+- **Evaluation**: Continuous tracking of predictions vs actual results
 
-### Calidad de Predicciones y Evaluación
-- **Algoritmo de Scoring**: Sistema de evaluación multi-criterio
-- **Umbrales de Calidad**: Filtrado automático de predicciones de baja calidad
-- **Optimización de Diversidad**: Asegura combinaciones de números variadas
-- **Evaluación de Premios**: Calcula premios reales ganados según reglas de Powerball
-- **Análisis de ROI**: Seguimiento de retorno de inversión en predicciones
+### Prediction Quality and Evaluation
+- **Scoring Algorithm**: Multi-criteria evaluation system
+- **Quality Thresholds**: Automatic filtering of low-quality predictions
+- **Diversity Optimization**: Ensures varied number combinations
+- **Prize Evaluation**: Calculates actual prizes won according to Powerball rules
+- **ROI Analysis**: Tracks return on investment for predictions
 
-## 🛠️ Especificaciones Técnicas
+## 🛠️ Technical Specifications
 
-### Tecnologías Core
+### Core Technologies
 - **Backend**: Python 3.8+, FastAPI, SQLite
 - **Machine Learning**: Scikit-learn, XGBoost, Pandas, NumPy
 - **Frontend**: HTML5, CSS3, JavaScript (Vanilla)
-- **Programación**: APScheduler con consciencia de zona horaria
-- **API**: Diseño RESTful con documentación automática
+- **Scheduling**: APScheduler with timezone awareness
+- **API**: RESTful design with automatic documentation
 
-### Requerimientos del Sistema
-- **Mínimo**: Python 3.8+, 2GB RAM, 1GB espacio en disco
-- **Recomendado**: Python 3.10+, 4GB RAM, almacenamiento SSD
-- **Red**: Conexión a internet para actualizaciones de datos
-- **Navegador**: Navegador moderno para interfaz web
+### System Requirements
+- **Minimum**: Python 3.8+, 2GB RAM, 1GB disk space
+- **Recommended**: Python 3.10+, 4GB RAM, SSD storage
+- **Network**: Internet connection for data updates
+- **Browser**: Modern browser for web interface
 
-### Esquema de Base de Datos
+### Database Schema
 ```sql
--- Tablas principales (optimizadas)
-powerball_draws       -- Resultados históricos de sorteos
-predictions_log       -- Predicciones generadas con scores y evaluaciones
-pipeline_executions   -- Historial de ejecuciones y estado
-adaptive_weights      -- Parámetros dinámicos de scoring
+-- Main tables (optimized)
+powerball_draws       -- Historical drawing results
+predictions_log       -- Generated predictions with scores and evaluations
+pipeline_executions   -- Execution history and status
+adaptive_weights      -- Dynamic scoring parameters
 ```
 
-## 🚀 Opciones de Deployment
+## 🚀 Deployment Options
 
-### Desarrollo Local
+### Local Development
 ```bash
-# Clonar repositorio
+# Clone repository
 git clone <repository-url>
 cd shiol-plus
 
-# Instalar dependencias
+# Install dependencies
 pip install -r requirements.txt
 
-# Inicializar base de datos
+# Initialize database
 python src/database.py
 
-# Ejecutar pipeline completo
+# Run complete pipeline
 python main.py
 
-# Iniciar servidor web
+# Start web server
 python main.py --server --host 0.0.0.0 --port 3000
 ```
 
-### Deployment en Replit (Recomendado)
-El sistema está optimizado para deployment en Replit con:
-- Gestión automática de dependencias
-- Port forwarding (puerto 3000)
-- Generación automática de URL pública
-- Programación automática
-- Persistencia de base de datos
+### Replit Deployment (Recommended)
+The system is optimized for Replit deployment with:
+- Automatic dependency management
+- Port forwarding (port 3000)
+- Automatic public URL generation
+- Automatic scheduling
+- Database persistence
 
-**Demo en Vivo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
+**Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
 
-## 📋 Interfaz de Línea de Comandos
+## 📋 Command Line Interface
 
-### Operaciones del Pipeline
+### Pipeline Operations
 ```bash
-# Ejecución completa del pipeline
+# Complete pipeline execution
 python main.py
 
-# Pasos específicos
-python main.py --step data          # Solo actualización de datos
-python main.py --step prediction    # Solo generación de predicciones
-python main.py --step evaluation    # Solo evaluación de predicciones
+# Specific steps
+python main.py --step data          # Data update only
+python main.py --step prediction    # Prediction generation only
+python main.py --step evaluation    # Prediction evaluation only
 
-# Estado del sistema
+# System status
 python main.py --status
 
-# Servidor web
+# Web server
 python main.py --server --host 0.0.0.0 --port 3000
 ```
 
-## 🔧 Configuración
+## 🔧 Configuration
 
-### Configuración del Sistema (`config/config.ini`)
+### System Configuration (`config/config.ini`)
 ```ini
 [pipeline]
-execution_days = 0,2,5  # Lunes, Miércoles, Sábado
-execution_time = 23:29   # 11:29 PM ET (30 min después del sorteo)
+execution_days = 0,2,5  # Monday, Wednesday, Saturday
+execution_time = 23:29   # 11:29 PM ET (30 min after drawing)
 timezone = America/New_York
 auto_execution_enabled = true
 
@@ -235,131 +235,131 @@ historical_weight = 20
 risk_weight = 15
 
 [evaluation]
-prize_thresholds = 4,7,100,50000  # Umbrales de premios de Powerball
+prize_thresholds = 4,7,100,50000  # Powerball prize thresholds
 auto_evaluation_enabled = true
 ```
 
-## 📊 Documentación de API
+## 📊 API Documentation
 
-### Endpoints Públicos
-- `GET /` - Interfaz web principal
-- `GET /api/v1/public/featured-predictions` - Últimas predicciones
-- `GET /api/v1/public/next-drawing` - Cuenta regresiva del sorteo
-- `GET /api/v1/system/info` - Información del sistema
+### Public Endpoints
+- `GET /` - Main web interface
+- `GET /api/v1/public/featured-predictions` - Latest predictions
+- `GET /api/v1/public/next-drawing` - Drawing countdown
+- `GET /api/v1/system/info` - System information
 
-### Endpoints del Pipeline
-- `GET /api/v1/pipeline/status` - Estado actual del pipeline
-- `POST /api/v1/pipeline/trigger` - Ejecución manual del pipeline
-- `GET /api/v1/pipeline/health` - Verificación de salud del sistema
+### Pipeline Endpoints
+- `GET /api/v1/pipeline/status` - Current pipeline status
+- `POST /api/v1/pipeline/trigger` - Manual pipeline execution
+- `GET /api/v1/pipeline/health` - System health check
 
-### Ejemplo de Integración
+### Integration Example
 ```python
 import requests
 
-# Obtener últimas predicciones
+# Get latest predictions
 response = requests.get('https://shiolplus.replit.app/api/v1/public/featured-predictions')
 predictions = response.json()
 
-# Verificar próximo sorteo
+# Check next drawing
 response = requests.get('https://shiolplus.replit.app/api/v1/public/next-drawing')
 next_drawing = response.json()
 
-# Ver evaluaciones de predicciones
+# View prediction evaluations
 for pred in predictions['predictions']:
     if 'prize_won' in pred:
-        print(f"Predicción {pred['prediction_id']}: Premio ganado ${pred['prize_won']}")
+        print(f"Prediction {pred['prediction_id']}: Prize won ${pred['prize_won']}")
 ```
 
-## 🧠 Detalles de Machine Learning
+## 🧠 Machine Learning Details
 
-### Arquitectura del Modelo
-- **Enfoque Ensemble**: Múltiples algoritmos con votación ponderada
-- **Ingeniería de Features**: 15+ características calculadas de datos históricos
-- **Datos de Entrenamiento**: Todo el historial disponible de sorteos de Powerball
-- **Validación**: Cross-validation con splits históricos
-- **Optimización**: Ajuste continuo de parámetros basado en rendimiento
+### Model Architecture
+- **Ensemble Approach**: Multiple algorithms with weighted voting
+- **Feature Engineering**: 15+ features calculated from historical data
+- **Training Data**: All available Powerball drawing history
+- **Validation**: Cross-validation with historical splits
+- **Optimization**: Continuous parameter tuning based on performance
 
-### Proceso de Evaluación
-1. **Comparación Automática**: Predicciones vs resultados oficiales de sorteos
-2. **Cálculo de Premios**: Determinación de premios según reglas de Powerball
-3. **Actualización de Datos**: Marcado de predicciones como evaluadas
-4. **Análisis de Rendimiento**: Cálculo de métricas de precisión y ROI
-5. **Feedback al Sistema**: Alimentación de resultados para mejora continua
+### Evaluation Process
+1. **Automatic Comparison**: Predictions vs official drawing results
+2. **Prize Calculation**: Prize determination according to Powerball rules
+3. **Data Update**: Marking predictions as evaluated
+4. **Performance Analysis**: Accuracy metrics and ROI calculation
+5. **System Feedback**: Feeding results for continuous improvement
 
-## 🔄 Automatización y Programación
+## 🔄 Automation and Scheduling
 
-### Ejecución Automática
-- **Horario**: 30 minutos después de cada sorteo de Powerball
-- **Días de Sorteo**: Lunes, Miércoles, Sábado a las 10:59 PM ET
-- **Ejecuciones del Pipeline**: Lunes 11:29 PM, Miércoles 11:29 PM, Sábado 11:29 PM ET
-- **Zona Horaria**: America/New_York (maneja DST automáticamente)
-- **Protección de Solapamiento**: Previene múltiples ejecuciones simultáneas
+### Automatic Execution
+- **Schedule**: 30 minutes after each Powerball drawing
+- **Drawing Days**: Monday, Wednesday, Saturday at 10:59 PM ET
+- **Pipeline Runs**: Monday 11:29 PM, Wednesday 11:29 PM, Saturday 11:29 PM ET
+- **Timezone**: America/New_York (handles DST automatically)
+- **Overlap Protection**: Prevents multiple simultaneous executions
 
-### Ejecución Manual
-- **CLI**: `python main.py` para pipeline completo
-- **API**: `POST /api/v1/pipeline/trigger` para ejecución programática
+### Manual Execution
+- **CLI**: `python main.py` for complete pipeline
+- **API**: `POST /api/v1/pipeline/trigger` for programmatic execution
 
-## 📈 Monitoreo de Rendimiento
+## 📈 Performance Monitoring
 
-### Métricas en Tiempo Real
-- **Estado del Pipeline**: Estado actual de ejecución y progreso
-- **Calidad de Predicciones**: Distribuciones de scoring y niveles de confianza
-- **Resultados de Evaluación**: Premios ganados, tasas de acierto, análisis de ROI
-- **Salud del Sistema**: Estado de base de datos, validez del modelo, historial de ejecución
+### Real-Time Metrics
+- **Pipeline Status**: Current execution status and progress
+- **Prediction Quality**: Scoring distributions and confidence levels
+- **Evaluation Results**: Prizes won, hit rates, ROI analysis
+- **System Health**: Database status, model validity, execution history
 
-### Dashboard de Análisis
-- **Historial de Ejecución**: Tasas de éxito, timing, seguimiento de errores
-- **Rendimiento de Predicciones**: Tasas de acierto, categorías de premios, análisis de ROI
-- **Recursos del Sistema**: Tamaño de base de datos, rendimiento del modelo, tiempos de respuesta de API
+### Analytics Dashboard
+- **Execution History**: Success rates, timing, error tracking
+- **Prediction Performance**: Hit rates, prize categories, ROI analysis
+- **System Resources**: Database size, model performance, API response times
 
-## 🔒 Seguridad y Confiabilidad
+## 🔒 Security and Reliability
 
-### Seguridad de Datos
-- **Almacenamiento Local**: Todos los datos almacenados localmente en base de datos SQLite
-- **Sin Dependencias Externas**: Predicciones generadas completamente de forma local
-- **API Segura**: Configuración CORS para acceso controlado
-- **Validación de Entrada**: Validación comprehensiva de todas las entradas
+### Data Security
+- **Local Storage**: All data stored locally in SQLite database
+- **No External Dependencies**: Predictions generated completely locally
+- **Secure API**: CORS configuration for controlled access
+- **Input Validation**: Comprehensive validation of all inputs
 
-### Confiabilidad del Sistema
-- **Manejo de Errores**: Manejo comprehensivo de excepciones con recuperación
-- **Logging**: Logs detallados de ejecución para debugging y monitoreo
-- **Sistema de Backup**: Backups automáticos de base de datos antes de operaciones importantes
-- **Verificaciones de Salud**: Monitoreo continuo de componentes del sistema
+### System Reliability
+- **Error Handling**: Comprehensive exception handling with recovery
+- **Logging**: Detailed execution logs for debugging and monitoring
+- **Backup System**: Automatic database backups before major operations
+- **Health Checks**: Continuous monitoring of system components
 
-## 📝 Contribuir
+## 📝 Contributing
 
-¡Agradecemos contribuciones a SHIOL+ v6.1! Por favor sigue estas directrices:
+We welcome contributions to SHIOL+ v6.1! Please follow these guidelines:
 
-### Proceso de Desarrollo
-1. Fork del repositorio
-2. Crear rama de feature
-3. Hacer cambios con tests
-4. Enviar pull request
+### Development Process
+1. Fork the repository
+2. Create feature branch
+3. Make changes with tests
+4. Submit pull request
 
-### Estándares de Código
-- Seguir PEP 8 para código Python
-- Usar nombres significativos para variables y funciones
-- Agregar docstrings comprehensivos
-- Incluir tests para nuevas características
-- Actualizar documentación para cambios
+### Code Standards
+- Follow PEP 8 for Python code
+- Use meaningful variable and function names
+- Add comprehensive docstrings
+- Include tests for new features
+- Update documentation for changes
 
-## 📄 Licencia
+## 📄 License
 
-Uso privado – Todos los derechos reservados.
+Private Use – All Rights Reserved.
 
-## 🏆 Créditos
+## 🏆 Credits
 
-- **Creador**: Orlando Batista
-- **Versión**: 6.1 (Pipeline Optimizado con Evaluación)
-- **Última Actualización**: Agosto 2025
-- **Demo en Vivo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
+- **Creator**: Orlando Batista
+- **Version**: 6.1 (Optimized Pipeline with Evaluation)
+- **Last Update**: August 2025
+- **Live Demo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
 
 ---
 
-**SHIOL+ v6.1** - Análisis de lotería con IA optimizado con rendimiento optimizado, predicciones inteligentes y evaluación automática de resultados.
+**SHIOL+ v6.1** - Optimized AI-powered lottery analysis with enhanced performance, intelligent predictions, and automatic result evaluation.
 
-**🌐 Experimenta SHIOL+ en Vivo**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
+**🌐 Experience SHIOL+ Live**: [https://shiolplus.replit.app](https://shiolplus.replit.app)
 
-Para soporte, documentación y actualizaciones, visita el repositorio del proyecto.
+For support, documentation, and updates, visit the project repository.
 
-**⚡ Optimizado para Rendimiento • 🤖 Powered by AI • 🎯 Built for Accuracy • 🏆 Evaluación Automática**
+**⚡ Optimized for Performance • 🤖 Powered by AI • 🎯 Built for Accuracy • 🏆 Automatic Evaluation**
