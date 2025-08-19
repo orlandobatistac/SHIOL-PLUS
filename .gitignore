@@ -35,4 +35,4 @@ src_backup*/
 /data/*.csv
 /data/validations/
 /data/predoctions/
-!/data/.gitkeep
+!/data/.gitkeepdata/shiolplus.db
