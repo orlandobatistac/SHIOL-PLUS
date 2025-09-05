@@ -25,7 +25,7 @@ class GeminiService:
         
         # Configure Gemini AI
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')  # Use latest available model
+        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')  # Use most cost-efficient model with vision
         
         # Define the prompt template for lottery ticket analysis
         self.prompt_template = """
@@ -267,7 +267,7 @@ IMPORTANT:
         """
         try:
             # Simple text generation test
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash-lite')
             response = model.generate_content("Hello")
             
             if response.text:
@@ -275,7 +275,7 @@ IMPORTANT:
                 return {
                     'success': True,
                     'message': 'Gemini API connection working',
-                    'model': 'gemini-1.5-flash'
+                    'model': 'gemini-2.5-flash-lite'
                 }
             else:
                 return {
