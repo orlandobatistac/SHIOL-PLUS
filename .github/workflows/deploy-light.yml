@@ -1,0 +1,25 @@
+name: Deploy to Server (Light)
+
+on:
+  workflow_dispatch:   # Se ejecuta manualmente desde GitHub
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Get latest code
+      uses: actions/checkout@v4
+
+    - name: Deploy to server (light)
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd /var/www/SHIOL-PLUS
+          git pull origin main
+          source venv/bin/activate
+          pip install --no-cache-dir -r requirements.txt
+          sudo systemctl restart shiolplus.service

@@ -1,4 +1,4 @@
-name: Deploy to Server
+name: Deploy to Server (Clean)
 
 # Activates only when you run it manually from GitHub Actions
 on:
