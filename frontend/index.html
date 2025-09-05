@@ -7,12 +7,12 @@
         <title>SHIOL+ AI Prediction System</title>
 
         <!-- PWA Manifest -->
-        <link rel="manifest" href="/static/manifest.json" />
+        <link rel="manifest" href="/manifest.json" />
         
         <!-- Favicons -->
-        <link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32x32.png">
-        <link rel="icon" type="image/png" sizes="16x16" href="/static/icon-16x16.png">
-        <link rel="apple-touch-icon" sizes="192x192" href="/static/icon-192x192.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/icon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/icon-16x16.png">
+        <link rel="apple-touch-icon" sizes="192x192" href="/icon-192x192.png">
         <script src="https://cdn.tailwindcss.com"></script>
         <link
             rel="stylesheet"
@@ -44,18 +44,12 @@
             <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center h-16">
                     <div class="flex items-center">
-                        <!-- Logo for light mode -->
-                        <img 
-                            src="/static/logo-shiol.png" 
-                            alt="SHIOL+ Logo" 
-                            class="h-8 w-auto mr-3 dark:hidden"
-                        />
-                        <!-- Logo for dark mode -->
-                        <img 
-                            src="/static/logo-shiol-dark.png" 
-                            alt="SHIOL+ Logo" 
-                            class="h-8 w-auto mr-3 hidden dark:block"
-                        />
+                        <!-- SHIOL+ Typographic Logo -->
+                        <div class="mr-3">
+                            <span class="text-2xl font-bold">
+                                <span class="text-blue-600 dark:text-blue-400">SHIOL</span><span class="text-blue-500 dark:text-blue-300 text-lg">+</span>
+                            </span>
+                        </div>
                         <div class="hidden sm:block">
                             <span class="text-sm font-normal text-gray-600 dark:text-gray-400">
                                 AI Prediction System
