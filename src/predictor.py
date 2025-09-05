@@ -400,8 +400,8 @@ class Predictor:
             historical_data = self.data_loader.load_historical_data()
 
             # Initialize enhanced ensemble predictor
-            # Assuming EnsemblePredictor expects models_dir to load other models
-            self.ensemble_predictor = EnsemblePredictor(historical_data, models_dir="models/")
+            # Pass models_dir as positional argument
+            self.ensemble_predictor = EnsemblePredictor(historical_data, "models/")
 
             logger.info("Enhanced ensemble prediction system initialized successfully")
 
