@@ -1,0 +1,2370 @@
+<!doctype html>
+<html lang="en" class="dark">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#1e88e5" />
+        <title>SHIOL+ AI Prediction System</title>
+
+        <!-- PWA Manifest -->
+        <link rel="manifest" href="/static/manifest.json" />
+        
+        <!-- Favicons -->
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/static/icon-16x16.png">
+        <link rel="apple-touch-icon" sizes="192x192" href="/static/icon-192x192.png">
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="css/styles.css" />
+        <style>
+            body {
+                font-family: "Inter", sans-serif;
+            }
+            .gradient-text {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+        </style>
+    </head>
+    <body class="dark bg-gray-100 dark:bg-gray-900 font-sans">
+        <!-- Header -->
+        <header
+            class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700"
+        >
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <!-- Logo for light mode -->
+                        <img 
+                            src="/static/logo-shiol.png" 
+                            alt="SHIOL+ Logo" 
+                            class="h-8 w-auto mr-3 dark:hidden"
+                        />
+                        <!-- Logo for dark mode -->
+                        <img 
+                            src="/static/logo-shiol-dark.png" 
+                            alt="SHIOL+ Logo" 
+                            class="h-8 w-auto mr-3 hidden dark:block"
+                        />
+                        <div class="hidden sm:block">
+                            <span class="text-sm font-normal text-gray-600 dark:text-gray-400">
+                                AI Prediction System
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <!-- Install App Button -->
+                        <button
+                            id="installBtn"
+                            class="hidden bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-md transition-colors duration-200 font-medium"
+                        >
+                            <i class="fas fa-download mr-1"></i>
+                            Install App
+                        </button>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                            <i class="fas fa-clock mr-1"></i>
+                            <span id="current-time">Loading...</span>
+                        </div>
+                        <div class="text-sm text-green-600 dark:text-green-400">
+                            <i class="fas fa-check-circle mr-1"></i>
+                            System Active
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-2xl mx-auto px-3 sm:px-4 lg:px-6 py-6">
+            <!-- Next Drawing Countdown -->
+            <div
+                class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 p-6 rounded-xl border border-blue-200 dark:border-blue-800 mb-8"
+            >
+                <div class="text-center">
+                    <h2
+                        class="text-xl font-semibold text-blue-800 dark:text-blue-200 mb-2"
+                    >
+                        <i class="fas fa-clock mr-2"></i>
+                        Next Powerball Drawing
+                    </h2>
+                    <div
+                        class="text-lg font-medium text-blue-700 dark:text-blue-300 mb-2"
+                        id="next-drawing-date"
+                    >
+                        September 03, 2025
+                    </div>
+                    <div
+                        class="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2"
+                        id="countdown-display"
+                    >
+                        Drawing Complete
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Predictions Section -->
+            <div
+                class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8"
+            >
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2
+                        class="text-2xl font-bold text-gray-900 dark:text-white flex items-center"
+                    >
+                        <i class="fas fa-robot text-blue-600 mr-3"></i>
+                        AI Predictions for Next Drawing
+                    </h2>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Complete set of 50 AI-generated predictions | Total
+                        predictions: <span id="total-predictions">50</span>
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span id="predictions-timestamp"
+                            >Loading timestamp...</span
+                        >
+                    </p>
+                </div>
+
+                <div class="p-6">
+                    <div
+                        id="predictions-loading"
+                        class="text-center py-8 hidden"
+                    >
+                        <i
+                            class="fas fa-spinner fa-spin text-3xl text-blue-600 mb-3"
+                        ></i>
+                        <p class="text-gray-600 dark:text-gray-400">
+                            Loading latest predictions...
+                        </p>
+                    </div>
+
+                    <div id="no-predictions" class="text-center py-8 hidden">
+                        <i
+                            class="fas fa-info-circle text-3xl text-gray-400 mb-3"
+                        ></i>
+                        <p class="text-gray-600 dark:text-gray-400">
+                            No predictions have been generated yet by the Smart
+                            AI Pipeline.
+                        </p>
+                    </div>
+
+                    <div id="predictions-table" class="overflow-x-auto">
+                        <table
+                            class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
+                        >
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                                    >
+                                        Rank
+                                    </th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                                    >
+                                        Numbers + Powerball
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="predictions-tbody"
+                                class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700"
+                            >
+                                <!-- Predictions will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Load More Button -->
+                    <div
+                        id="load-more-container"
+                        class="text-center mt-6 hidden"
+                    >
+                        <button
+                            id="load-more-btn"
+                            class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 touch-manipulation"
+                        >
+                            <i class="fas fa-plus-circle mr-2"></i>
+                            <span id="load-more-text"
+                                >Load More Predictions</span
+                            >
+                            <span
+                                id="load-more-count"
+                                class="ml-2 px-2 py-1 bg-blue-500 text-xs rounded-full"
+                                >+10</span
+                            >
+                        </button>
+                        <p
+                            class="text-xs text-gray-500 dark:text-gray-400 mt-2"
+                        >
+                            Showing <span id="shown-count">10</span> of
+                            <span id="total-available">50</span> predictions
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Draws Section -->
+            <div
+                class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8"
+            >
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2
+                        class="text-2xl font-bold text-gray-900 dark:text-white flex items-center"
+                    >
+                        <i class="fas fa-chart-line text-orange-600 mr-3"></i>
+                        Recent Powerball Draws
+                    </h2>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Click on any draw to see predictions with matches.
+                    </p>
+                </div>
+
+                <div class="p-6">
+                    <div id="draws-loading" class="text-center py-8 hidden">
+                        <i
+                            class="fas fa-spinner fa-spin text-3xl text-orange-600 mb-3"
+                        ></i>
+                        <p class="text-gray-600 dark:text-gray-400">
+                            Loading recent draws...
+                        </p>
+                    </div>
+
+                    <div id="no-draws" class="text-center py-8 hidden">
+                        <i
+                            class="fas fa-info-circle text-3xl text-gray-400 mb-3"
+                        ></i>
+                        <p class="text-gray-600 dark:text-gray-400">
+                            No recent Powerball draws found.
+                        </p>
+                    </div>
+
+                    <div id="draws-grid" class="space-y-3">
+                        <!-- Draws will be loaded here -->
+                    </div>
+                </div>
+            </div>
+            <!-- Ticket Verification Section -->
+            <div
+                class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8"
+            >
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2
+                        class="text-2xl font-bold text-gray-900 dark:text-white flex items-center"
+                    >
+                        <i class="fas fa-ticket-alt text-green-600 mr-3"></i>
+                        Verify Your Powerball Ticket
+                    </h2>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Take a photo or upload an image of your Powerball ticket
+                        to check if you've won!
+                    </p>
+                </div>
+
+                <div class="p-6">
+                    <!-- Camera/Upload Controls -->
+                    <div class="mb-6">
+                        <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                            <button
+                                id="camera-btn"
+                                class="flex-1 inline-flex items-center justify-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                            >
+                                <i class="fas fa-camera mr-2"></i>
+                                Take Photo
+                            </button>
+                            <button
+                                id="upload-btn"
+                                class="flex-1 inline-flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            >
+                                <i class="fas fa-upload mr-2"></i>
+                                Upload Image
+                            </button>
+                        </div>
+
+                        <!-- Hidden file input -->
+                        <input
+                            type="file"
+                            id="ticket-file-input"
+                            accept="image/*"
+                            capture="environment"
+                            class="hidden"
+                        />
+
+                        <!-- Image preview -->
+                        <div id="image-preview-container" class="hidden mb-4">
+                            <div class="relative">
+                                <img
+                                    id="image-preview"
+                                    class="w-full max-w-md mx-auto rounded-lg shadow-md"
+                                    alt="Ticket preview"
+                                />
+                                <button
+                                    id="remove-image-btn"
+                                    class="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center"
+                                >
+                                    <i class="fas fa-times text-sm"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Preview Numbers Button -->
+                        <div
+                            id="preview-btn-container"
+                            class="hidden text-center mb-4"
+                        >
+                            <button
+                                id="preview-numbers-btn"
+                                class="inline-flex items-center px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            >
+                                <i class="fas fa-eye mr-2"></i>
+                                Preview Numbers Detected
+                            </button>
+                        </div>
+
+                        <!-- Numbers Preview Display -->
+                        <div id="numbers-preview-container" class="hidden mb-4">
+                            <div
+                                class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"
+                            >
+                                <div class="flex items-center mb-3">
+                                    <i
+                                        class="fas fa-eye text-blue-600 dark:text-blue-400 mr-2"
+                                    ></i>
+                                    <h4
+                                        class="text-sm font-medium text-blue-900 dark:text-blue-100"
+                                    >
+                                        Numbers Detected by OCR
+                                    </h4>
+                                    <span
+                                        id="detection-confidence"
+                                        class="ml-auto text-xs text-blue-600 dark:text-blue-400"
+                                    ></span>
+                                </div>
+
+                                <div id="detected-plays-list" class="space-y-2">
+                                    <!-- Detected plays will be populated here -->
+                                </div>
+
+                                <div
+                                    class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700"
+                                >
+                                    <p
+                                        class="text-xs text-blue-700 dark:text-blue-300"
+                                    >
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Review the numbers above. If they look
+                                        incorrect, you can edit them manually
+                                        after verification.
+                                    </p>
+                                    <p
+                                        id="draw-date-preview"
+                                        class="text-xs text-blue-600 dark:text-blue-400 mt-1"
+                                    ></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Verify button -->
+                        <div
+                            id="verify-btn-container"
+                            class="hidden text-center"
+                        >
+                            <button
+                                id="verify-ticket-btn"
+                                class="inline-flex items-center px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                            >
+                                <i class="fas fa-search mr-2"></i>
+                                Verify Ticket
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Processing Status -->
+                    <div
+                        id="verification-loading"
+                        class="text-center py-8 hidden"
+                    >
+                        <i
+                            class="fas fa-spinner fa-spin text-3xl text-purple-600 mb-3"
+                        ></i>
+                        <p class="text-gray-600 dark:text-gray-400 mb-2">
+                            Processing your ticket...
+                        </p>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">
+                            <p>• Analyzing image quality</p>
+                            <p>• Extracting numbers with AI</p>
+                            <p>• Checking against official results</p>
+                        </div>
+                    </div>
+
+                    <!-- Verification Results -->
+                    <div id="verification-results" class="hidden">
+                        <!-- Winner result -->
+                        <div
+                            id="winner-result"
+                            class="hidden bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 p-6 rounded-lg border border-green-200 dark:border-green-800 mb-4"
+                        >
+                            <div class="text-center mb-4">
+                                <i
+                                    class="fas fa-trophy text-4xl text-green-600 mb-3"
+                                ></i>
+                                <h3
+                                    class="text-2xl font-bold text-green-800 dark:text-green-200"
+                                >
+                                    🎉 CONGRATULATIONS! 🎉
+                                </h3>
+                                <p
+                                    class="text-green-700 dark:text-green-300 text-lg font-semibold"
+                                >
+                                    You have a winning ticket!
+                                </p>
+                            </div>
+                            <div
+                                class="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4"
+                            >
+                                <div class="text-center">
+                                    <p
+                                        class="text-3xl font-bold text-green-600"
+                                        id="total-prize-amount"
+                                    >
+                                        $0.00
+                                    </p>
+                                    <p
+                                        class="text-sm text-gray-600 dark:text-gray-400"
+                                    >
+                                        Total Prize Amount
+                                    </p>
+                                </div>
+                            </div>
+                            <div id="winning-plays-details"></div>
+                        </div>
+
+                        <!-- No win result -->
+                        <div
+                            id="no-win-result"
+                            class="hidden bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-900/30 dark:to-slate-900/30 p-6 rounded-lg border border-gray-200 dark:border-gray-700 mb-4"
+                        >
+                            <div class="text-center">
+                                <i
+                                    class="fas fa-times-circle text-4xl text-gray-500 mb-3"
+                                ></i>
+                                <h3
+                                    class="text-xl font-bold text-gray-700 dark:text-gray-300"
+                                >
+                                    No Prize This Time
+                                </h3>
+                                <p class="text-gray-600 dark:text-gray-400">
+                                    Your ticket doesn't have any winning
+                                    combinations for this draw.
+                                </p>
+                                <p
+                                    class="text-sm text-gray-500 dark:text-gray-400 mt-2"
+                                >
+                                    Better luck next time! 🍀
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Ticket details -->
+                        <div
+                            id="ticket-details"
+                            class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4"
+                        >
+                            <h4
+                                class="font-semibold text-gray-900 dark:text-white mb-3"
+                            >
+                                Ticket Information
+                            </h4>
+                            <div
+                                class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm"
+                            >
+                                <div>
+                                    <span
+                                        class="text-gray-600 dark:text-gray-400"
+                                        >Draw Date:</span
+                                    >
+                                    <span
+                                        id="ticket-draw-date"
+                                        class="font-medium text-gray-900 dark:text-white ml-2"
+                                        >-</span
+                                    >
+                                </div>
+                                <div>
+                                    <span
+                                        class="text-gray-600 dark:text-gray-400"
+                                        >Total Plays:</span
+                                    >
+                                    <span
+                                        id="ticket-total-plays"
+                                        class="font-medium text-gray-900 dark:text-white ml-2"
+                                        >-</span
+                                    >
+                                </div>
+                            </div>
+
+                            <!-- Official winning numbers -->
+                            <div class="mt-4">
+                                <p
+                                    class="text-sm text-gray-600 dark:text-gray-400 mb-2"
+                                >
+                                    Official Winning Numbers:
+                                </p>
+                                <div class="flex items-center space-x-2">
+                                    <div
+                                        id="official-numbers"
+                                        class="flex space-x-1"
+                                    >
+                                        <!-- Official numbers will be inserted here -->
+                                    </div>
+                                    <span
+                                        class="text-sm text-gray-600 dark:text-gray-400 mx-2"
+                                        >PB:</span
+                                    >
+                                    <div id="official-powerball">
+                                        <!-- Official powerball will be inserted here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Your numbers -->
+                            <div id="your-plays" class="mt-4">
+                                <p
+                                    class="text-sm text-gray-600 dark:text-gray-400 mb-2"
+                                >
+                                    Your Numbers:
+                                </p>
+                                <!-- Player's numbers will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manual Date Input -->
+                    <div
+                        id="manual-date-section"
+                        class="hidden bg-yellow-50 dark:bg-yellow-900/30 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800 mb-4"
+                    >
+                        <div class="flex items-start">
+                            <i
+                                class="fas fa-exclamation-circle text-yellow-600 mr-3 mt-1"
+                            ></i>
+                            <div class="flex-1">
+                                <h4
+                                    class="font-semibold text-yellow-800 dark:text-yellow-200 mb-2"
+                                >
+                                    Date Detection Failed
+                                </h4>
+                                <p
+                                    class="text-yellow-700 dark:text-yellow-300 text-sm mb-3"
+                                >
+                                    We couldn't automatically detect the draw
+                                    date from your ticket. Please enter the draw
+                                    date manually to continue verification.
+                                </p>
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <div class="flex-1">
+                                        <label
+                                            for="manual-date-input"
+                                            class="block text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1"
+                                        >
+                                            Draw Date (YYYY-MM-DD):
+                                        </label>
+                                        <input
+                                            type="date"
+                                            id="manual-date-input"
+                                            class="w-full px-3 py-2 border border-yellow-300 dark:border-yellow-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                            min="2025-01-01"
+                                            max="2025-12-31"
+                                        />
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button
+                                            id="verify-with-manual-date-btn"
+                                            class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                                        >
+                                            <i class="fas fa-search mr-1"></i>
+                                            Verify
+                                        </button>
+                                        <button
+                                            id="cancel-manual-date-btn"
+                                            class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manual Play Entry -->
+                    <div
+                        id="manual-play-entry"
+                        class="hidden bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800 mb-4"
+                    >
+                        <div class="flex items-start">
+                            <i class="fas fa-edit text-blue-600 mr-3 mt-1"></i>
+                            <div class="flex-1">
+                                <h4
+                                    class="font-semibold text-blue-800 dark:text-blue-200 mb-2"
+                                >
+                                    Enter Lottery Numbers Manually
+                                </h4>
+                                <p
+                                    class="text-blue-700 dark:text-blue-300 text-sm mb-4"
+                                >
+                                    Enter your lottery numbers below. You can
+                                    enter up to 5 plays. Each play requires 5
+                                    main numbers (1-69) and 1 Powerball number
+                                    (1-26).
+                                </p>
+
+                                <!-- Manual plays input grid -->
+                                <div class="space-y-4">
+                                    <!-- Play 1 -->
+                                    <div
+                                        class="bg-white dark:bg-gray-800 p-3 rounded border border-blue-200 dark:border-blue-700"
+                                    >
+                                        <div class="flex items-center mb-2">
+                                            <span
+                                                class="text-sm font-medium text-blue-800 dark:text-blue-200"
+                                                >Play 1:</span
+                                            >
+                                        </div>
+                                        <div class="grid grid-cols-6 gap-2">
+                                            <input
+                                                type="number"
+                                                id="play-1-num-1"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-1-num-2"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-1-num-3"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-1-num-4"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-1-num-5"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-1-pb"
+                                                min="1"
+                                                max="26"
+                                                placeholder="PB 1-26"
+                                                class="px-2 py-1 text-center border border-red-300 dark:border-red-600 rounded text-sm bg-red-50 dark:bg-red-900/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <!-- Play 2 -->
+                                    <div
+                                        class="bg-white dark:bg-gray-800 p-3 rounded border border-blue-200 dark:border-blue-700"
+                                    >
+                                        <div class="flex items-center mb-2">
+                                            <span
+                                                class="text-sm font-medium text-blue-800 dark:text-blue-200"
+                                                >Play 2:</span
+                                            >
+                                        </div>
+                                        <div class="grid grid-cols-6 gap-2">
+                                            <input
+                                                type="number"
+                                                id="play-2-num-1"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-2-num-2"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-2-num-3"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-2-num-4"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-2-num-5"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-2-pb"
+                                                min="1"
+                                                max="26"
+                                                placeholder="PB 1-26"
+                                                class="px-2 py-1 text-center border border-red-300 dark:border-red-600 rounded text-sm bg-red-50 dark:bg-red-900/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <!-- Play 3 -->
+                                    <div
+                                        class="bg-white dark:bg-gray-800 p-3 rounded border border-blue-200 dark:border-blue-700"
+                                    >
+                                        <div class="flex items-center mb-2">
+                                            <span
+                                                class="text-sm font-medium text-blue-800 dark:text-blue-200"
+                                                >Play 3:</span
+                                            >
+                                        </div>
+                                        <div class="grid grid-cols-6 gap-2">
+                                            <input
+                                                type="number"
+                                                id="play-3-num-1"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-3-num-2"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-3-num-3"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-3-num-4"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-3-num-5"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-3-pb"
+                                                min="1"
+                                                max="26"
+                                                placeholder="PB 1-26"
+                                                class="px-2 py-1 text-center border border-red-300 dark:border-red-600 rounded text-sm bg-red-50 dark:bg-red-900/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <!-- Play 4 -->
+                                    <div
+                                        class="bg-white dark:bg-gray-800 p-3 rounded border border-blue-200 dark:border-blue-700"
+                                    >
+                                        <div class="flex items-center mb-2">
+                                            <span
+                                                class="text-sm font-medium text-blue-800 dark:text-blue-200"
+                                                >Play 4:</span
+                                            >
+                                        </div>
+                                        <div class="grid grid-cols-6 gap-2">
+                                            <input
+                                                type="number"
+                                                id="play-4-num-1"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-4-num-2"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-4-num-3"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-4-num-4"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-4-num-5"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-4-pb"
+                                                min="1"
+                                                max="26"
+                                                placeholder="PB 1-26"
+                                                class="px-2 py-1 text-center border border-red-300 dark:border-red-600 rounded text-sm bg-red-50 dark:bg-red-900/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <!-- Play 5 -->
+                                    <div
+                                        class="bg-white dark:bg-gray-800 p-3 rounded border border-blue-200 dark:border-blue-700"
+                                    >
+                                        <div class="flex items-center mb-2">
+                                            <span
+                                                class="text-sm font-medium text-blue-800 dark:text-blue-200"
+                                                >Play 5:</span
+                                            >
+                                        </div>
+                                        <div class="grid grid-cols-6 gap-2">
+                                            <input
+                                                type="number"
+                                                id="play-5-num-1"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-5-num-2"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-5-num-3"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-5-num-4"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-5-num-5"
+                                                min="1"
+                                                max="69"
+                                                placeholder="1-69"
+                                                class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <input
+                                                type="number"
+                                                id="play-5-pb"
+                                                min="1"
+                                                max="26"
+                                                placeholder="PB 1-26"
+                                                class="px-2 py-1 text-center border border-red-300 dark:border-red-600 rounded text-sm bg-red-50 dark:bg-red-900/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Draw date selection -->
+                                <div
+                                    class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded border"
+                                >
+                                    <label
+                                        for="manual-draw-date"
+                                        class="block text-sm font-medium text-blue-800 dark:text-blue-200 mb-1"
+                                    >
+                                        Draw Date:
+                                    </label>
+                                    <input
+                                        type="date"
+                                        id="manual-draw-date"
+                                        class="w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        min="2025-01-01"
+                                        max="2025-12-31"
+                                        value="2025-08-02"
+                                    />
+                                </div>
+
+                                <!-- Action buttons -->
+                                <div
+                                    class="flex flex-col sm:flex-row gap-2 mt-4"
+                                >
+                                    <button
+                                        onclick="ticketVerification.verifyManualPlays()"
+                                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                    >
+                                        <i class="fas fa-check mr-1"></i>
+                                        Verify Numbers
+                                    </button>
+                                    <button
+                                        onclick="ticketVerification.hideManualPlayEntry()"
+                                        class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                                    >
+                                        <i class="fas fa-times mr-1"></i>
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error Display -->
+                    <div
+                        id="verification-error"
+                        class="hidden bg-red-50 dark:bg-red-900/30 p-4 rounded-lg border border-red-200 dark:border-red-800"
+                    >
+                        <div class="flex items-center">
+                            <i
+                                class="fas fa-exclamation-triangle text-red-600 mr-2"
+                            ></i>
+                            <div>
+                                <h4
+                                    class="font-semibold text-red-800 dark:text-red-200"
+                                >
+                                    Verification Error
+                                </h4>
+                                <p
+                                    id="error-message"
+                                    class="text-red-700 dark:text-red-300 text-sm mt-1"
+                                ></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tips for better results -->
+                    <div
+                        class="mt-6 bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800"
+                    >
+                        <h4
+                            class="font-semibold text-blue-800 dark:text-blue-200 mb-2"
+                        >
+                            <i class="fas fa-lightbulb mr-2"></i>
+                            Tips for Best Results
+                        </h4>
+                        <ul
+                            class="text-sm text-blue-700 dark:text-blue-300 space-y-1"
+                        >
+                            <li>
+                                • Make sure the ticket is well-lit and clearly
+                                visible
+                            </li>
+                            <li>
+                                • Keep the camera steady and focus on the
+                                numbers
+                            </li>
+                            <li>• Avoid shadows or glare on the ticket</li>
+                            <li>• Include the entire ticket in the photo</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Draw Matches Modal -->
+        <div
+            id="drawMatchesModal"
+            class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4"
+        >
+            <div
+                class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+            >
+                <!-- Modal Header -->
+                <div
+                    class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center"
+                >
+                    <div>
+                        <h3
+                            class="text-xl font-bold text-gray-900 dark:text-white"
+                        >
+                            Predictions vs Draw Results
+                        </h3>
+                        <p
+                            id="modal-draw-date"
+                            class="text-sm text-gray-600 dark:text-gray-400 mt-1"
+                        ></p>
+                    </div>
+                    <button
+                        onclick="closeDrawMatchesModal()"
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Content -->
+                <div class="p-6 overflow-y-auto max-h-[75vh]">
+                    <!-- Loading State -->
+                    <div id="modal-loading" class="text-center py-8">
+                        <i
+                            class="fas fa-spinner fa-spin text-3xl text-blue-600 mb-3"
+                        ></i>
+                        <p class="text-gray-600 dark:text-gray-400">
+                            Loading predictions data...
+                        </p>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="modal-empty" class="text-center py-8 hidden">
+                        <i
+                            class="fas fa-info-circle text-3xl text-gray-400 mb-3"
+                        ></i>
+                        <p class="text-gray-600 dark:text-gray-400">
+                            No predictions found for this draw date.
+                        </p>
+                    </div>
+
+                    <!-- Content -->
+                    <div id="modal-content" class="hidden">
+                        <!-- Winning Numbers Display -->
+                        <div
+                            class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 p-4 rounded-lg border border-green-200 dark:border-green-800 mb-6"
+                        >
+                            <h4
+                                class="text-lg font-semibold text-green-800 dark:text-green-200 mb-3"
+                            >
+                                Winning Numbers
+                            </h4>
+                            <div class="flex items-center space-x-2">
+                                <div
+                                    id="modal-winning-numbers"
+                                    class="flex space-x-1"
+                                >
+                                    <!-- Winning numbers will be inserted here -->
+                                </div>
+                                <span
+                                    class="text-sm text-green-700 dark:text-green-300 mx-2"
+                                    >PB:</span
+                                >
+                                <div id="modal-winning-powerball">
+                                    <!-- Winning powerball will be inserted here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Summary Stats -->
+                        <div
+                            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
+                        >
+                            <div
+                                class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg"
+                            >
+                                <div
+                                    class="text-2xl font-bold text-blue-600 dark:text-blue-400"
+                                    id="modal-total-predictions"
+                                >
+                                    0
+                                </div>
+                                <div
+                                    class="text-sm text-blue-700 dark:text-blue-300"
+                                >
+                                    Total Predictions
+                                </div>
+                            </div>
+                            <div
+                                class="bg-green-50 dark:bg-green-900/30 p-4 rounded-lg"
+                            >
+                                <div
+                                    class="text-2xl font-bold text-green-600 dark:text-green-400"
+                                    id="modal-matches-found"
+                                >
+                                    0
+                                </div>
+                                <div
+                                    class="text-sm text-green-700 dark:text-green-300"
+                                >
+                                    Predictions with Matches
+                                </div>
+                            </div>
+                            <div
+                                class="bg-purple-50 dark:bg-purple-900/30 p-4 rounded-lg"
+                            >
+                                <div
+                                    class="text-lg font-bold text-purple-600 dark:text-purple-400"
+                                    id="modal-best-match"
+                                >
+                                    None
+                                </div>
+                                <div
+                                    class="text-sm text-purple-700 dark:text-purple-300"
+                                >
+                                    Best Match
+                                </div>
+                            </div>
+                            <div
+                                class="bg-orange-50 dark:bg-orange-900/30 p-4 rounded-lg"
+                            >
+                                <div
+                                    class="text-xl font-bold text-orange-600 dark:text-orange-400"
+                                    id="modal-total-prizes"
+                                >
+                                    $0.00
+                                </div>
+                                <div
+                                    class="text-sm text-orange-700 dark:text-orange-300"
+                                >
+                                    Total Prizes
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Predictions Table -->
+                        <div class="overflow-x-auto">
+                            <table
+                                class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
+                            >
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th
+                                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                                        >
+                                            Rank
+                                        </th>
+                                        <th
+                                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                                        >
+                                            Numbers
+                                        </th>
+                                        <th
+                                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                                        >
+                                            PB
+                                        </th>
+                                        <th
+                                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                                        >
+                                            Matches
+                                        </th>
+                                        <th
+                                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                                        >
+                                            Prize
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody
+                                    id="modal-predictions-tbody"
+                                    class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700"
+                                >
+                                    <!-- Prediction matches will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer
+            class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-12"
+        >
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div
+                    class="text-center text-sm text-gray-600 dark:text-gray-400"
+                >
+                    © 2025 SHIOL+ AI Prediction System | Last updated:
+                    <span id="last-updated">Loading...</span>
+                    <br />
+                    Predictions are for entertainment purposes only and do not
+                    guarantee results.
+                </div>
+            </div>
+        </footer>
+
+        <!-- JavaScript -->
+        <script>
+            document.addEventListener("DOMContentLoaded", async () => {
+                console.log("Frontend loading...");
+
+                // PWA Service Worker Registration
+                if ("serviceWorker" in navigator) {
+                    try {
+                        const registration =
+                            await navigator.serviceWorker.register(
+                                "/static/service-worker.js",
+                            );
+                        console.log(
+                            "Service Worker registered successfully:",
+                            registration,
+                        );
+                    } catch (error) {
+                        console.log(
+                            "Service Worker registration failed:",
+                            error,
+                        );
+                    }
+                }
+
+                // PWA Install App functionality
+                let deferredPrompt;
+                const installBtn = document.getElementById("installBtn");
+
+                // Check if app is already installed
+                function isStandalone() {
+                    return (
+                        window.matchMedia("(display-mode: standalone)")
+                            .matches || window.navigator.standalone === true
+                    );
+                }
+
+                // Show install button after user interaction (fallback method)
+                function showInstallButtonFallback() {
+                    setTimeout(() => {
+                        if (!deferredPrompt && !isStandalone()) {
+                            console.log(
+                                "Showing install button as fallback after user interaction",
+                            );
+                            installBtn.classList.remove("hidden");
+                            installBtn.innerHTML =
+                                '<i class="fas fa-mobile-alt mr-1"></i>Add to Phone';
+                            installBtn.title = "Add SHIOL+ to your home screen";
+                        }
+                    }, 3000); // Show after 3 seconds of interaction
+                }
+
+                // Listen for user interaction to enable fallback
+                let userInteracted = false;
+                document.addEventListener("click", () => {
+                    if (!userInteracted) {
+                        userInteracted = true;
+                        showInstallButtonFallback();
+                    }
+                });
+
+                window.addEventListener("beforeinstallprompt", (e) => {
+                    console.log("PWA install prompt available");
+                    e.preventDefault();
+                    deferredPrompt = e;
+                    installBtn.classList.remove("hidden");
+                    installBtn.innerHTML =
+                        '<i class="fas fa-download mr-1"></i>Install App';
+                });
+
+                installBtn.addEventListener("click", async () => {
+                    if (deferredPrompt) {
+                        // Native installation
+                        deferredPrompt.prompt();
+                        const { outcome } = await deferredPrompt.userChoice;
+                        console.log("PWA install outcome:", outcome);
+                        deferredPrompt = null;
+                        installBtn.classList.add("hidden");
+                    } else {
+                        // If no prompt available, hide button (PWA not ready)
+                        console.log("PWA installation not available");
+                        installBtn.classList.add("hidden");
+                    }
+                });
+
+                window.addEventListener("appinstalled", () => {
+                    console.log("PWA was installed");
+                    installBtn.classList.add("hidden");
+                    deferredPrompt = null;
+                });
+
+                // Update current time
+                function updateCurrentTime() {
+                    const now = new Date();
+                    const timeString = now.toLocaleTimeString("en-US", {
+                        timeZone: "America/New_York",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hour12: true,
+                    });
+                    document.getElementById("current-time").textContent =
+                        `${timeString} ET`;
+                }
+
+                updateCurrentTime();
+                setInterval(updateCurrentTime, 1000);
+
+                // Initialize countdown
+                initializeCountdown();
+
+                const API_BASE_URL = window.location.origin + "/api/v1";
+
+                // Global variables for pagination
+                let allPredictions = [];
+                let currentlyShown = 0;
+                const PREDICTIONS_PER_LOAD = 10;
+
+                // Load predictions
+                async function loadPredictions() {
+                    try {
+                        console.log("Loading predictions...");
+                        document
+                            .getElementById("predictions-loading")
+                            .classList.remove("hidden");
+
+                        const response = await fetch(
+                            `${API_BASE_URL}/public/predictions/latest?limit=50`,
+                        );
+                        if (!response.ok)
+                            throw new Error("Failed to fetch predictions");
+
+                        const data = await response.json();
+                        allPredictions = data.predictions || [];
+                        console.log(
+                            "Loaded predictions:",
+                            allPredictions.length,
+                        );
+
+                        if (allPredictions.length === 0) {
+                            document
+                                .getElementById("predictions-loading")
+                                .classList.add("hidden");
+                            document
+                                .getElementById("no-predictions")
+                                .classList.remove("hidden");
+                            return;
+                        }
+
+                        // Update totals and timestamp
+                        document.getElementById(
+                            "total-predictions",
+                        ).textContent = allPredictions.length;
+                        document.getElementById("total-available").textContent =
+                            allPredictions.length;
+
+                        // Update prediction creation timestamp
+                        if (
+                            allPredictions.length > 0 &&
+                            allPredictions[0].prediction_date
+                        ) {
+                            const predictionDate = new Date(
+                                allPredictions[0].prediction_date,
+                            );
+                            const formattedDate =
+                                predictionDate.toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    timeZone: "America/New_York",
+                                });
+                            const formattedTime =
+                                predictionDate.toLocaleTimeString("en-US", {
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                    timeZone: "America/New_York",
+                                });
+
+                            const timestampElement = document.getElementById(
+                                "predictions-timestamp",
+                            );
+                            if (timestampElement) {
+                                timestampElement.textContent = `Generated on ${formattedDate} at ${formattedTime} ET`;
+                            }
+                        }
+
+                        // Update footer last updated timestamp
+                        if (
+                            allPredictions.length > 0 &&
+                            allPredictions[0].created_at
+                        ) {
+                            const lastUpdated = new Date(
+                                allPredictions[0].created_at,
+                            );
+                            const formattedLastUpdated =
+                                lastUpdated.toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    timeZone: "America/New_York",
+                                });
+                            const formattedLastUpdatedTime =
+                                lastUpdated.toLocaleTimeString("en-US", {
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                    timeZone: "America/New_York",
+                                });
+
+                            const lastUpdatedElement =
+                                document.getElementById("last-updated");
+                            if (lastUpdatedElement) {
+                                lastUpdatedElement.textContent = `${formattedLastUpdated} at ${formattedLastUpdatedTime} ET`;
+                            }
+                        }
+
+                        // Initialize pagination
+                        currentlyShown = 0;
+                        const tbody =
+                            document.getElementById("predictions-tbody");
+                        tbody.innerHTML = "";
+
+                        // Show initial predictions
+                        showMorePredictions();
+
+                        document
+                            .getElementById("predictions-loading")
+                            .classList.add("hidden");
+                        document
+                            .getElementById("predictions-table")
+                            .classList.remove("hidden");
+                    } catch (error) {
+                        console.error("Error loading predictions:", error);
+                        document
+                            .getElementById("predictions-loading")
+                            .classList.add("hidden");
+                        document
+                            .getElementById("no-predictions")
+                            .classList.remove("hidden");
+                    }
+                }
+
+                // Show more predictions function
+                function showMorePredictions() {
+                    const tbody = document.getElementById("predictions-tbody");
+                    const startIndex = currentlyShown;
+                    const endIndex = Math.min(
+                        currentlyShown + PREDICTIONS_PER_LOAD,
+                        allPredictions.length,
+                    );
+
+                    // Add new predictions to table
+                    for (let i = startIndex; i < endIndex; i++) {
+                        const pred = allPredictions[i];
+                        const row = document.createElement("tr");
+                        row.className =
+                            "hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors";
+
+                        const rank = i + 1;
+                        row.innerHTML = `
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span class="inline-flex items-center justify-center w-8 h-6 rounded-md ${rank <= 10 ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white" : "bg-gradient-to-r from-gray-400 to-gray-500 text-white"} text-sm font-bold shadow-md">
+                                #${rank}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="flex items-center space-x-1">
+                                ${[pred.n1, pred.n2, pred.n3, pred.n4, pred.n5]
+                                    .filter((n) => n)
+                                    .map(
+                                        (num) =>
+                                            `<span class="inline-flex items-center justify-center w-8 h-8 bg-white text-gray-900 rounded-full text-sm font-bold border-2 border-gray-300 shadow-lg ring-2 ring-blue-200 ring-opacity-50">${num}</span>`,
+                                    )
+                                    .join("")}
+                                <div class="w-2"></div>
+                                <span class="inline-flex items-center justify-center w-8 h-8 bg-red-600 text-white rounded-full text-sm font-bold shadow-lg ring-2 ring-red-200 ring-opacity-50">
+                                    ${pred.pb}
+                                </span>
+                            </div>
+                        </td>
+                    `;
+
+                        tbody.appendChild(row);
+                    }
+
+                    currentlyShown = endIndex;
+
+                    // Update counters
+                    document.getElementById("shown-count").textContent =
+                        currentlyShown;
+
+                    // Show/hide load more button
+                    const loadMoreContainer = document.getElementById(
+                        "load-more-container",
+                    );
+                    if (currentlyShown < allPredictions.length) {
+                        loadMoreContainer.classList.remove("hidden");
+                        const remaining =
+                            allPredictions.length - currentlyShown;
+                        const nextLoad = Math.min(
+                            PREDICTIONS_PER_LOAD,
+                            remaining,
+                        );
+                        document.getElementById("load-more-count").textContent =
+                            `+${nextLoad}`;
+
+                        // Update button text based on remaining
+                        const loadMoreText =
+                            document.getElementById("load-more-text");
+                        if (remaining <= PREDICTIONS_PER_LOAD) {
+                            loadMoreText.textContent = "Show All Remaining";
+                        } else {
+                            loadMoreText.textContent = "Load More Predictions";
+                        }
+                    } else {
+                        loadMoreContainer.classList.add("hidden");
+                    }
+                }
+
+                // Load recent draws
+                async function loadRecentDraws() {
+                    try {
+                        console.log("Loading recent draws...");
+                        document
+                            .getElementById("draws-loading")
+                            .classList.remove("hidden");
+
+                        const response = await fetch(
+                            `${API_BASE_URL}/public/draws/recent?limit=20`,
+                        );
+                        if (!response.ok)
+                            throw new Error("Failed to fetch draws");
+
+                        const data = await response.json();
+                        const allDraws = data.draws || [];
+                        console.log("Loaded all draws:", allDraws.length);
+
+                        if (allDraws.length === 0) {
+                            document
+                                .getElementById("draws-loading")
+                                .classList.add("hidden");
+                            document
+                                .getElementById("no-draws")
+                                .classList.remove("hidden");
+                            return;
+                        }
+
+                        // Filter draws that have predictions
+                        const drawsWithPredictions = [];
+
+                        for (const draw of allDraws) {
+                            try {
+                                const predictionResponse = await fetch(
+                                    `${API_BASE_URL}/public/predictions/by-draw/${encodeURIComponent(draw.draw_date)}?min_matches=0&limit=1`,
+                                );
+                                if (predictionResponse.ok) {
+                                    const predictionData =
+                                        await predictionResponse.json();
+                                    if (
+                                        predictionData.predictions &&
+                                        predictionData.predictions.length > 0
+                                    ) {
+                                        drawsWithPredictions.push(draw);
+                                    }
+                                }
+                            } catch (predError) {
+                                console.log(
+                                    `No predictions found for draw ${draw.draw_date}`,
+                                );
+                            }
+
+                            // Limit to 12 draws with predictions
+                            if (drawsWithPredictions.length >= 12) break;
+                        }
+
+                        console.log(
+                            "Draws with predictions:",
+                            drawsWithPredictions.length,
+                        );
+
+                        if (drawsWithPredictions.length === 0) {
+                            document
+                                .getElementById("draws-loading")
+                                .classList.add("hidden");
+                            document
+                                .getElementById("no-draws")
+                                .classList.remove("hidden");
+                            return;
+                        }
+
+                        const grid = document.getElementById("draws-grid");
+                        grid.innerHTML = "";
+
+                        drawsWithPredictions.forEach((draw) => {
+                            const drawCard = document.createElement("div");
+                            drawCard.className =
+                                "bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20";
+
+                            // Fix date parsing to avoid timezone issues
+                            const dateParts = draw.draw_date.split("-");
+                            const fixedDate = new Date(
+                                parseInt(dateParts[0]),
+                                parseInt(dateParts[1]) - 1,
+                                parseInt(dateParts[2]),
+                            );
+                            const formattedDate = fixedDate.toLocaleDateString(
+                                "en-US",
+                                {
+                                    weekday: "short",
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                },
+                            );
+
+                            drawCard.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div class="text-left">
+                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+                                            ${formattedDate}
+                                        </h4>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Click for matches</p>
+                                    </div>
+                                    <div class="flex items-center space-x-1">
+                                        <span class="inline-flex items-center justify-center w-7 h-7 bg-white text-gray-900 rounded-full text-sm font-bold border-2 border-gray-300 shadow-lg ring-2 ring-blue-200 ring-opacity-50">${draw.n1}</span>
+                                        <span class="inline-flex items-center justify-center w-7 h-7 bg-white text-gray-900 rounded-full text-sm font-bold border-2 border-gray-300 shadow-lg ring-2 ring-blue-200 ring-opacity-50">${draw.n2}</span>
+                                        <span class="inline-flex items-center justify-center w-7 h-7 bg-white text-gray-900 rounded-full text-sm font-bold border-2 border-gray-300 shadow-lg ring-2 ring-blue-200 ring-opacity-50">${draw.n3}</span>
+                                        <span class="inline-flex items-center justify-center w-7 h-7 bg-white text-gray-900 rounded-full text-sm font-bold border-2 border-gray-300 shadow-lg ring-2 ring-blue-200 ring-opacity-50">${draw.n4}</span>
+                                        <span class="inline-flex items-center justify-center w-7 h-7 bg-white text-gray-900 rounded-full text-sm font-bold border-2 border-gray-300 shadow-lg ring-2 ring-blue-200 ring-opacity-50">${draw.n5}</span>
+                                        <div class="w-2"></div>
+                                        <span class="inline-flex items-center justify-center w-7 h-7 bg-red-600 text-white rounded-full text-sm font-bold shadow-lg ring-2 ring-red-200 ring-opacity-50">${draw.pb}</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <i class="fas fa-chevron-right text-gray-400 dark:text-gray-500"></i>
+                                </div>
+                            </div>
+                        `;
+
+                            // Add click event to open modal
+                            drawCard.addEventListener("click", () => {
+                                showDrawMatchesModal(draw.draw_date);
+                            });
+
+                            grid.appendChild(drawCard);
+                        });
+
+                        document
+                            .getElementById("draws-loading")
+                            .classList.add("hidden");
+                        document
+                            .getElementById("draws-grid")
+                            .classList.remove("hidden");
+                    } catch (error) {
+                        console.error("Error loading draws:", error);
+                        document
+                            .getElementById("draws-loading")
+                            .classList.add("hidden");
+                        document
+                            .getElementById("no-draws")
+                            .classList.remove("hidden");
+                    }
+                }
+
+                // Initialize - load all data
+                try {
+                    console.log("Starting initialization...");
+                    await Promise.all([loadPredictions(), loadRecentDraws()]);
+
+                    // Setup load more button event listener
+                    document
+                        .getElementById("load-more-btn")
+                        .addEventListener("click", function () {
+                            showMorePredictions();
+                        });
+
+                    console.log("All data loaded successfully");
+                } catch (error) {
+                    console.error("Error during initialization:", error);
+                }
+            });
+
+            // Modal functions
+            async function showDrawMatchesModal(drawDate) {
+                console.log("Opening modal for draw date:", drawDate);
+
+                const modal = document.getElementById("drawMatchesModal");
+                if (!modal) {
+                    console.error("Modal element not found");
+                    return;
+                }
+
+                // Show modal
+                modal.classList.remove("hidden");
+
+                // Reset states
+                document
+                    .getElementById("modal-loading")
+                    .classList.remove("hidden");
+                document.getElementById("modal-empty").classList.add("hidden");
+                document
+                    .getElementById("modal-content")
+                    .classList.add("hidden");
+
+                try {
+                    // Fetch draw matches data
+                    const response = await fetch(
+                        `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=50`,
+                    );
+                    if (!response.ok) {
+                        throw new Error(
+                            `HTTP ${response.status}: ${response.statusText}`,
+                        );
+                    }
+
+                    const data = await response.json();
+                    console.log("Modal data received:", data);
+
+                    // Hide loading
+                    document
+                        .getElementById("modal-loading")
+                        .classList.add("hidden");
+
+                    if (data.predictions && data.predictions.length > 0) {
+                        // Show draw date
+                        displayModalDrawDate(data.draw_date);
+
+                        // Show winning numbers
+                        displayModalWinningNumbers(data.draw_numbers);
+
+                        // Calculate prizes for all predictions
+                        const predictionsWithPrizes = data.predictions.map(
+                            (pred) => ({
+                                ...pred,
+                                prize_info: calculatePrizeAmount(
+                                    pred.matches_main || 0,
+                                    pred.matches_powerball || false,
+                                ),
+                            }),
+                        );
+
+                        // Filter to show only winning predictions and sort by original ID to maintain original rank
+                        const winningPredictions = predictionsWithPrizes
+                            .filter((p) => p.prize_info.amount > 0)
+                            .sort((a, b) => a.id - b.id); // Sort by ID to maintain original order
+
+                        // Create a map of ID to original rank (1-50)
+                        const allPredictionsSorted = data.predictions.sort(
+                            (a, b) => a.id - b.id,
+                        );
+                        const idToRankMap = {};
+                        allPredictionsSorted.forEach((pred, index) => {
+                            idToRankMap[pred.id] = index + 1;
+                        });
+
+                        // Calculate total prizes
+                        const totalPrizes = winningPredictions.reduce(
+                            (sum, pred) => sum + (pred.prize_info.amount || 0),
+                            0,
+                        );
+
+                        // Create summary from data
+                        const summary = {
+                            total_predictions: data.predictions.length,
+                            total_with_matches: winningPredictions.length,
+                            best_match_description:
+                                getBestMatchDescription(winningPredictions),
+                            total_prizes: totalPrizes,
+                        };
+                        displayModalSummary(summary);
+
+                        // Show predictions table
+                        displayModalPredictions(
+                            winningPredictions,
+                            data.draw_numbers,
+                            idToRankMap,
+                        );
+
+                        // Show content
+                        document
+                            .getElementById("modal-content")
+                            .classList.remove("hidden");
+                    } else {
+                        document
+                            .getElementById("modal-empty")
+                            .classList.remove("hidden");
+                    }
+                } catch (error) {
+                    console.error("Error loading modal data:", error);
+                    document
+                        .getElementById("modal-loading")
+                        .classList.add("hidden");
+                    document
+                        .getElementById("modal-empty")
+                        .classList.remove("hidden");
+                }
+            }
+
+            function closeDrawMatchesModal() {
+                const modal = document.getElementById("drawMatchesModal");
+                if (modal) {
+                    modal.classList.add("hidden");
+                }
+            }
+
+            function displayModalWinningNumbers(drawNumbers) {
+                if (!drawNumbers) return;
+
+                const numbersContainer = document.getElementById(
+                    "modal-winning-numbers",
+                );
+                const powerballContainer = document.getElementById(
+                    "modal-winning-powerball",
+                );
+
+                numbersContainer.innerHTML = "";
+                powerballContainer.innerHTML = "";
+
+                // Add white balls from draw_numbers structure
+                const winningNumbers = [
+                    drawNumbers.n1,
+                    drawNumbers.n2,
+                    drawNumbers.n3,
+                    drawNumbers.n4,
+                    drawNumbers.n5,
+                ].filter((n) => n);
+                winningNumbers.forEach((num) => {
+                    const ball = document.createElement("span");
+                    ball.className =
+                        "inline-flex items-center justify-center w-7 h-7 bg-white text-gray-900 rounded-full text-sm font-bold border-2 border-gray-300 shadow-lg ring-2 ring-blue-200 ring-opacity-50";
+                    ball.textContent = num;
+                    numbersContainer.appendChild(ball);
+                });
+
+                // Add powerball
+                if (drawNumbers.pb) {
+                    const ball = document.createElement("span");
+                    ball.className =
+                        "inline-flex items-center justify-center w-7 h-7 bg-red-600 text-white rounded-full text-sm font-bold shadow-lg ring-2 ring-red-200 ring-opacity-50";
+                    ball.textContent = drawNumbers.pb;
+                    powerballContainer.appendChild(ball);
+                }
+            }
+
+            function displayModalDrawDate(drawDate) {
+                const dateElement = document.getElementById("modal-draw-date");
+                if (dateElement && drawDate) {
+                    const date = new Date(drawDate + "T00:00:00");
+                    const formattedDate = date.toLocaleDateString("en-US", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                    });
+                    dateElement.textContent = `Draw Date: ${formattedDate}`;
+                }
+            }
+
+            function calculatePrizeAmount(mainMatches, powerballMatch) {
+                if (mainMatches === 5 && powerballMatch) {
+                    return { amount: 100000000.0, description: "Jackpot" };
+                } else if (mainMatches === 5) {
+                    return { amount: 1000000.0, description: "Match 5" };
+                } else if (mainMatches === 4 && powerballMatch) {
+                    return {
+                        amount: 50000.0,
+                        description: "Match 4 + Powerball",
+                    };
+                } else if (mainMatches === 4) {
+                    return { amount: 100.0, description: "Match 4" };
+                } else if (mainMatches === 3 && powerballMatch) {
+                    return {
+                        amount: 100.0,
+                        description: "Match 3 + Powerball",
+                    };
+                } else if (mainMatches === 3) {
+                    return { amount: 7.0, description: "Match 3" };
+                } else if (mainMatches === 2 && powerballMatch) {
+                    return { amount: 7.0, description: "Match 2 + Powerball" };
+                } else if (mainMatches === 1 && powerballMatch) {
+                    return { amount: 4.0, description: "Match 1 + Powerball" };
+                } else if (powerballMatch) {
+                    return { amount: 4.0, description: "Powerball Only" };
+                } else {
+                    return { amount: 0.0, description: "No Prize" };
+                }
+            }
+
+            function getBestMatchDescription(predictions) {
+                if (predictions.length === 0) return "None";
+
+                let bestMainMatches = 0;
+                let hasPowerballMatch = false;
+
+                predictions.forEach((pred) => {
+                    if (
+                        pred.matches_main > bestMainMatches ||
+                        (pred.matches_main === bestMainMatches &&
+                            pred.matches_powerball &&
+                            !hasPowerballMatch)
+                    ) {
+                        bestMainMatches = pred.matches_main;
+                        if (pred.matches_powerball) hasPowerballMatch = true;
+                    }
+                });
+
+                if (bestMainMatches === 0 && !hasPowerballMatch) return "None";
+                return `${bestMainMatches}${hasPowerballMatch ? "+PB" : ""} matches`;
+            }
+
+            function displayModalSummary(summary) {
+                if (!summary) return;
+
+                document.getElementById("modal-total-predictions").textContent =
+                    summary.total_predictions || 0;
+                document.getElementById("modal-matches-found").textContent =
+                    summary.total_with_matches || 0;
+                document.getElementById("modal-best-match").textContent =
+                    summary.best_match_description || "None";
+                document.getElementById("modal-total-prizes").textContent =
+                    `$${(summary.total_prizes || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+
+            function displayModalPredictions(
+                predictions,
+                winningNumbers,
+                idToRankMap,
+            ) {
+                const tbody = document.getElementById(
+                    "modal-predictions-tbody",
+                );
+                tbody.innerHTML = "";
+
+                if (predictions.length === 0) {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                    <td colspan="5" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-trophy text-2xl mb-2"></i>
+                        <br>
+                        No winning predictions found for this draw.
+                        <br>
+                        <span class="text-sm">Try again with the next drawing!</span>
+                    </td>
+                `;
+                    tbody.appendChild(row);
+                    return;
+                }
+
+                // Extract winning numbers for comparison
+                const winningMainNumbers = winningNumbers
+                    ? [
+                          winningNumbers.n1,
+                          winningNumbers.n2,
+                          winningNumbers.n3,
+                          winningNumbers.n4,
+                          winningNumbers.n5,
+                      ]
+                    : [];
+                const winningPowerball = winningNumbers
+                    ? winningNumbers.pb
+                    : null;
+
+                predictions.forEach((pred, index) => {
+                    const row = document.createElement("tr");
+                    row.className = "hover:bg-gray-50 dark:hover:bg-gray-700";
+
+                    // Create number balls HTML with highlighting for matches
+                    const numbers = [
+                        pred.n1,
+                        pred.n2,
+                        pred.n3,
+                        pred.n4,
+                        pred.n5,
+                    ].filter((n) => n);
+                    const numbersHtml = numbers
+                        .map((num) => {
+                            const isMatch = winningMainNumbers.includes(num);
+                            const bgColor = isMatch
+                                ? "bg-green-600"
+                                : "bg-white";
+                            const textColor = isMatch
+                                ? "text-white"
+                                : "text-gray-900";
+                            const borderClass = isMatch
+                                ? ""
+                                : "border-2 border-gray-300";
+                            const ringClass = isMatch
+                                ? "ring-2 ring-green-300"
+                                : "ring-2 ring-blue-200 ring-opacity-50";
+                            const shadowClass = "shadow-lg";
+                            return `<span class="inline-flex items-center justify-center w-7 h-7 ${bgColor} ${textColor} rounded-full text-sm font-bold ${borderClass} ${ringClass} ${shadowClass}">${num}</span>`;
+                        })
+                        .join("");
+
+                    // Highlight Powerball if it matches
+                    const pbMatch = pred.pb === winningPowerball;
+                    const pbBgColor = pbMatch ? "bg-green-600" : "bg-red-600";
+                    const pbRingClass = pbMatch
+                        ? "ring-2 ring-green-300"
+                        : "ring-2 ring-red-200 ring-opacity-50";
+                    const pbShadowClass = "shadow-lg";
+                    const powerballHtml = `<span class="inline-flex items-center justify-center w-7 h-7 ${pbBgColor} text-white rounded-full text-sm font-bold ${pbRingClass} ${pbShadowClass}">${pred.pb}</span>`;
+
+                    const matchesText = `${pred.matches_main || 0}${pred.matches_powerball ? "+PB" : ""}`;
+                    const prizeAmount = pred.prize_info
+                        ? pred.prize_info.amount
+                        : 0;
+                    const prizeText =
+                        prizeAmount > 0
+                            ? `$${prizeAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : "-";
+
+                    row.innerHTML = `
+                    <td class="px-4 py-3 text-sm text-gray-900 dark:text-white font-bold">#${idToRankMap[pred.id] || index + 1}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center justify-start space-x-1">
+                            ${numbersHtml}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center justify-center">
+                            ${powerballHtml}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-sm font-medium ${pred.matches_main > 0 || pred.matches_powerball ? "text-green-600" : "text-gray-500"}">${matchesText}</td>
+                    <td class="px-4 py-3 text-sm font-medium ${prizeAmount > 0 ? "text-green-600" : "text-gray-500"}">${prizeText}</td>
+                `;
+
+                    tbody.appendChild(row);
+                });
+            }
+
+            // Countdown functionality
+            function getNextDrawingDate() {
+                const now = new Date();
+                const et = new Date(
+                    now.toLocaleString("en-US", {
+                        timeZone: "America/New_York",
+                    }),
+                );
+                let nextDrawing = new Date(et);
+
+                const currentDay = et.getDay(); // Sunday = 0, Monday = 1, ..., Saturday = 6
+                const currentHour = et.getHours();
+                const currentMinute = et.getMinutes();
+
+                let daysToAdd = 0;
+
+                // Powerball drawings: Monday (1), Wednesday (3), Saturday (6) at 10:59 PM ET
+                if (currentDay === 0) {
+                    // Sunday
+                    daysToAdd = 1; // Next Monday
+                } else if (currentDay === 1) {
+                    // Monday
+                    if (
+                        currentHour < 22 ||
+                        (currentHour === 22 && currentMinute < 59)
+                    ) {
+                        daysToAdd = 0; // Today
+                    } else {
+                        daysToAdd = 2; // Next Wednesday
+                    }
+                } else if (currentDay === 2) {
+                    // Tuesday
+                    daysToAdd = 1; // Next Wednesday
+                } else if (currentDay === 3) {
+                    // Wednesday
+                    if (
+                        currentHour < 22 ||
+                        (currentHour === 22 && currentMinute < 59)
+                    ) {
+                        daysToAdd = 0; // Today
+                    } else {
+                        daysToAdd = 3; // Next Saturday
+                    }
+                } else if (currentDay === 4 || currentDay === 5) {
+                    // Thursday or Friday
+                    daysToAdd = 6 - currentDay; // Next Saturday
+                } else if (currentDay === 6) {
+                    // Saturday
+                    if (
+                        currentHour < 22 ||
+                        (currentHour === 22 && currentMinute < 59)
+                    ) {
+                        daysToAdd = 0; // Today
+                    } else {
+                        daysToAdd = 2; // Next Monday
+                    }
+                }
+
+                nextDrawing.setDate(et.getDate() + daysToAdd);
+                nextDrawing.setHours(22, 59, 0, 0); // 10:59 PM ET
+
+                return nextDrawing;
+            }
+
+            function formatCountdown(timeDiff) {
+                if (timeDiff <= 0) {
+                    return "Drawing in Progress";
+                }
+
+                const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor(
+                    (timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60),
+                );
+                const minutes = Math.floor(
+                    (timeDiff % (1000 * 60 * 60)) / (1000 * 60),
+                );
+                const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+
+                let result = "";
+                if (days > 0) {
+                    result += `${days}d `;
+                }
+                result += `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+
+                return result;
+            }
+
+            function updateCountdown() {
+                const nextDrawing = getNextDrawingDate();
+                const now = new Date();
+                const timeDiff = nextDrawing.getTime() - now.getTime();
+
+                // Update date display
+                const dateElement =
+                    document.getElementById("next-drawing-date");
+                if (dateElement) {
+                    const formattedDate = nextDrawing.toLocaleDateString(
+                        "en-US",
+                        {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                            timeZone: "America/New_York",
+                        },
+                    );
+                    const formattedTime = nextDrawing.toLocaleTimeString(
+                        "en-US",
+                        {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                            timeZone: "America/New_York",
+                        },
+                    );
+                    dateElement.textContent = `${formattedDate} at ${formattedTime} ET`;
+                }
+
+                // Update countdown display
+                const countdownElement =
+                    document.getElementById("countdown-display");
+                if (countdownElement) {
+                    countdownElement.textContent = formatCountdown(timeDiff);
+
+                    // Change colors based on time remaining
+                    countdownElement.className = "text-4xl font-bold mb-2 ";
+                    if (timeDiff <= 0) {
+                        countdownElement.className +=
+                            "text-red-600 dark:text-red-400 animate-pulse";
+                    } else if (timeDiff <= 3600000) {
+                        // 1 hour
+                        countdownElement.className +=
+                            "text-orange-600 dark:text-orange-400";
+                    } else if (timeDiff <= 86400000) {
+                        // 24 hours
+                        countdownElement.className +=
+                            "text-yellow-600 dark:text-yellow-400";
+                    } else {
+                        countdownElement.className +=
+                            "text-blue-600 dark:text-blue-400";
+                    }
+                }
+            }
+
+            function initializeCountdown() {
+                updateCountdown();
+                setInterval(updateCountdown, 1000);
+            }
+
+            // Close modal when clicking outside
+            document.addEventListener("click", (e) => {
+                const modal = document.getElementById("drawMatchesModal");
+                if (e.target === modal) {
+                    closeDrawMatchesModal();
+                }
+            });
+
+            // Device fingerprinting and counters
+            function generateFingerprint() {
+                const screen = window.screen;
+                const navigator = window.navigator;
+                const fingerprint = [
+                    screen.width,
+                    screen.height,
+                    screen.colorDepth,
+                    navigator.language,
+                    navigator.platform,
+                    new Date().getTimezoneOffset(),
+                    navigator.hardwareConcurrency || "unknown",
+                ].join("|");
+
+                // Create simple hash
+                let hash = 0;
+                for (let i = 0; i < fingerprint.length; i++) {
+                    const char = fingerprint.charCodeAt(i);
+                    hash = (hash << 5) - hash + char;
+                    hash = hash & hash;
+                }
+                return "device_" + Math.abs(hash).toString(36);
+            }
+
+            async function registerVisit() {
+                const fingerprint = generateFingerprint();
+                const visited = localStorage.getItem("shiol_visited");
+
+                if (!visited) {
+                    try {
+                        const response = await fetch(
+                            "/api/v1/public/register-visit",
+                            {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ fingerprint }),
+                            },
+                        );
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.new_visit) {
+                                localStorage.setItem("shiol_visited", "true");
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Error registering visit:", error);
+                    }
+                }
+            }
+
+            async function registerPWAInstall() {
+                const fingerprint = generateFingerprint();
+                const installed = localStorage.getItem("shiol_pwa_installed");
+
+                if (!installed) {
+                    try {
+                        const response = await fetch(
+                            "/api/v1/public/register-pwa-install",
+                            {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ fingerprint }),
+                            },
+                        );
+
+                        if (response.ok) {
+                            localStorage.setItem("shiol_pwa_installed", "true");
+                        }
+                    } catch (error) {
+                        console.error("Error registering PWA install:", error);
+                    }
+                }
+            }
+
+            async function updateCounters() {
+                try {
+                    const response = await fetch("/api/v1/public/counters");
+                    if (response.ok) {
+                        const data = await response.json();
+                        const visitsElement =
+                            document.getElementById("visit-counter");
+                        const installsElement =
+                            document.getElementById("pwa-counter");
+
+                        if (visitsElement)
+                            visitsElement.textContent = data.visits || "0";
+                        if (installsElement)
+                            installsElement.textContent = data.installs || "0";
+                    }
+                } catch (error) {
+                    console.error("Error updating counters:", error);
+                }
+            }
+
+            // Listen for PWA installation
+            if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.addEventListener("message", (event) => {
+                    if (event.data && event.data.type === "PWA_INSTALLED") {
+                        registerPWAInstall();
+                        setTimeout(updateCounters, 1000);
+                    }
+                });
+            }
+
+            // Listen for standalone mode (PWA already installed)
+            window.addEventListener("appinstalled", () => {
+                registerPWAInstall();
+                setTimeout(updateCounters, 1000);
+            });
+
+            // Initialize on page load
+            document.addEventListener("DOMContentLoaded", () => {
+                registerVisit();
+                updateCounters();
+
+                // Update counters periodically
+                setInterval(updateCounters, 60000); // Every minute
+            });
+        </script>
+
+        <!-- Ticket Verification Script -->
+        <script src="js/ticket-verification.js"></script>
+
+        <!-- Simple footer with counters -->
+        <footer
+            class="mt-auto py-3 text-center text-xs text-gray-400 dark:text-gray-600"
+        >
+            <span id="visit-counter">0</span> • <span id="pwa-counter">0</span>
+        </footer>
+    </body>
+</html>
