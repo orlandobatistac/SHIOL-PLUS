@@ -9,7 +9,7 @@
  * - Users receive updates seamlessly without UI prompts
  */
 
-const APP_VERSION = '2.2.4'; // INCREMENT THIS ON EACH DEPLOY
+const APP_VERSION = '2.2.5'; // INCREMENT THIS ON EACH DEPLOY
 const CACHE_NAME = `shiol-plus-v${APP_VERSION}`;
 const OFFLINE_URL = '/';
 
