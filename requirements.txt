@@ -1,0 +1,31 @@
+pandas
+numpy
+scikit-learn==1.7.0
+xgboost==3.0.2
+joblib==1.5.1
+loguru==0.7.3
+statsmodels
+requests==2.32.4
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+apscheduler==3.10.4
+bcrypt<4.0.0
+psutil==5.9.8
+pytz==2023.3
+jinja2==3.1.2
+python-multipart==0.0.6
+scipy
+matplotlib==3.8.2
+plotly==5.17.0
+# opencv-python  # REMOVED - dependency eliminated (using Gemini AI instead)
+Pillow
+easyocr
+google-cloud-vision
+# Duplicate numpy removed
+# opencv-python  # REMOVED - dependency eliminated (using Gemini AI instead)
+# pillow  # Duplicate removed (Pillow already listed above)
+scikit-image
+google-generativeai
+PyJWT
+email-validator
+passlib==1.7.4

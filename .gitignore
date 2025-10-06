@@ -1,0 +1,54 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.[eE]nv
+venv/
+env/
+
+# IDE configuration files
+.vscode/
+.idea/
+
+# Replit-specific
+.pythonlibs/
+.upm/
+.replit
+*.replit
+.config/
+replit.md
+
+# Build artifacts
+dist/
+build/
+*.egg-info
+
+# Generated output files
+/outputs/*
+!/outputs/.gitkeep
+
+# Log files
+logs/*.log
+
+# Database files
+/db/
+
+# Backup directories
+src_backup*/
+
+# Data directory specific ignores
+/data/validations/
+/data/predictions/
+!/data/.gitkeep
+/data/shiolplus.db
+
+# Assets (ignore completely)
+attached_assets/
+
+# Note: static directory now contains only essential files for production
+
+# Misc caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
