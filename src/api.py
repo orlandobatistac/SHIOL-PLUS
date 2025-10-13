@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Query, HTTPException
+from fastapi import FastAPI, APIRouter, Query, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -9,7 +9,8 @@ import asyncio
 import uuid
 from typing import Optional, Dict, Any
 from pathlib import Path
-import traceback # Import traceback for error logging
+import traceback
+import subprocess
 
 from src.predictor import Predictor
 from src.intelligent_generator import IntelligentGenerator, DeterministicGenerator
@@ -17,6 +18,8 @@ from src.loader import update_database_from_source
 import src.database as db
 # from src.adaptive_feedback import initialize_adaptive_system  # REMOVED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.executors.pool import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 import pytz
 from pydantic import BaseModel
@@ -29,6 +32,7 @@ from src.api_prediction_endpoints import prediction_router, draw_router, set_pre
 from src.api_public_endpoints import public_frontend_router, set_public_components
 from src.api_ticket_endpoints import ticket_router
 from src.api_auth_endpoints import auth_router
+from src.auth_middleware import require_admin_access
 
 # --- Pipeline Monitoring Global Variables ---
 # Global variables for pipeline monitoring
@@ -37,7 +41,34 @@ pipeline_executions = {}  # Track running pipeline executions
 pipeline_logs = []  # Store recent pipeline logs
 
 # --- Scheduler and App Lifecycle ---
-scheduler = AsyncIOScheduler()
+# Configure persistent jobstore using SQLite
+# Use relative path from project root for portability (Replit/VPS)
+import os
+scheduler_db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'scheduler.db')
+scheduler_db_url = f'sqlite:///{scheduler_db_path}'
+
+jobstores = {
+    'default': SQLAlchemyJobStore(url=scheduler_db_url)
+}
+
+# Configure thread pool executor for job execution
+executors = {
+    'default': ThreadPoolExecutor(max_workers=3)
+}
+
+# Default job configuration
+job_defaults = {
+    'coalesce': True,           # Merge multiple missed runs into one
+    'max_instances': 1,         # Prevent overlapping executions
+    'misfire_grace_time': 600   # 10 minutes tolerance for missed jobs
+}
+
+# Initialize scheduler with persistent configuration
+scheduler = AsyncIOScheduler(
+    jobstores=jobstores,
+    executors=executors,
+    job_defaults=job_defaults
+)
 
 async def update_data_automatically():
     """Task to update database from source."""
@@ -47,23 +78,6 @@ async def update_data_automatically():
         logger.info("Automatic data update completed successfully.")
     except Exception as e:
         logger.error(f"Error during automatic data update: {e}")
-
-async def evaluate_predictions_automatically():
-    """Task to automatically evaluate predictions in background."""
-    logger.info("Running automatic prediction evaluation task.")
-    try:
-        from src.prediction_evaluator import run_prediction_evaluation
-
-        # Run the evaluation in background
-        results = run_prediction_evaluation()
-
-        if 'error' not in results:
-            logger.info(f"Automatic evaluation completed: {results.get('total_predictions_evaluated', 0)} predictions evaluated")
-        else:
-            logger.error(f"Automatic evaluation failed: {results['error']}")
-
-    except Exception as e:
-        logger.error(f"Error during automatic prediction evaluation: {e}")
 
 async def trigger_full_pipeline_automatically():
     """Task to trigger the full pipeline automatically with enhanced metadata."""
@@ -144,9 +158,6 @@ async def run_full_pipeline_background(execution_id: str, num_predictions: int =
         }
 
         # Execute main.py in subprocess for stability (UNIFIED APPROACH)
-        import subprocess
-        import os
-
         cmd = [
             "python", "main.py",
             "--predictions", str(num_predictions)
@@ -278,7 +289,8 @@ async def lifespan(app: FastAPI):
         id="post_drawing_pipeline",
         name="Full Pipeline 30 Minutes After Drawing (11:29 PM ET)",
         max_instances=1,           # Prevent overlapping executions
-        coalesce=True             # Merge multiple pending executions into one
+        coalesce=True,             # Merge multiple pending executions into one
+        replace_existing=True      # Update job on restart instead of duplicating
     )
 
     # 2. Maintenance data update only (no full pipeline)
@@ -292,34 +304,24 @@ async def lifespan(app: FastAPI):
         id="maintenance_data_update",
         name="Maintenance Data Update on Non-Drawing Days",
         max_instances=1,
-        coalesce=True
+        coalesce=True,
+        replace_existing=True      # Update job on restart instead of duplicating
     )
 
-    # 3. Automatic prediction evaluation every 6 hours
-    scheduler.add_job(
-        func=evaluate_predictions_automatically,
-        trigger="cron",
-        hour="6,12,18",             # Every 6 hours (6 AM, 12 PM, 6 PM ET)
-        minute=15,                  # 15 minutes past the hour
-        timezone="America/New_York",
-        id="prediction_evaluation",
-        name="Automatic Prediction Evaluation (Every 6 Hours)",
-        max_instances=1,
-        coalesce=True
-    )
     # Start scheduler after configuration
     try:
         scheduler.start()
-        logger.info("Scheduler started successfully")
+        logger.info("✅ Scheduler started successfully with persistent jobstore (SQLite)")
+        logger.info(f"📁 Jobstore location: {scheduler_db_path}")
 
         # Log detailed scheduler configuration for debugging
         jobs = scheduler.get_jobs()
-        logger.info(f"Active scheduled jobs: {len(jobs)}")
+        logger.info(f"📋 Active scheduled jobs: {len(jobs)}")
         for job in jobs:
             try:
                 next_run = getattr(job, 'next_run_time', 'Unknown')
                 timezone = getattr(job.trigger, 'timezone', 'Unknown')
-                logger.info(f"Job: {job.id} | Next run: {next_run} | Timezone: {timezone}")
+                logger.info(f"  • Job: {job.id} | Next run: {next_run} | Timezone: {timezone}")
             except AttributeError as e:
                 logger.warning(f"Job {job.id} missing attributes: {e}")
     except Exception as e:
@@ -424,6 +426,123 @@ async def health_check():
         "service": "SHIOL+ API"
     }
 
+# --- Scheduler Health Check Endpoint ---
+@api_router.get("/scheduler/health")
+async def get_scheduler_health():
+    """
+    Scheduler health check endpoint for monitoring.
+    Returns scheduler status and list of active jobs.
+    """
+    try:
+        jobs = scheduler.get_jobs()
+        
+        return {
+            "scheduler_running": scheduler.running,
+            "total_jobs": len(jobs),
+            "jobs": [
+                {
+                    "id": job.id,
+                    "name": job.name,
+                    "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+                    "trigger": str(job.trigger)
+                }
+                for job in jobs
+            ],
+            "timestamp": datetime.now().isoformat(),
+            "jobstore_type": "SQLAlchemyJobStore (SQLite)",
+            "jobstore_path": scheduler_db_path
+        }
+    except Exception as e:
+        logger.error(f"Error getting scheduler health: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving scheduler health: {str(e)}"
+        )
+
+# --- System Stats Endpoint ---
+@api_router.get("/system/stats")
+async def get_system_stats():
+    """
+    Get comprehensive system statistics for status dashboard.
+    Returns database stats, pipeline metrics, and system health.
+    """
+    try:
+        from src.database import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get database statistics
+        cursor.execute("SELECT COUNT(*) FROM powerball_draws")
+        total_draws = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM predictions_log")
+        total_predictions = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM users WHERE is_premium = 1")
+        premium_users = cursor.fetchone()[0]
+        
+        # Get latest pipeline execution
+        cursor.execute("""
+            SELECT created_at, prize_description 
+            FROM predictions_log 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """)
+        latest_prediction = cursor.fetchone()
+        
+        # Get latest draw
+        cursor.execute("""
+            SELECT draw_date, n1, n2, n3, n4, n5, pb 
+            FROM powerball_draws 
+            ORDER BY draw_date DESC 
+            LIMIT 1
+        """)
+        latest_draw = cursor.fetchone()
+        
+        # Get predictions with matches
+        cursor.execute("""
+            SELECT COUNT(*) FROM predictions_log 
+            WHERE evaluated = 1 
+            AND matches_wb > 0
+        """)
+        winning_predictions = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return {
+            "database": {
+                "total_draws": total_draws,
+                "total_predictions": total_predictions,
+                "total_users": total_users,
+                "premium_users": premium_users,
+                "winning_predictions": winning_predictions
+            },
+            "pipeline": {
+                "last_execution": latest_prediction[0] if latest_prediction else None,
+                "last_status": latest_prediction[1] if latest_prediction else None
+            },
+            "latest_draw": {
+                "date": latest_draw[0] if latest_draw else None,
+                "numbers": f"{latest_draw[1]}, {latest_draw[2]}, {latest_draw[3]}, {latest_draw[4]}, {latest_draw[5]}" if latest_draw else None,
+                "powerball": latest_draw[6] if latest_draw else None
+            },
+            "system": {
+                "version": "6.0.0",
+                "model_loaded": predictor is not None and hasattr(predictor, 'model') and predictor.model is not None,
+                "generators_loaded": intelligent_generator is not None and deterministic_generator is not None
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting system stats: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving system stats: {str(e)}"
+        )
+
 # Simple health endpoint without prefix for easy access
 @app.get("/health")
 async def health():
@@ -487,6 +606,60 @@ logger.info(f"Service Worker auto-version: {SERVER_START_TIMESTAMP}")
 
 # PWA assets now served directly from frontend directory
 
+# Special route for status dashboard page (Admin only)
+@app.get("/status", response_class=Response)
+async def status_dashboard_page(request: Request):
+    """Serve system status dashboard page (Admin access required)"""
+    from fastapi.responses import RedirectResponse
+    from src.auth_middleware import get_user_from_request
+    
+    # Check authentication manually to provide better UX
+    user = get_user_from_request(request)
+    
+    if not user:
+        # Not authenticated - redirect to home page and trigger login modal
+        return RedirectResponse(url="/?login=required", status_code=302)
+    
+    # Debug logging
+    logger.info(f"User accessing /status: {user.get('username')} - is_admin: {user.get('is_admin', False)}")
+    
+    if not user.get("is_admin", False):
+        # Authenticated but not admin - show friendly error page
+        error_html = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Access Denied - SHIOL+</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+            <div class="text-center max-w-md mx-auto px-6">
+                <div class="mb-6">
+                    <i class="fas fa-lock text-6xl text-red-500"></i>
+                </div>
+                <h1 class="text-3xl font-bold mb-4">Access Denied</h1>
+                <p class="text-gray-400 mb-8">This resource is restricted to administrators only.</p>
+                <a href="/" class="inline-block bg-gradient-to-r from-cyan-500 to-pink-500 text-white px-6 py-3 rounded-lg hover:opacity-90 transition">
+                    Return to Home
+                </a>
+            </div>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        </body>
+        </html>
+        """
+        return Response(content=error_html, media_type="text/html", status_code=403)
+    
+    # User is authenticated and admin - serve status page
+    status_path = os.path.join(FRONTEND_DIR, "status.html")
+    if os.path.exists(status_path):
+        with open(status_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+    else:
+        raise HTTPException(status_code=404, detail="Status page not found")
+
 # Special route for payment success page (before middleware)
 @app.get("/payment-success", response_class=Response)
 async def payment_success_page():
@@ -499,41 +672,17 @@ async def payment_success_page():
     else:
         raise HTTPException(status_code=404, detail="Payment success page not found")
 
-# Dynamic service worker endpoint with auto-versioning
-@app.get("/service-worker.js", response_class=Response)
-async def serve_service_worker():
-    """Serve service worker with automatic version based on server start time"""
-    sw_path = os.path.join(FRONTEND_DIR, "service-worker.js")
-    if os.path.exists(sw_path):
-        with open(sw_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Replace the static version with dynamic server timestamp
-        content = content.replace(
-            "const APP_VERSION = '2.0.1';",
-            f"const APP_VERSION = '{SERVER_START_TIMESTAMP}';"
-        )
-        
-        # Add no-cache headers to ensure browser always checks for updates
-        response = Response(content=content, media_type="application/javascript")
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
-        
-        return response
-    else:
-        raise HTTPException(status_code=404, detail="Service worker not found")
-
-# Add cache control middleware for CSS/JS files to prevent Chrome caching issues
+# Add cache control middleware for critical files to prevent caching issues
 @app.middleware("http")
 async def cache_control_middleware(request, call_next):
     """
-    Prevent aggressive caching of CSS/JS files that causes inconsistent blur behavior in Chrome.
+    Prevent aggressive caching of HTML, CSS, and JS files to ensure users always get latest version.
+    This prevents PWA service worker cache issues and ensures updates are visible immediately.
     """
     response = await call_next(request)
     
-    # Apply no-cache headers to CSS and JS files to prevent Chrome blur inconsistencies
-    if request.url.path.endswith(('.css', '.js')):
+    # Apply no-cache headers to HTML, CSS, and JS files
+    if request.url.path.endswith(('.html', '.css', '.js')) or request.url.path == '/':
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"

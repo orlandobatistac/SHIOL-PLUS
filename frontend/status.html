@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Status - SHIOL+</title>
+    <link rel="icon" type="image/png" href="/images/icon-192.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/dark-theme.css">
+    <style>
+        :root {
+            --canvas-accent: #00e0ff;
+            --canvas-accent2: #ff6b9d;
+        }
+        
+        body {
+            background: #0d0f1a;
+            color: #e2e8f0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, var(--canvas-accent) 0%, var(--canvas-accent2) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .status-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+        
+        .status-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(0, 224, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .status-running {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        
+        .status-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .status-warning {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--canvas-accent) 0%, var(--canvas-accent2) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #e2e8f0;
+        }
+        
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--canvas-accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .refresh-btn {
+            background: linear-gradient(135deg, var(--canvas-accent) 0%, var(--canvas-accent2) 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: opacity 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-4xl font-bold gradient-text mb-2">System Status</h1>
+                <p class="text-gray-400">Real-time monitoring dashboard</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="last-update" class="text-sm text-gray-400"></span>
+                <button onclick="refreshAllData()" class="refresh-btn">
+                    <i class="fas fa-sync-alt mr-2"></i>Refresh
+                </button>
+                <a href="/" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fas fa-home text-xl"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="flex items-center justify-center py-20">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div id="content" class="hidden">
+            <!-- Scheduler Status -->
+            <section class="mb-8">
+                <h2 class="section-title"><i class="fas fa-clock mr-2"></i>Scheduler Status</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="status-card">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-gray-400">Scheduler</span>
+                            <span id="scheduler-status" class="status-badge status-running">Running</span>
+                        </div>
+                        <div class="stat-value" id="total-jobs">0</div>
+                        <div class="text-sm text-gray-400">Active Jobs</div>
+                    </div>
+                    <div class="status-card col-span-2">
+                        <h3 class="text-sm font-semibold text-gray-400 mb-3">Scheduled Jobs</h3>
+                        <div id="jobs-list" class="space-y-2"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- System Health -->
+            <section class="mb-8">
+                <h2 class="section-title"><i class="fas fa-heart-pulse mr-2"></i>System Health</h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">API Status</div>
+                        <div class="stat-value">OK</div>
+                        <div class="text-sm text-gray-400" id="api-version">v6.0.0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Database</div>
+                        <div class="stat-value">✓</div>
+                        <div class="text-sm text-gray-400">Connected</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">ML Model</div>
+                        <div class="stat-value" id="model-status">✓</div>
+                        <div class="text-sm text-gray-400">Loaded</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Generators</div>
+                        <div class="stat-value" id="generators-status">✓</div>
+                        <div class="text-sm text-gray-400">Active</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Database Statistics -->
+            <section class="mb-8">
+                <h2 class="section-title"><i class="fas fa-database mr-2"></i>Database Statistics</h2>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Total Draws</div>
+                        <div class="stat-value" id="total-draws">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Predictions</div>
+                        <div class="stat-value" id="total-predictions">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Users</div>
+                        <div class="stat-value" id="total-users">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Premium</div>
+                        <div class="stat-value" id="premium-users">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Winners</div>
+                        <div class="stat-value" id="winning-predictions">0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Pipeline Info -->
+            <section class="mb-8">
+                <h2 class="section-title"><i class="fas fa-gears mr-2"></i>Pipeline Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Last Execution</div>
+                        <div class="text-xl font-semibold" id="last-execution">Never</div>
+                        <div class="text-sm text-gray-400 mt-1" id="last-status">-</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Latest Draw</div>
+                        <div class="text-xl font-semibold" id="latest-draw-date">-</div>
+                        <div class="text-sm text-gray-400 mt-1" id="latest-draw-numbers">-</div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+
+        async function loadSchedulerData() {
+            try {
+                const response = await fetch('/api/v1/scheduler/health');
+                const data = await response.json();
+                
+                // Update scheduler status
+                const statusBadge = document.getElementById('scheduler-status');
+                if (data.scheduler_running) {
+                    statusBadge.textContent = 'Running';
+                    statusBadge.className = 'status-badge status-running';
+                } else {
+                    statusBadge.textContent = 'Stopped';
+                    statusBadge.className = 'status-badge status-error';
+                }
+                
+                // Update total jobs
+                document.getElementById('total-jobs').textContent = data.total_jobs;
+                
+                // Update jobs list
+                const jobsList = document.getElementById('jobs-list');
+                jobsList.innerHTML = '';
+                
+                if (data.jobs && data.jobs.length > 0) {
+                    data.jobs.forEach(job => {
+                        const jobDiv = document.createElement('div');
+                        jobDiv.className = 'flex items-center justify-between p-2 bg-white/5 rounded-lg';
+                        jobDiv.innerHTML = `
+                            <div>
+                                <div class="font-semibold text-sm">${job.name}</div>
+                                <div class="text-xs text-gray-400">${job.trigger}</div>
+                            </div>
+                            <div class="text-xs text-gray-400">
+                                ${job.next_run_time ? new Date(job.next_run_time).toLocaleString() : 'Not scheduled'}
+                            </div>
+                        `;
+                        jobsList.appendChild(jobDiv);
+                    });
+                } else {
+                    jobsList.innerHTML = '<div class="text-gray-400 text-sm">No scheduled jobs</div>';
+                }
+            } catch (error) {
+                console.error('Error loading scheduler data:', error);
+            }
+        }
+
+        async function loadSystemStats() {
+            try {
+                const response = await fetch('/api/v1/system/stats');
+                const data = await response.json();
+                
+                // Update database stats
+                document.getElementById('total-draws').textContent = data.database.total_draws.toLocaleString();
+                document.getElementById('total-predictions').textContent = data.database.total_predictions.toLocaleString();
+                document.getElementById('total-users').textContent = data.database.total_users.toLocaleString();
+                document.getElementById('premium-users').textContent = data.database.premium_users.toLocaleString();
+                document.getElementById('winning-predictions').textContent = data.database.winning_predictions.toLocaleString();
+                
+                // Update system health
+                document.getElementById('api-version').textContent = `v${data.system.version}`;
+                document.getElementById('model-status').textContent = data.system.model_loaded ? '✓' : '✗';
+                document.getElementById('generators-status').textContent = data.system.generators_loaded ? '✓' : '✗';
+                
+                // Update pipeline info
+                if (data.pipeline.last_execution) {
+                    const lastExec = new Date(data.pipeline.last_execution);
+                    document.getElementById('last-execution').textContent = lastExec.toLocaleString();
+                    document.getElementById('last-status').textContent = `Status: ${data.pipeline.last_status}`;
+                } else {
+                    document.getElementById('last-execution').textContent = 'Never';
+                    document.getElementById('last-status').textContent = '-';
+                }
+                
+                // Update latest draw
+                if (data.latest_draw.date) {
+                    document.getElementById('latest-draw-date').textContent = data.latest_draw.date;
+                    document.getElementById('latest-draw-numbers').textContent = 
+                        `Numbers: ${data.latest_draw.numbers} | PB: ${data.latest_draw.powerball}`;
+                } else {
+                    document.getElementById('latest-draw-date').textContent = 'No draws available';
+                    document.getElementById('latest-draw-numbers').textContent = '-';
+                }
+                
+            } catch (error) {
+                console.error('Error loading system stats:', error);
+            }
+        }
+
+        async function refreshAllData() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('content').classList.add('hidden');
+            
+            await Promise.all([
+                loadSchedulerData(),
+                loadSystemStats()
+            ]);
+            
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('content').classList.remove('hidden');
+            
+            // Update timestamp
+            const now = new Date();
+            document.getElementById('last-update').textContent = `Last updated: ${now.toLocaleTimeString()}`;
+        }
+
+        // Initial load
+        refreshAllData();
+
+        // Auto-refresh every 30 seconds
+        autoRefreshInterval = setInterval(refreshAllData, 30000);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            clearInterval(autoRefreshInterval);
+        });
+    </script>
+</body>
+</html>

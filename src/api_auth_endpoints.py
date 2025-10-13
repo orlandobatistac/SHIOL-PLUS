@@ -77,6 +77,7 @@ class UserResponse(BaseModel):
     email: str
     username: str
     is_premium: bool
+    is_admin: bool = False
     premium_expires_at: Optional[str] = None
     created_at: str
     login_count: int
@@ -130,6 +131,7 @@ def create_access_token(user_data: Dict[str, Any], remember_me: bool = False) ->
         "user_id": user_data["id"],
         "username": user_data["username"],
         "is_premium": user_data["is_premium"],
+        "is_admin": user_data.get("is_admin", False),
         "exp": expiration,
         "iat": datetime.utcnow()
     }
@@ -547,6 +549,7 @@ async def get_auth_status(current_user: Optional[Dict[str, Any]] = Depends(get_c
                 "email": current_user["email"],
                 "username": current_user["username"],
                 "is_premium": current_user["is_premium"],
+                "is_admin": current_user.get("is_admin", False),
                 "premium_expires_at": current_user.get("premium_expires_at"),
                 "created_at": current_user["created_at"],
                 "login_count": current_user["login_count"],

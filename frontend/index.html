@@ -1450,90 +1450,20 @@
             document.addEventListener("DOMContentLoaded", async () => {
                 console.log("Frontend loading...");
 
-                // PWA Service Worker Registration
-                if ("serviceWorker" in navigator) {
-                    try {
-                        const registration =
-                            await navigator.serviceWorker.register(
-                                "/service-worker.js",
-                            );
-                        console.log(
-                            "Service Worker registered successfully:",
-                            registration,
-                        );
-                    } catch (error) {
-                        console.log(
-                            "Service Worker registration failed:",
-                            error,
-                        );
-                    }
-                }
-
-                // PWA Install App functionality
-                let deferredPrompt;
-                const installBtn = document.getElementById("installBtn");
-
-                // Check if app is already installed
-                function isStandalone() {
-                    return (
-                        window.matchMedia("(display-mode: standalone)")
-                            .matches || window.navigator.standalone === true
-                    );
-                }
-
-                // Show install button after user interaction (fallback method)
-                function showInstallButtonFallback() {
+                // Check if login modal should be opened (e.g., from /status redirect)
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('login') === 'required') {
+                    // Wait for AuthManager to be ready
                     setTimeout(() => {
-                        if (!deferredPrompt && !isStandalone()) {
-                            console.log(
-                                "Showing install button as fallback after user interaction",
-                            );
-                            installBtn.classList.remove("hidden");
-                            installBtn.innerHTML =
-                                '<i class="fas fa-mobile-alt mr-1"></i>Add to Phone';
-                            installBtn.title = "Add SHIOL+ to your home screen";
+                        if (window.authManager) {
+                            window.authManager.showLoginModal();
+                            console.log('Login modal opened from URL parameter');
                         }
-                    }, 3000); // Show after 3 seconds of interaction
+                        // Clean URL without reloading
+                        const cleanUrl = window.location.pathname;
+                        window.history.replaceState({}, document.title, cleanUrl);
+                    }, 500);
                 }
-
-                // Listen for user interaction to enable fallback
-                let userInteracted = false;
-                document.addEventListener("click", () => {
-                    if (!userInteracted) {
-                        userInteracted = true;
-                        showInstallButtonFallback();
-                    }
-                });
-
-                window.addEventListener("beforeinstallprompt", (e) => {
-                    console.log("PWA install prompt available");
-                    e.preventDefault();
-                    deferredPrompt = e;
-                    installBtn.classList.remove("hidden");
-                    installBtn.innerHTML =
-                        '<i class="fas fa-download mr-1"></i>Install App';
-                });
-
-                installBtn.addEventListener("click", async () => {
-                    if (deferredPrompt) {
-                        // Native installation
-                        deferredPrompt.prompt();
-                        const { outcome } = await deferredPrompt.userChoice;
-                        console.log("PWA install outcome:", outcome);
-                        deferredPrompt = null;
-                        installBtn.classList.add("hidden");
-                    } else {
-                        // If no prompt available, hide button (PWA not ready)
-                        console.log("PWA installation not available");
-                        installBtn.classList.add("hidden");
-                    }
-                });
-
-                window.addEventListener("appinstalled", () => {
-                    console.log("PWA was installed");
-                    installBtn.classList.add("hidden");
-                    deferredPrompt = null;
-                });
 
                 // Update current time
                 function updateCurrentTime() {
@@ -2712,73 +2642,10 @@
                 }
             }
 
-            async function registerPWAInstall() {
-                const fingerprint = generateFingerprint();
-                const installed = localStorage.getItem("shiol_pwa_installed");
-
-                if (!installed) {
-                    try {
-                        const response = await fetch(
-                            "/api/v1/public/register-pwa-install",
-                            {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ fingerprint }),
-                            },
-                        );
-
-                        if (response.ok) {
-                            localStorage.setItem("shiol_pwa_installed", "true");
-                        }
-                    } catch (error) {
-                        console.error("Error registering PWA install:", error);
-                    }
-                }
-            }
-
-            async function updateCounters() {
-                try {
-                    const response = await fetch("/api/v1/public/counters");
-                    if (response.ok) {
-                        const data = await response.json();
-                        const visitsElement =
-                            document.getElementById("visit-counter");
-                        const installsElement =
-                            document.getElementById("pwa-counter");
-
-                        if (visitsElement)
-                            visitsElement.textContent = data.visits || "0";
-                        if (installsElement)
-                            installsElement.textContent = data.installs || "0";
-                    }
-                } catch (error) {
-                    console.error("Error updating counters:", error);
-                }
-            }
-
-            // Listen for PWA installation
-            if ("serviceWorker" in navigator) {
-                navigator.serviceWorker.addEventListener("message", (event) => {
-                    if (event.data && event.data.type === "PWA_INSTALLED") {
-                        registerPWAInstall();
-                        setTimeout(updateCounters, 1000);
-                    }
-                });
-            }
-
-            // Listen for standalone mode (PWA already installed)
-            window.addEventListener("appinstalled", () => {
-                registerPWAInstall();
-                setTimeout(updateCounters, 1000);
-            });
 
             // Initialize on page load
             document.addEventListener("DOMContentLoaded", () => {
                 registerVisit();
-                updateCounters();
-
-                // Update counters periodically
-                setInterval(updateCounters, 60000); // Every minute
                 
                 // Connect hero CTA buttons to header buttons
                 const heroCTAFree = document.getElementById('hero-cta-free');
@@ -2842,36 +2709,19 @@
         <script src="js/auth-manager.js"></script>
         <script src="js/ticket-verification.js"></script>
         
-        <!-- Service Worker Registration with Silent Auto-Update -->
+        <!-- Unregister Service Worker (PWA Removed) -->
         <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', async () => {
                 try {
-                    // In development: unregister all old service workers first
-                    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-                        const registrations = await navigator.serviceWorker.getRegistrations();
-                        for (const registration of registrations) {
-                            console.log('[DEV] Unregistering old service worker');
-                            await registration.unregister();
-                        }
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const registration of registrations) {
+                        console.log('🗑️ Unregistering service worker to prevent cache issues');
+                        await registration.unregister();
                     }
-                    
-                    // Register service worker
-                    const registration = await navigator.serviceWorker.register('/service-worker.js');
-                    console.log('Service Worker registered:', registration.scope);
-                    
-                    // Silent auto-update: Reload when new service worker takes control
-                    let refreshing = false;
-                    navigator.serviceWorker.addEventListener('controllerchange', () => {
-                        if (!refreshing) {
-                            refreshing = true;
-                            console.log('New Service Worker activated, reloading...');
-                            window.location.reload();
-                        }
-                    });
-                    
+                    console.log('✅ All service workers removed - cache issues resolved');
                 } catch (error) {
-                    console.log('Service Worker registration failed:', error);
+                    console.log('Service Worker cleanup failed:', error);
                 }
             });
         }
@@ -2887,6 +2737,12 @@
                         <button id="login-close" class="text-white/60 hover:text-white transition-colors">
                             <i class="fas fa-times text-lg"></i>
                         </button>
+                    </div>
+                    
+                    <!-- Admin Required Context Message -->
+                    <div id="login-admin-context" class="hidden mb-4 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-4 py-3 rounded-md text-sm">
+                        <i class="fas fa-shield-alt mr-2"></i>
+                        Sign in as administrator to access system status panel
                     </div>
                     
                     <form id="login-form" class="space-y-4">
@@ -2927,7 +2783,7 @@
                                 class="w-4 h-4 bg-canvas-surface border border-canvas-line rounded focus:ring-2 focus:ring-canvas-accent text-canvas-accent cursor-pointer"
                             />
                             <label for="login-remember-me" class="ml-2 text-sm text-white/80 cursor-pointer select-none">
-                                Mantenerme logueado
+                                Remember me
                             </label>
                         </div>
                         
@@ -3132,11 +2988,14 @@
             </div>
         </div>
 
-        <!-- Enhanced footer with social proof counters -->
+        <!-- Footer -->
         <footer
             class="mt-auto py-3 text-center text-xs text-gray-400 dark:text-gray-600"
         >
-            <span id="visit-counter">Loading...</span> visits • <span id="pwa-counter">Loading...</span> installs • <span id="premium-counter">Loading...</span> premium users
+            <a href="#" id="system-status-link" class="inline-flex items-center gap-2 text-white/40 hover:text-canvas-accent transition-colors">
+                <i class="fas fa-chart-line"></i>
+                <span>System Status</span>
+            </a>
         </footer>
     </body>
 </html>

@@ -381,6 +381,18 @@ def _create_core_tables(cursor):
             is_active BOOLEAN DEFAULT TRUE
         )
     """)
+    
+    # Migration for is_admin column
+    try:
+        cursor.execute("PRAGMA table_info(users)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'is_admin' not in columns:
+            logger.info("Adding is_admin column to users table...")
+            cursor.execute("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
+            logger.info("is_admin column added successfully")
+    except sqlite3.Error as e:
+        logger.error(f"Error during is_admin migration: {e}")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS system_config (
@@ -2223,7 +2235,7 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
             
             # Try login as email first, then username
             cursor.execute("""
-                SELECT id, email, username, password_hash, is_premium, premium_expires_at, is_active, created_at, login_count
+                SELECT id, email, username, password_hash, is_premium, premium_expires_at, is_active, created_at, login_count, is_admin
                 FROM users 
                 WHERE (email = ? OR username = ?) AND is_active = TRUE
             """, (login.lower().strip(), login.strip()))
@@ -2233,7 +2245,7 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
             if not user_data:
                 return None
                 
-            user_id, email, username, stored_hash, is_premium, premium_expires_at, is_active, created_at, login_count = user_data
+            user_id, email, username, stored_hash, is_premium, premium_expires_at, is_active, created_at, login_count, is_admin = user_data
             
             # Deterministic verification based on hash format
             password_valid = False
@@ -2282,7 +2294,7 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
                 except ValueError:
                     pass
             
-            logger.info(f"User authenticated: {username} (Premium: {current_premium_status})")
+            logger.info(f"User authenticated: {username} (Premium: {current_premium_status}, Admin: {bool(is_admin)})")
             
             return {
                 'id': user_id,
@@ -2291,7 +2303,8 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
                 'is_premium': current_premium_status,
                 'premium_expires_at': premium_expires_at,
                 'created_at': created_at,
-                'login_count': updated_login_count
+                'login_count': updated_login_count,
+                'is_admin': bool(is_admin) if is_admin is not None else False
             }
             
     except sqlite3.Error as e:
@@ -2306,7 +2319,7 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT id, email, username, is_premium, premium_expires_at, created_at, last_login, login_count
+                SELECT id, email, username, is_premium, premium_expires_at, created_at, last_login, login_count, is_admin
                 FROM users 
                 WHERE id = ? AND is_active = TRUE
             """, (user_id,))
@@ -2316,7 +2329,7 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
             if not user_data:
                 return None
                 
-            user_id, email, username, is_premium, premium_expires_at, created_at, last_login, login_count = user_data
+            user_id, email, username, is_premium, premium_expires_at, created_at, last_login, login_count, is_admin = user_data
             
             return {
                 'id': user_id,
@@ -2326,7 +2339,8 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
                 'premium_expires_at': premium_expires_at,
                 'created_at': created_at,
                 'last_login': last_login,
-                'login_count': login_count
+                'login_count': login_count,
+                'is_admin': bool(is_admin) if is_admin is not None else False
             }
             
     except sqlite3.Error as e:

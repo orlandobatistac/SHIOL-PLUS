@@ -270,13 +270,13 @@ class AuthManager {
         
         if (heroCTAFree) {
             heroCTAFree.addEventListener('click', () => {
-                this.showUpgradeModal({ view: 'register' });
+                this.handleUpgradeClick();
             });
         }
         
         if (heroCTAPremium) {
             heroCTAPremium.addEventListener('click', () => {
-                this.showUpgradeModal({ view: 'register' });
+                this.handleUpgradeClick();
             });
         }
         
@@ -372,6 +372,12 @@ class AuthManager {
         
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => this.handleLogout());
+        }
+
+        // System Status link
+        const systemStatusLink = document.getElementById('system-status-link');
+        if (systemStatusLink) {
+            systemStatusLink.addEventListener('click', (e) => this.handleSystemStatusClick(e));
         }
 
         // Close dropdown when clicking outside
@@ -493,10 +499,27 @@ class AuthManager {
 
     /**
      * Show login modal
+     * @param {Object} options - Modal options
+     * @param {string} options.context - Context for login (e.g., 'admin_required')
      */
-    showLoginModal() {
-        console.log('Opening login modal...');
+    showLoginModal(options = {}) {
+        console.log('Opening login modal...', options);
+        
         const modal = document.getElementById('login-modal');
+        const adminContextDiv = document.getElementById('login-admin-context');
+        
+        // Store context for post-login handling
+        this.loginContext = options.context || null;
+        
+        // Show/hide admin context message
+        if (adminContextDiv) {
+            if (options.context === 'admin_required') {
+                adminContextDiv.classList.remove('hidden');
+            } else {
+                adminContextDiv.classList.add('hidden');
+            }
+        }
+        
         if (modal) {
             modal.classList.remove('hidden');
         }
@@ -507,10 +530,20 @@ class AuthManager {
      */
     hideLoginModal() {
         const modal = document.getElementById('login-modal');
+        const adminContextDiv = document.getElementById('login-admin-context');
+        
         if (modal) {
             modal.classList.add('hidden');
             this.clearLoginForm();
         }
+        
+        // Hide admin context message
+        if (adminContextDiv) {
+            adminContextDiv.classList.add('hidden');
+        }
+        
+        // Clear login context
+        this.loginContext = null;
     }
 
     /**
@@ -588,6 +621,42 @@ class AuthManager {
     }
 
     /**
+     * Handle System Status link click with admin verification
+     */
+    async handleSystemStatusClick(e) {
+        e.preventDefault();
+        
+        // Check if user is authenticated
+        if (!this.isAuthenticated) {
+            // Not logged in - show login modal with admin context
+            this.showLoginModal({ context: 'admin_required' });
+            return;
+        }
+        
+        // User is logged in - check if admin
+        const isAdmin = this.user?.is_admin || false;
+        
+        if (isAdmin) {
+            // Admin user - redirect to status page
+            window.location.href = '/status';
+        } else {
+            // Not admin - show error message
+            this.showAdminRequiredMessage();
+        }
+    }
+
+    /**
+     * Show admin required message
+     */
+    showAdminRequiredMessage() {
+        // Create toast notification or alert
+        const message = 'Administrator access only. Your account does not have administrator permissions.';
+        
+        // Simple alert for now - can be enhanced with toast notification
+        alert(message);
+    }
+
+    /**
      * Handle login form submission
      */
     async handleLogin(e) {
@@ -630,6 +699,25 @@ class AuthManager {
                 this.isPremium = data.user?.is_premium || false;
                 this.updateAuthUI();
                 this.renderHeroCTAs();
+                
+                // Check if login was for admin access to system status
+                if (this.loginContext === 'admin_required') {
+                    const isAdmin = data.user?.is_admin || false;
+                    
+                    if (isAdmin) {
+                        // Admin user - redirect to status page
+                        this.hideLoginModal();
+                        window.location.href = '/status';
+                        return;
+                    } else {
+                        // Not admin - show error in modal
+                        this.hideLoginModal();
+                        this.showAdminRequiredMessage();
+                        return;
+                    }
+                }
+                
+                // Normal login flow
                 this.hideLoginModal();
                 
                 // Refresh predictions after successful login
@@ -916,23 +1004,86 @@ class AuthManager {
 
     /**
      * Handle upgrade button click
+     * Verifies auth status from server in real-time before proceeding
      */
-    handleUpgradeClick() {
+    async handleUpgradeClick() {
         console.log('Upgrade button clicked');
         
         // Track upgrade intent
         this.trackEvent('upgrade_button_clicked');
         
-        // If user is not authenticated, switch to register view within same modal
-        if (!this.isAuthenticated) {
-            console.log('User not authenticated - switching to register view');
-            this.isRegisteringFromUpgrade = true; // Mark that user is registering from upgrade flow
-            this.setUpgradeModalView('register');
+        // Find all upgrade buttons and show loading state
+        const upgradeButtons = document.querySelectorAll('[data-upgrade-action="start"], .unlock-premium-btn');
+        const originalButtonStates = new Map();
+        
+        upgradeButtons.forEach(btn => {
+            if (btn) {
+                originalButtonStates.set(btn, {
+                    disabled: btn.disabled,
+                    innerHTML: btn.innerHTML
+                });
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Verifying...';
+            }
+        });
+        
+        let isAuthenticatedNow = false;
+        
+        try {
+            // Verify authentication status from server in real-time
+            console.log('Verifying authentication status from server...');
+            const response = await fetch('/api/v1/auth/status', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Update local state with fresh server data
+                this.isAuthenticated = data.is_authenticated || false;
+                this.user = data.user || null;
+                this.isPremium = data.user?.is_premium || false;
+                isAuthenticatedNow = this.isAuthenticated;
+                
+                console.log('Auth status verified:', {
+                    isAuthenticated: this.isAuthenticated,
+                    isPremium: this.isPremium,
+                    username: this.user?.username
+                });
+            } else {
+                console.log('Auth status check failed, treating as not authenticated');
+                this.isAuthenticated = false;
+                this.user = null;
+                this.isPremium = false;
+                isAuthenticatedNow = false;
+            }
+        } catch (error) {
+            console.error('Error verifying auth status:', error);
+            // On error, fall back to not authenticated (safer)
+            this.isAuthenticated = false;
+            isAuthenticatedNow = false;
+        } finally {
+            // Restore button states
+            upgradeButtons.forEach(btn => {
+                const originalState = originalButtonStates.get(btn);
+                if (btn && originalState) {
+                    btn.disabled = originalState.disabled;
+                    btn.innerHTML = originalState.innerHTML;
+                }
+            });
+        }
+        
+        // Now decide what to do based on verified auth status
+        if (!isAuthenticatedNow) {
+            console.log('User not authenticated - showing register modal');
+            this.isRegisteringFromUpgrade = true;
+            this.showUpgradeModal({ view: 'register' });
             return;
         }
 
-        // If user is authenticated, proceed with upgrade process
-        this.startUpgradeProcess();
+        // User is authenticated - go directly to Stripe (NO modal)
+        console.log('User is authenticated - redirecting directly to Stripe checkout');
+        await this.startUpgradeProcess();
     }
 
     /**

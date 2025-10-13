@@ -1,6 +1,6 @@
 # SHIOL+ Production Requirements - VPS Deployment with ML Pipeline
-# Version 3.0 - Includes ML dependencies for model retraining pipeline
-# Total estimated size: ~800MB (optimized from 2GB+ full requirements.txt)
+# Version 4.0 - Complete dependencies for production deployment
+# Total estimated size: ~850MB (optimized from 2GB+ full requirements.txt)
 
 # Core Web Framework
 fastapi==0.104.1
@@ -15,6 +15,7 @@ jinja2==3.1.2
 
 # Scheduling (for automated pipeline)
 apscheduler==3.10.4
+SQLAlchemy==2.0.23
 
 # AI Integration (Core Feature)
 google-generativeai
@@ -22,9 +23,15 @@ google-generativeai
 # Basic Image Processing
 Pillow
 
-# Security & System
+# Security & Authentication
 bcrypt==4.1.2
 psutil==5.9.8
+PyJWT==2.8.0
+passlib==1.7.4
+email-validator==2.1.0
+
+# Payment Processing (optional - can be disabled via feature flag)
+stripe==8.5.0
 
 # ML Pipeline Dependencies (REQUIRED for model retraining)
 pandas

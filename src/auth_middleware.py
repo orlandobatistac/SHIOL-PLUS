@@ -96,6 +96,7 @@ def get_user_from_request(request: Request) -> Optional[Dict[str, Any]]:
                     "email": user_data["email"],
                     "is_premium": is_premium_active,  # Use computed premium status
                     "premium_expires_at": user_data["premium_expires_at"],
+                    "is_admin": user_data.get("is_admin", False),  # Include admin status
                     "auth_source": auth_source
                 }
                 
@@ -176,6 +177,27 @@ def require_premium_access(request: Request) -> Dict[str, Any]:
         raise HTTPException(
             status_code=403,
             detail="Premium subscription required. Upgrade to access all 100 AI predictions for only $9.99/year!"
+        )
+    
+    return user
+
+def require_admin_access(request: Request) -> Dict[str, Any]:
+    """
+    Dependency to require admin user access
+    
+    Raises:
+        HTTPException 401 if not authenticated
+        HTTPException 403 if not admin
+        
+    Returns:
+        Admin user data if authenticated and admin
+    """
+    user = require_authentication(request)
+    
+    if not user.get("is_admin", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required. This resource is restricted to administrators only."
         )
     
     return user

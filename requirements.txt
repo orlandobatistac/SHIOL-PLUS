@@ -29,3 +29,4 @@ google-generativeai
 PyJWT
 email-validator
 passlib==1.7.4
+sqlalchemy
