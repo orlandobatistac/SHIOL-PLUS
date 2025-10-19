@@ -148,7 +148,7 @@ class PipelineOrchestrator:
         hours_after_drawing = current_date.hour >= 23  # After 11 PM ET
 
         logger.info(f"Pipeline execution context: Drawing day: {is_drawing_day}, After 11PM: {hours_after_drawing}")
-        logger.info("Pipeline configuration: {num_predictions} predictions, Full 5-step execution")
+        logger.info(f"Pipeline configuration: {num_predictions} predictions, Full 5-step execution")
         logger.info(f"Execution source: {execution_source}")
 
         try:
