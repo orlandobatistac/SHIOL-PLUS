@@ -94,10 +94,11 @@ async def trigger_full_pipeline_automatically():
         current_day = current_time.strftime('%A').lower()
         current_time_str = current_time.strftime('%H:%M')
 
-        # Expected scheduler configuration (from scheduler setup)
-        expected_days = ['monday', 'wednesday', 'saturday']
-        expected_time = '23:30'
-        timezone = 'America/New_York'
+    # Expected scheduler configuration (from scheduler setup)
+    # Drawings occur Monday, Wednesday, Saturday at 22:59 ET; pipeline runs the next day at 01:00 ET
+    expected_days = ['tuesday', 'thursday', 'sunday']
+    expected_time = '01:00'
+    timezone = 'America/New_York'
 
         # Check if execution matches schedule
         matches_schedule = (
@@ -277,17 +278,17 @@ async def lifespan(app: FastAPI):
     # Pipeline orchestrator removed - deprecated system that caused inconsistent results
 
     # Schedule pipeline execution optimally:
-    # 1. Full pipeline only on actual drawing days (Monday, Wednesday, Saturday)
-    # Drawing is at 10:59 PM ET, so pipeline runs at 11:29 PM ET (30 minutes after)
+    # 1. Full pipeline runs at 01:00 AM ET the day after each drawing (Tue/Thu/Sun)
+    #    This gives external APIs time to publish official results before evaluation.
     scheduler.add_job(
         func=trigger_full_pipeline_automatically,
         trigger="cron",
-        day_of_week="mon,wed,sat", # Only on actual Powerball drawing days
-        hour=23,                    # 11 PM ET
-        minute=29,                  # 11:29 PM - 30 minutes after 10:59 PM drawing
-        timezone="America/New_York", # EXPLICIT TIMEZONE FIX
+        day_of_week="tue,thu,sun", # Next-day after actual Powerball drawing days
+        hour=1,                      # 01:00 AM ET
+        minute=0,                    # 01:00 AM - safer delay to allow results to be published
+        timezone="America/New_York", # EXPLICIT TIMEZONE
         id="post_drawing_pipeline",
-        name="Full Pipeline 30 Minutes After Drawing (11:29 PM ET)",
+        name="Full Pipeline Next-Day 01:00 AM ET",
         max_instances=1,           # Prevent overlapping executions
         coalesce=True,             # Merge multiple pending executions into one
         replace_existing=True      # Update job on restart instead of duplicating
