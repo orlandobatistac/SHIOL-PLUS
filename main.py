@@ -828,8 +828,6 @@ class PipelineOrchestrator:
         step_mapping = {
             'data': self.step_data_update,
             'data_update': self.step_data_update,
-            'adaptive': self.step_adaptive_analysis,
-            'adaptive_analysis': self.step_adaptive_analysis,
             'weights': self.step_weight_optimization,
             'weight_optimization': self.step_weight_optimization,
             'prediction': self.step_prediction_generation,
