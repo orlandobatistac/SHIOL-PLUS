@@ -127,14 +127,14 @@ class PipelineOrchestrator:
             execution_source (str): Source of execution ('scheduled_pipeline', 'manual_dashboard', etc.)
             trigger_details (dict): Additional trigger metadata
         """
-        # Production timeout: 15 minutes maximum
+        # Production timeout: 25 minutes maximum
         import signal
 
         def timeout_handler(signum, frame):
-            raise TimeoutError("Pipeline execution timeout after 15 minutes")
+            raise TimeoutError("Pipeline execution timeout after 25 minutes")
 
         signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(900)  # 15 minutes timeout
+        signal.alarm(1500)  # 25 minutes timeout (increased for Replit stability)
         logger.info("=" * 60)
         logger.info("STARTING SHIOL+ PHASE 5 OPTIMIZED PIPELINE EXECUTION")
         logger.info("=" * 60)
