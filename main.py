@@ -3,13 +3,14 @@
 SHIOL+ Phase 5 Pipeline Orchestrator
 ====================================
 
-Main pipeline orchestrator that coordinates all 6 pipeline steps:
+Main pipeline orchestrator that coordinates all 5 pipeline steps:
 1. Data Update
-2. Adaptive Analysis
-3. Prediction Generation
-4. Weight Optimization
-5. Historical Validation
-6. Performance Analysis
+2. Historical Validation
+3. Weight Optimization
+4. Prediction Generation
+5. Performance Analysis
+
+Optimized pipeline with logical step ordering and increased timeout for production stability.
 
 Usage:
     python main.py                    # Run full pipeline
