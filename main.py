@@ -167,7 +167,7 @@ class PipelineOrchestrator:
                 'trigger_type': execution_source,
                 'trigger_source': execution_source,
                 'steps_completed': 0,
-                'total_steps': 6,
+                'total_steps': 5,  # Updated to 5 steps (removed deprecated adaptive_analysis)
                 'num_predictions': num_predictions,
                 'current_step': 'initialization'
             }
@@ -220,7 +220,7 @@ class PipelineOrchestrator:
             logger.info("=" * 60)
             logger.info("SHIOL+ PHASE 5 PIPELINE EXECUTION COMPLETED SUCCESSFULLY")
             logger.info(f"Total execution time: {execution_time}")
-            logger.info(f"Steps completed: {pipeline_summary.get('successful_steps', 0)}/6")
+            logger.info(f"Steps completed: {pipeline_summary.get('successful_steps', 0)}/5")
             logger.info(f"Pipeline health: {pipeline_summary.get('pipeline_health', 'unknown')}")
             logger.info("=" * 60)
 
@@ -230,7 +230,7 @@ class PipelineOrchestrator:
                 'results': pipeline_results,
                 'summary': pipeline_summary,
                 'steps_completed': pipeline_summary.get('successful_steps', 0),
-                'total_steps': 6  # Updated to 6 steps
+                'total_steps': 5  # Updated to 5 steps
             }
 
         except TimeoutError as e:
