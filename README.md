@@ -309,12 +309,10 @@ GET /api/v1/health                  # Detailed health status
 
 ### **Pipeline Architecture**
 1. **Data Update**: Fetch latest draws from MUSL API
-2. **Adaptive Analysis**: Analyze recent performance patterns
-3. **Weight Optimization**: Adjust model weights based on accuracy
+2. **Weight Optimization**: Adjust model weights based on accuracy
+3. **Historical Validation**: Verify prediction quality and consistency
 4. **Prediction Generation**: Create 100 ranked predictions
-5. **Evaluation**: Compare predictions against actual results
-6. **Validation**: Verify prediction quality and consistency
-7. **Performance Analysis**: Track metrics and optimize
+5. **Performance Analysis**: Track metrics and optimize
 
 ### **Scheduling**
 - **Automated Execution**: APScheduler runs 30 minutes after each drawing
