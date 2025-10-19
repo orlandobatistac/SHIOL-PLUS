@@ -3,13 +3,12 @@
 SHIOL+ Phase 5 Pipeline Orchestrator
 ====================================
 
-Main pipeline orchestrator that coordinates all 6 pipeline steps:
+Main pipeline orchestrator that coordinates all 5 pipeline steps:
 1. Data Update
-2. Adaptive Analysis
-3. Prediction Generation
-4. Weight Optimization
-5. Historical Validation
-6. Performance Analysis
+2. Historical Validation
+3. Weight Optimization
+4. Prediction Generation
+5. Performance Analysis
 
 Usage:
     python main.py                    # Run full pipeline
@@ -134,7 +133,7 @@ class PipelineOrchestrator:
             raise TimeoutError("Pipeline execution timeout after 15 minutes")
 
         signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(900)  # 15 minutes timeout
+        signal.alarm(1500)  # 25 minutes timeout
         logger.info("=" * 60)
         logger.info("STARTING SHIOL+ PHASE 5 OPTIMIZED PIPELINE EXECUTION")
         logger.info("=" * 60)
@@ -167,7 +166,7 @@ class PipelineOrchestrator:
                 'trigger_type': execution_source,
                 'trigger_source': execution_source,
                 'steps_completed': 0,
-                'total_steps': 6,
+                'total_steps': 5,
                 'num_predictions': num_predictions,
                 'current_step': 'initialization'
             }
@@ -178,27 +177,23 @@ class PipelineOrchestrator:
             self._check_system_resources()
 
             # STEP 1: Data Update & Drawing Detection (LIGHTWEIGHT)
-            logger.info("STEP 1/6: Data Update & Drawing Detection (Resource-Optimized)")
+            logger.info("STEP 1/5: Data Update & Drawing Detection (Resource-Optimized)")
             pipeline_results['data_update'] = self._execute_step('data_update', self.step_data_update)
 
-            # STEP 2: Adaptive Analysis (Regular maintenance)
-            logger.info("STEP 2/6: Adaptive Analysis (Maintenance Mode)")
-            pipeline_results['adaptive_analysis'] = self._execute_step('adaptive_analysis', self.step_adaptive_analysis)
-
-            # STEP 3: Weight Optimization (Regular optimization)
-            logger.info("STEP 3/6: Weight Optimization (Scheduled)")
-            pipeline_results['weight_optimization'] = self._execute_step('weight_optimization', self.step_weight_optimization)
-
-            # STEP 4: Historical Validation (Maintenance validation)
-            logger.info("STEP 4/6: Historical Validation (Maintenance)")
+            # STEP 2: Historical Validation (Post-Draw Evaluation)
+            logger.info("STEP 2/5: Historical Validation (Post-Draw Evaluation)")
             pipeline_results['historical_validation'] = self._execute_step('historical_validation', self.step_historical_validation)
 
-            # STEP 5: Prediction Generation (ALWAYS generate for next drawing)
-            logger.info("STEP 5/6: Prediction Generation (Next Drawing)")
+            # STEP 3: Weight Optimization (Adaptive Adjustment)
+            logger.info("STEP 3/5: Weight Optimization (Adaptive Adjustment)")
+            pipeline_results['weight_optimization'] = self._execute_step('weight_optimization', self.step_weight_optimization)
+
+            # STEP 4: Prediction Generation (Next Drawing)
+            logger.info("STEP 4/5: Prediction Generation (Next Drawing)")
             pipeline_results['prediction_generation'] = self._execute_step('prediction_generation', self.step_prediction_generation)
 
-            # STEP 6: Performance Analysis
-            logger.info("STEP 6/6: Performance Analysis")
+            # STEP 5: Performance Analysis
+            logger.info("STEP 5/5: Performance Analysis")
             pipeline_results['performance_analysis'] = self._execute_step('performance_analysis', self.step_performance_analysis)
 
 
@@ -220,7 +215,7 @@ class PipelineOrchestrator:
             logger.info("=" * 60)
             logger.info("SHIOL+ PHASE 5 PIPELINE EXECUTION COMPLETED SUCCESSFULLY")
             logger.info(f"Total execution time: {execution_time}")
-            logger.info(f"Steps completed: {pipeline_summary.get('successful_steps', 0)}/6")
+            logger.info(f"Steps completed: {pipeline_summary.get('successful_steps', 0)}/5")
             logger.info(f"Pipeline health: {pipeline_summary.get('pipeline_health', 'unknown')}")
             logger.info("=" * 60)
 
@@ -230,7 +225,7 @@ class PipelineOrchestrator:
                 'results': pipeline_results,
                 'summary': pipeline_summary,
                 'steps_completed': pipeline_summary.get('successful_steps', 0),
-                'total_steps': 6  # Updated to 6 steps
+                'total_steps': 5
             }
 
         except TimeoutError as e:
@@ -378,32 +373,6 @@ class PipelineOrchestrator:
 
         except Exception as e:
             logger.error(f"Data update step failed: {e}")
-            raise
-
-    def step_adaptive_analysis(self) -> Dict[str, Any]:
-        """
-        Step 2: Adaptive Analysis - Run adaptive analysis on recent data.
-
-        Returns:
-            Dict with adaptive analysis results
-        """
-        try:
-            # Ensure we have historical data
-            if self.historical_data is None or self.historical_data.empty:
-                self.historical_data = get_all_draws()
-
-            # Initialize adaptive system if not already done
-            if self.adaptive_system is None:
-                self.adaptive_system = initialize_adaptive_system(self.historical_data)
-
-            # Run adaptive analysis
-            analysis_results = run_adaptive_analysis(days_back=30)
-
-            logger.info(f"Adaptive analysis completed: {analysis_results.get('total_predictions_analyzed', 0)} predictions analyzed")
-            return analysis_results
-
-        except Exception as e:
-            logger.error(f"Adaptive analysis step failed: {e}")
             raise
 
     def _check_system_resources(self):
@@ -828,8 +797,6 @@ class PipelineOrchestrator:
         step_mapping = {
             'data': self.step_data_update,
             'data_update': self.step_data_update,
-            'adaptive': self.step_adaptive_analysis,
-            'adaptive_analysis': self.step_adaptive_analysis,
             'weights': self.step_weight_optimization,
             'weight_optimization': self.step_weight_optimization,
             'prediction': self.step_prediction_generation,
@@ -1041,7 +1008,7 @@ Examples:
   python main.py --help             # Show this help message
 
 Available steps:
-  data, adaptive, weights, prediction, validation, performance
+  data, weights, prediction, validation, performance
 
 Server mode:
   --server or --api starts the web API server optimized for VPN access
