@@ -1041,7 +1041,7 @@ Examples:
   python main.py --help             # Show this help message
 
 Available steps:
-  data, adaptive, weights, prediction, validation, performance
+  data, weights, prediction, validation, performance
 
 Server mode:
   --server or --api starts the web API server optimized for VPN access
