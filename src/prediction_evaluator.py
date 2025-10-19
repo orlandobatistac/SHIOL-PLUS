@@ -71,17 +71,33 @@ class PredictionEvaluator:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                # Find predictions that need evaluation (have target_draw_date with actual results)
-                query = """
-                    SELECT DISTINCT pl.target_draw_date
-                    FROM predictions_log pl
-                    INNER JOIN powerball_draws pd ON pl.target_draw_date = pd.draw_date
-                    WHERE pl.evaluated = FALSE
-                    AND pl.target_draw_date >= date('now', '-' || ? || ' days')
-                    ORDER BY pl.target_draw_date ASC
-                """
+                # Use COALESCE to treat NULL target_draw_date as the date part of created_at
+                # so predictions without explicit target date are still evaluated against draws
+                # that match their creation date.
+                if days_back is None:
+                    # Evaluate ALL unevaluated predictions that have matching draw results
+                    query = """
+                        SELECT DISTINCT COALESCE(pl.target_draw_date, DATE(pl.created_at)) as eval_date
+                        FROM predictions_log pl
+                        INNER JOIN powerball_draws pd ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
+                        WHERE pl.evaluated = FALSE
+                        ORDER BY eval_date ASC
+                    """
 
-                cursor.execute(query, (days_back,))
+                    cursor.execute(query)
+                else:
+                    # Keep existing behavior when a days_back window is requested
+                    query = """
+                        SELECT DISTINCT COALESCE(pl.target_draw_date, DATE(pl.created_at)) as eval_date
+                        FROM predictions_log pl
+                        INNER JOIN powerball_draws pd ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
+                        WHERE pl.evaluated = FALSE
+                        AND COALESCE(pl.target_draw_date, DATE(pl.created_at)) >= date('now', '-' || ? || ' days')
+                        ORDER BY eval_date ASC
+                    """
+
+                    cursor.execute(query, (days_back,))
+
                 dates_to_evaluate = [row[0] for row in cursor.fetchall()]
 
                 evaluation_results = {

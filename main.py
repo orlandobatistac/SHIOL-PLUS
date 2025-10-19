@@ -652,7 +652,8 @@ class PipelineOrchestrator:
 
             # Initialize evaluator and run evaluation
             evaluator = PredictionEvaluator()
-            evaluation_results = evaluator.evaluate_recent_predictions(days_back=7)
+            # Evaluate ALL unevaluated predictions regardless of age (days_back=None)
+            evaluation_results = evaluator.evaluate_recent_predictions(days_back=None)
 
             result = {
                 'evaluation_completed': True,
