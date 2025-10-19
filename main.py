@@ -403,25 +403,19 @@ class PipelineOrchestrator:
 
     def step_weight_optimization(self) -> Dict[str, Any]:
         """
-        Step 4: Weight Optimization - Optimize scoring weights based on performance.
-
+        Step 3: Weight Optimization - Simple adaptive optimization based on performance.
+        
         Returns:
             Dict with weight optimization results
         """
         try:
-            # Ensure adaptive system is initialized
-            if self.adaptive_system is None:
-                if self.historical_data is None:
-                    self.historical_data = get_all_draws()
-                self.adaptive_system = initialize_adaptive_system(self.historical_data)
-
             # Get performance data for optimization
             performance_data = get_performance_analytics(30)
 
             # Check if we have enough data for optimization
             total_predictions = performance_data.get('total_predictions', 0)
 
-            # If we just generated predictions in step 3, check the database directly
+            # If we just generated predictions, check the database directly
             if total_predictions < 10:
                 try:
                     from src.database import get_prediction_history
@@ -431,8 +425,8 @@ class PipelineOrchestrator:
                 except Exception as e:
                     logger.warning(f"Could not check recent predictions: {e}")
 
-            if total_predictions < 5:  # Reduced threshold since we just generated predictions
-                logger.warning(f"Still insufficient data for weight optimization (have {total_predictions}, need at least 5)")
+            if total_predictions < 5:
+                logger.warning(f"Insufficient data for weight optimization (have {total_predictions}, need at least 5)")
                 return {
                     'status': 'skipped',
                     'reason': 'insufficient_data',
@@ -442,10 +436,7 @@ class PipelineOrchestrator:
 
             logger.info(f"Proceeding with weight optimization using {total_predictions} predictions")
 
-            # Get weight optimizer
-            weight_optimizer = self.adaptive_system['weight_optimizer']
-
-            # Get current weights (default if none exist)
+            # Default weights configuration
             current_weights = {
                 'probability': 0.40,
                 'diversity': 0.25,
@@ -453,25 +444,53 @@ class PipelineOrchestrator:
                 'risk_adjusted': 0.15
             }
 
-            # Optimize weights
-            optimized_weights = weight_optimizer.optimize_weights(
-                current_weights=current_weights,
-                performance_data=performance_data,
-                algorithm='differential_evolution'
-            )
+            # Simple adaptive optimization based on performance
+            optimized_weights = current_weights.copy()
+            
+            win_rate = performance_data.get('win_rate', 0)
+            avg_accuracy = performance_data.get('avg_accuracy', 0)
+            
+            # Only adjust weights if we have sufficient data (100+ predictions)
+            if total_predictions >= 100:
+                logger.info(f"Applying adaptive weight optimization (win_rate: {win_rate:.2f}%, accuracy: {avg_accuracy:.2%})")
+                
+                if win_rate > 5:
+                    # High win rate - increase probability weight
+                    optimized_weights['probability'] = min(0.50, current_weights['probability'] + 0.05)
+                    optimized_weights['diversity'] = max(0.15, current_weights['diversity'] - 0.05)
+                    logger.info("High win rate detected - increasing probability weight")
+                    
+                elif win_rate < 1:
+                    # Low win rate - increase diversity
+                    optimized_weights['diversity'] = min(0.35, current_weights['diversity'] + 0.05)
+                    optimized_weights['probability'] = max(0.30, current_weights['probability'] - 0.05)
+                    logger.info("Low win rate detected - increasing diversity weight")
+                    
+                if avg_accuracy > 0.5:
+                    # High accuracy - increase historical weight
+                    optimized_weights['historical'] = min(0.30, current_weights['historical'] + 0.05)
+                    optimized_weights['risk_adjusted'] = max(0.10, current_weights['risk_adjusted'] - 0.05)
+                    logger.info("High accuracy detected - increasing historical weight")
+            else:
+                logger.info(f"Using default weights (need 100+ predictions, have {total_predictions})")
 
             result = {
-                'optimization_performed': optimized_weights is not None,
+                'optimization_performed': total_predictions >= 100,
                 'current_weights': current_weights,
                 'optimized_weights': optimized_weights,
-                'performance_data_used': performance_data,
-                'algorithm_used': 'differential_evolution'
+                'performance_data_used': {
+                    'total_predictions': total_predictions,
+                    'win_rate': win_rate,
+                    'avg_accuracy': avg_accuracy
+                },
+                'algorithm_used': 'simple_performance_based_adaptive',
+                'adjustments_made': optimized_weights != current_weights
             }
 
-            if optimized_weights:
-                logger.info(f"Weight optimization completed: {optimized_weights}")
+            if optimized_weights != current_weights:
+                logger.info(f"Weight optimization completed with adjustments: {optimized_weights}")
             else:
-                logger.warning("Weight optimization failed to find better weights")
+                logger.info("Weight optimization completed - no adjustments needed")
 
             return result
 
