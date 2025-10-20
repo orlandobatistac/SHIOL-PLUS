@@ -1619,7 +1619,7 @@
                             .classList.remove("hidden");
 
                         const response = await fetch(
-                            `${API_BASE_URL}/public/predictions/latest?limit=100`,
+                            `${API_BASE_URL}/public/predictions/latest?limit=200`,
                         );
                         if (!response.ok)
                             throw new Error("Failed to fetch predictions");
@@ -2123,7 +2123,7 @@
                 try {
                     // Fetch draw matches data
                     const response = await fetch(
-                        `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=100`,
+                        `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`,
                     );
                     if (!response.ok) {
                         throw new Error(
