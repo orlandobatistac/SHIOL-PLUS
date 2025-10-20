@@ -56,7 +56,7 @@ async def get_public_predictions_by_draw(
     request: Request,
     draw_date: str,
     min_matches: int = Query(0, description="Minimum number of matches to include"),
-    limit: int = Query(100, description="Maximum number of predictions to return")
+    limit: int = Query(200, description="Maximum number of predictions to return")
 ):
     """Get predictions for a specific draw date (public endpoint)"""
     try:

@@ -564,10 +564,10 @@ class PipelineOrchestrator:
             # Initialize predictor (it loads data internally)
             predictor = Predictor()
 
-            # Generate 100 Smart AI predictions (optimized for Replit resources)
-            logger.info("Generating 100 Smart AI predictions (Replit-optimized)...")
+            # Generate 200 Smart AI predictions
+            logger.info("Generating 200 Smart AI predictions...")
             smart_predictions = predictor.predict_diverse_plays(
-                num_plays=100,
+                num_plays=200,
                 save_to_log=True,
                 target_draw_date=next_drawing_date
             )
@@ -623,7 +623,7 @@ class PipelineOrchestrator:
             logger.info(f"Average score: {avg_score:.4f}")
             logger.info(f"Top 10 average score: {top_10_avg:.4f}")
             logger.info(f"Best prediction: {smart_predictions[0]['numbers']} + {smart_predictions[0]['powerball']} (Score: {smart_predictions[0]['score_total']:.4f})")
-            logger.info("All 100 Smart AI predictions have been saved to the database")
+            logger.info("All 200 Smart AI predictions have been saved to the database")
 
             return result
 
