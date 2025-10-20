@@ -238,9 +238,9 @@ async function showDrawMatchesModal(drawDateInput) {
 
         // Try multiple API endpoints for better compatibility
         const apiEndpoints = [
-            `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=100`,
-            `/api/v1/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=100`,
-            `/api/v1/predictions/public/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=100`
+            `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`,
+            `/api/v1/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`,
+            `/api/v1/predictions/public/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`
         ];
 
         let response = null;
