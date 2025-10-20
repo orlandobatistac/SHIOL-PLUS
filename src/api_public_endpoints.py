@@ -238,7 +238,7 @@ async def get_public_grouped_history():
         raise HTTPException(status_code=500, detail=f"Error getting history: {str(e)}")
 
 @public_frontend_router.get("/api/v1/public/predictions/latest")
-async def get_public_latest_predictions(request: Request, limit: int = Query(default=100, le=200)):
+async def get_public_latest_predictions(request: Request, limit: int = Query(default=200, le=800)):
     """Get latest AI predictions for public access"""
     try:
         from src.database import get_db_connection
@@ -254,11 +254,19 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
         cursor = conn.cursor()
         
         # Query latest predictions
+        # ✅ FIXED: Changed from predictions_log to generated_tickets
+        # Added column aliases for frontend compatibility
         try:
             cursor.execute("""
-                SELECT id, timestamp, target_draw_date, n1, n2, n3, n4, n5, powerball, 
-                       model_version, score_total, created_at
-                FROM predictions_log 
+                SELECT 
+                    id, 
+                    created_at as timestamp,
+                    draw_date as target_draw_date,
+                    n1, n2, n3, n4, n5, powerball, 
+                    strategy_used as model_version,
+                    confidence_score as score_total,
+                    created_at
+                FROM generated_tickets 
                 ORDER BY created_at DESC 
                 LIMIT ?
             """, (limit,))
