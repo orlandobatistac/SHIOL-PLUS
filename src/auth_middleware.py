@@ -319,9 +319,9 @@ def apply_freemium_restrictions(predictions: list, request: Request, draw_date: 
     
     # Apply access restrictions
     if access["is_premium"]:
-        # Premium users get up to 100 predictions (business rule cap)
-        accessible_predictions = sorted_predictions[:100]
-        locked_predictions = sorted_predictions[100:] if len(sorted_predictions) > 100 else []
+        # Premium users get up to 200 predictions (business rule cap)
+        accessible_predictions = sorted_predictions[:200]
+        locked_predictions = sorted_predictions[200:] if len(sorted_predictions) > 200 else []
     else:
         # Free/guest users get limited predictions based on day
         accessible_predictions = sorted_predictions[:access["max_predictions"]]

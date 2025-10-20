@@ -20,7 +20,7 @@ window.AppTexts = {
             cta: "UNLOCK NOW - ONLY $9.99/YEAR 🚀",
             features: {
                 aiAlgorithm: "Advanced AI algorithm insights",
-                allPredictions: "Access to all 100 ranked AI insights", 
+                allPredictions: "Access to all 200 ranked AI insights", 
                 performanceTracking: "Historical performance tracking",
                 mobileApp: "PWA mobile app access",
                 customerSupport: "Priority customer support",
@@ -33,7 +33,7 @@ window.AppTexts = {
             socialProof: {
                 userCount: "{count}+",
                 successRate: "85%",
-                insightCount: "100"
+                insightCount: "200"
             },
             overlay: {
                 rankBadge: "Rank #{rank}",
@@ -46,7 +46,7 @@ window.AppTexts = {
         },
         register: {
             title: "Go Premium Access",
-            subtitle: "Unlock all 100 AI insights instantly",
+            subtitle: "Unlock all 200 AI insights instantly",
             createAccount: "Create Your Premium Account",
             pricing: "$9.99/YEAR",
             pricingSubtext: "That's just $0.83/month!",
@@ -59,7 +59,7 @@ window.AppTexts = {
                 },
                 premium: {
                     emoji: "🔥", 
-                    title: "100 AI Insights",
+                    title: "200 AI Insights",
                     subtitle: "Advanced AI"
                 }
             },
@@ -83,7 +83,7 @@ window.AppTexts = {
             }
         },
         common: {
-            securityNote: "Secure payment · 100 AI insights · Cancel anytime",
+            securityNote: "Secure payment · 200 AI insights · Cancel anytime",
             cancelAnytime: "Cancel anytime",
             loading: "Loading...",
             close: "Close"
@@ -113,7 +113,7 @@ window.AppTexts = {
             description: "{day} draw – 1 insight available. Saturday: 5 insights!"
         },
         insightsRemaining: "{remaining}/{total} insights available",
-        upgradePrompt: "Upgrade to Premium for 100 insights every draw",
+        upgradePrompt: "Upgrade to Premium for 200 insights every draw",
         nextPremiumDay: "Next Premium Day: Saturday",
         saturdayBonus: "🎁 Saturday Bonus: 5 insights"
     },
