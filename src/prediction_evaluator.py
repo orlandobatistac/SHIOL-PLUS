@@ -71,31 +71,26 @@ class PredictionEvaluator:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                # Use COALESCE to treat NULL target_draw_date as the date part of created_at
-                # so predictions without explicit target date are still evaluated against draws
-                # that match their creation date.
+                # Select draw dates that have generated tickets which appear unevaluated.
+                # Here we treat tickets with prize_won NULL or 0 as not yet evaluated.
                 if days_back is None:
-                    # Evaluate ALL unevaluated predictions that have matching draw results
                     query = """
-                        SELECT DISTINCT COALESCE(pl.target_draw_date, DATE(pl.created_at)) as eval_date
-                        FROM predictions_log pl
-                        INNER JOIN powerball_draws pd ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
-                        WHERE pl.evaluated = FALSE
+                        SELECT DISTINCT gt.draw_date as eval_date
+                        FROM generated_tickets gt
+                        INNER JOIN powerball_draws pd ON gt.draw_date = pd.draw_date
+                        WHERE (gt.prize_won IS NULL OR gt.prize_won = 0)
                         ORDER BY eval_date ASC
                     """
-
                     cursor.execute(query)
                 else:
-                    # Keep existing behavior when a days_back window is requested
                     query = """
-                        SELECT DISTINCT COALESCE(pl.target_draw_date, DATE(pl.created_at)) as eval_date
-                        FROM predictions_log pl
-                        INNER JOIN powerball_draws pd ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
-                        WHERE pl.evaluated = FALSE
-                        AND COALESCE(pl.target_draw_date, DATE(pl.created_at)) >= date('now', '-' || ? || ' days')
+                        SELECT DISTINCT gt.draw_date as eval_date
+                        FROM generated_tickets gt
+                        INNER JOIN powerball_draws pd ON gt.draw_date = pd.draw_date
+                        WHERE (gt.prize_won IS NULL OR gt.prize_won = 0)
+                        AND gt.draw_date >= date('now', '-' || ? || ' days')
                         ORDER BY eval_date ASC
                     """
-
                     cursor.execute(query, (days_back,))
 
                 dates_to_evaluate = [row[0] for row in cursor.fetchall()]
@@ -156,12 +151,12 @@ class PredictionEvaluator:
                 winning_numbers = list(actual_result[:5])
                 winning_powerball = actual_result[5]
 
-                # Get ALL predictions for this date (both evaluated and unevaluated)
+                # Get ALL generated tickets for this date
                 cursor.execute("""
-                    SELECT id, n1, n2, n3, n4, n5, powerball, evaluated
-                    FROM predictions_log
-                    WHERE target_draw_date = ? OR (target_draw_date IS NULL AND DATE(created_at) = ?)
-                """, (draw_date, draw_date))
+                    SELECT id, n1, n2, n3, n4, n5, powerball, confidence_score
+                    FROM generated_tickets
+                    WHERE draw_date = ?
+                """, (draw_date,))
 
                 predictions = cursor.fetchall()
 
@@ -194,17 +189,13 @@ class PredictionEvaluator:
                         # Calculate prize
                         prize_amount, prize_description = calculate_prize_amount(matches_main, matches_pb)
 
-                        # Update prediction with evaluation results (even if already evaluated to ensure consistency)
+                        # Update generated_tickets with prize info and mark as played
                         cursor.execute("""
-                            UPDATE predictions_log
-                            SET evaluated = TRUE,
-                                matches_wb = ?,
-                                matches_pb = ?,
-                                prize_amount = ?,
-                                prize_description = ?,
-                                evaluation_date = CURRENT_TIMESTAMP
+                            UPDATE generated_tickets
+                            SET prize_won = ?,
+                                was_played = TRUE
                             WHERE id = ?
-                        """, (matches_main, matches_pb, prize_amount, prize_description, pred_id))
+                        """, (prize_amount, pred_id))
 
                         # Update summary
                         if prize_amount > 0:
@@ -288,13 +279,13 @@ class PredictionEvaluator:
 
             logger.info(f"Actual numbers for {draw_date}: {actual_numbers} + PB: {actual_pb}")
 
-            # Get all predictions for this draw date with better date matching
+            # Get all generated tickets for this draw date
             cursor.execute("""
-                SELECT id, timestamp, n1, n2, n3, n4, n5, powerball, method, confidence_score
-                FROM predictions_log 
-                WHERE DATE(timestamp) = ? OR DATE(created_at) = ?
+                SELECT id, created_at as timestamp, n1, n2, n3, n4, n5, powerball, strategy_used as method, confidence_score
+                FROM generated_tickets 
+                WHERE draw_date = ?
                 ORDER BY confidence_score DESC
-            """, (draw_date, draw_date))
+            """, (draw_date,))
 
             predictions = cursor.fetchall()
             conn.close()
@@ -385,17 +376,17 @@ class PredictionEvaluator:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
 
-                # Get overall statistics
+                # Get overall statistics from generated_tickets
                 cursor.execute("""
                     SELECT 
                         COUNT(*) as total_evaluated,
-                        COUNT(CASE WHEN prize_amount > 0 THEN 1 END) as winning_predictions,
-                        SUM(prize_amount) as total_prizes,
-                        AVG(matches_wb) as avg_main_matches,
-                        MAX(prize_amount) as best_prize
-                    FROM predictions_log
-                    WHERE evaluated = TRUE
-                    AND evaluation_date >= datetime('now', '-' || ? || ' days')
+                        COUNT(CASE WHEN prize_won > 0 THEN 1 END) as winning_predictions,
+                        SUM(prize_won) as total_prizes,
+                        AVG(NULL) as avg_main_matches,
+                        MAX(prize_won) as best_prize
+                    FROM generated_tickets
+                    WHERE (prize_won IS NOT NULL AND prize_won != 0)
+                    AND created_at >= datetime('now', '-' || ? || ' days')
                 """, (days_back,))
 
                 overall_stats = cursor.fetchone()
@@ -415,14 +406,20 @@ class PredictionEvaluator:
 
 
                 # Get prize distribution
+                # Prize distribution from generated_tickets (by numeric bins)
                 cursor.execute("""
-                    SELECT prize_description, COUNT(*) as count, SUM(prize_amount) as total
-                    FROM predictions_log
-                    WHERE evaluated = TRUE
-                    AND evaluation_date >= datetime('now', '-' || ? || ' days')
-                    AND prize_amount > 0
-                    GROUP BY prize_description
-                    ORDER BY prize_amount DESC
+                    SELECT CASE 
+                        WHEN prize_won >= 1000000 THEN '>=1M'
+                        WHEN prize_won >= 1000 THEN '>=1K'
+                        WHEN prize_won > 0 THEN '<1K'
+                        ELSE 'none' END as tier,
+                    COUNT(*) as count,
+                    SUM(prize_won) as total
+                    FROM generated_tickets
+                    WHERE (prize_won IS NOT NULL AND prize_won != 0)
+                    AND created_at >= datetime('now', '-' || ? || ' days')
+                    GROUP BY tier
+                    ORDER BY total DESC
                 """, (days_back,))
 
                 prize_distribution = cursor.fetchall()

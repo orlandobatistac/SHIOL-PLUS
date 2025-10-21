@@ -130,7 +130,7 @@ async def get_predictions_by_draw(
                 id, timestamp, n1, n2, n3, n4, n5, powerball, 
                 score_total, model_version, method, confidence_score,
                 target_draw_date, created_at
-            FROM predictions_log 
+            FROM generated_tickets 
             WHERE (target_draw_date = ? OR DATE(timestamp) = ? OR DATE(created_at) = ?)
             ORDER BY score_total DESC, confidence_score DESC
             LIMIT ?
@@ -366,7 +366,7 @@ async def get_detailed_predictions_by_draw(
         if not draw_info:
             # Check if we have predictions for this date even without official draw results
             cursor.execute("""
-                SELECT COUNT(*) FROM predictions_log 
+                SELECT COUNT(*) FROM generated_tickets 
                 WHERE target_draw_date = ?
             """, (draw_date,))
 
@@ -389,7 +389,7 @@ async def get_detailed_predictions_by_draw(
         # Get all predictions for this date
         cursor.execute("""
             SELECT id, timestamp, n1, n2, n3, n4, n5, powerball, score_total, model_version
-            FROM predictions_log 
+            FROM generated_tickets 
             WHERE target_draw_date = ? OR DATE(timestamp) = ?
             ORDER BY score_total DESC
         """, (draw_date, draw_date))
@@ -523,7 +523,7 @@ async def get_predictions_by_draw_date(
                 model_version,
                 target_draw_date,
                 created_at
-            FROM predictions_log 
+            FROM generated_tickets 
             WHERE target_draw_date = ? OR DATE(created_at) = ?
             ORDER BY score_total DESC
             LIMIT ?
@@ -671,7 +671,7 @@ async def get_predictions_only_by_date(
                 model_version,
                 target_draw_date,
                 created_at
-            FROM predictions_log 
+            FROM generated_tickets 
             WHERE target_draw_date = ? OR DATE(created_at) = ?
             ORDER BY score_total DESC
             LIMIT ?

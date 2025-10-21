@@ -1,3 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+logs/
+tmp/
+
+# Database backups (we only commit schema, not data)
+data/*.db.backup*
+data/*backup*
+data/scheduler.db
+
+# Environment variables
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Playwright
+playwright/.auth/
+
+# Temporary files
+*.tmp
+*.bak
 # Python artifacts
 __pycache__/
 *.pyc
@@ -175,3 +242,11 @@ ENV/
 # ============================================
 .replit
 replit.nix
+
+# No migrations or backups in repo
+migrations/
+backups/
+*.backup
+main.py.backup
+data/*.backup*
+data/*_backup_*

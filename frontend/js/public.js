@@ -6,6 +6,37 @@ function closeDrawMatchesModal() {
     }
 }
 
+// Simple client-side table sorter for strategy table
+function enableStrategyTableSorting() {
+    const table = document.getElementById('strategyTable');
+    if (!table) return;
+    const ths = table.querySelectorAll('th');
+    ths.forEach(th => {
+        th.addEventListener('click', () => {
+            const key = th.getAttribute('data-key');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const idxMap = { strategy: 0, count: 1, wins: 2, total_prize: 3 };
+            const idx = idxMap[key] || 0;
+            const asc = th.classList.contains('asc') ? false : true;
+            rows.sort((a,b) => {
+                const aText = a.children[idx].textContent.replace(/[$,]/g,'');
+                const bText = b.children[idx].textContent.replace(/[$,]/g,'');
+                const aVal = isNaN(aText) ? aText.toLowerCase() : parseFloat(aText);
+                const bVal = isNaN(bText) ? bText.toLowerCase() : parseFloat(bText);
+                if (aVal < bVal) return asc ? -1 : 1;
+                if (aVal > bVal) return asc ? 1 : -1;
+                return 0;
+            });
+            // Clear asc/desc on headers
+            ths.forEach(h => h.classList.remove('asc','desc'));
+            th.classList.add(asc ? 'asc' : 'desc');
+            // Re-append rows
+            rows.forEach(r => tbody.appendChild(r));
+        });
+    });
+}
+
 // Utility function to display matches in the modal
 function updateDrawMatchesModal(data) {
     const modalContent = document.getElementById('modalContent');
@@ -52,6 +83,78 @@ function updateDrawMatchesModal(data) {
                         </div>
                     ` : '<div class="text-sm text-gray-400">Winning numbers not available</div>'}
                 </div>
+                </div>
+
+                <!-- Analytics summary block (prize tiers, strategy, matches, confidence) -->
+                ${data.prize_tiers || data.strategy_counts || data.match_distribution ? `
+                <div class="mb-4 p-3 bg-white border rounded-lg text-sm text-gray-700">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="font-medium text-gray-800">Prize Tiers</div>
+                            <div class="mt-2">
+                                ${Object.keys(data.prize_tiers || {}).length === 0 ? '<div class="text-gray-400">No prizes</div>' : Object.entries(data.prize_tiers || {}).map(([tier, info]) => {
+                                    // Choose badge by total_prize
+                                    const total = info.total_prize || 0;
+                                    const cls = total >= 1000 ? 'badge-high' : (total >= 100 ? 'badge-medium' : 'badge-low');
+                                    return `<div class="flex justify-between items-center"><span>${tier}</span><span class="${cls}">💰 ${info.count}</span></div>`
+                                }).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-800">By Strategy</div>
+                            <div class="mt-2">
+                                ${Object.keys(data.strategy_counts || {}).length === 0 ? '<div class="text-gray-400">No data</div>' : `
+                                    <table class="strategy-table" id="strategyTable">
+                                        <thead>
+                                            <tr>
+                                                <th data-key="strategy">Strategy</th>
+                                                <th data-key="count">Count</th>
+                                                <th data-key="wins">Wins</th>
+                                                <th data-key="total_prize">Total Prize</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${Object.entries(data.strategy_counts || {}).map(([s, info]) =>
+                                                `<tr data-strategy="${s}"><td>${s}</td><td>${info.count}</td><td>${info.wins || 0}</td><td>$${(info.total_prize||0).toLocaleString()}</td></tr>`
+                                            ).join('')}
+                                        </tbody>
+                                    </table>
+                                `}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-800">Match Distribution 🎯</div>
+                            <div class="mt-2 text-xs text-gray-600">
+                                ${Object.entries(data.match_distribution || {}).map(([matches, md]) =>
+                                    `
+                                    <div class="mb-2">
+                                        <div class="flex justify-between text-sm"><span>${matches} WB</span><span>${(md.without_pb + md.with_pb)}</span></div>
+                                        <div class="progress-bar mt-1">
+                                            <div class="progress progress-medium" style="width: ${Math.min(100, ((md.without_pb + md.with_pb) / Math.max(1, data.total_predictions)) * 100)}%"></div>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">PB: ${md.with_pb} • Without PB: ${md.without_pb}</div>
+                                    </div>
+                                `
+                                ).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="font-medium text-gray-800">Confidence</div>
+                            <div class="mt-2 text-xs text-gray-600">
+                                ${Object.entries(data.confidence_summary || {}).map(([k, v]) =>
+                                    `<div class="flex justify-between"><span>${k}</span><span>${v.count} (${(v.avg_confidence*100).toFixed(1)}%)</span></div>`
+                                ).join('')}
+                                <div class="mt-2">
+                                    ${Object.entries(data.confidence_summary || {}).map(([k, v]) =>
+                                        `<div class="flex items-center gap-2 mt-1"><span class="badge-${k==='high'?'high':k==='medium'?'medium':'low'}">${k === 'high' ? '🔥' : (k==='medium' ? '⚡' : '🔹')} ${k}</span><div class="progress-bar flex-1"><div class="progress ${k==='high'?'progress-high':k==='medium'?'progress-medium':'progress-low'}" style="width:${(v.count / Math.max(1, data.total_predictions) * 100).toFixed(1)}%"></div></div></div>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+
                 <div class="space-y-4">
         `;
 
@@ -104,6 +207,12 @@ function updateDrawMatchesModal(data) {
             </div>
         `;
         modalContent.innerHTML = contentHtml;
+        // Enable strategy table sorting if present
+        try {
+            enableStrategyTableSorting();
+        } catch (e) {
+            console.warn('Could not enable strategy table sorting:', e);
+        }
     } else {
         modalContent.innerHTML = `
             <div class="p-6 text-center">
@@ -219,7 +328,7 @@ async function showDrawMatchesModal(drawDateInput) {
 
         console.log(`Final draw date for API: ${drawDate} (from input: ${drawDateInput})`);
 
-        // Show modal immediately with loading state
+    // Show modal immediately with loading state
         const modal = document.getElementById('drawMatchesModal');
         const modalContent = document.getElementById('modalContent');
 
@@ -236,11 +345,39 @@ async function showDrawMatchesModal(drawDateInput) {
             </div>
         `;
 
-        // Try multiple API endpoints for better compatibility
+        // First try the analytics endpoint which returns summary + top_predictions
+        let analyticsData = null;
+        try {
+            const analyticsUrl = `/api/v1/public/analytics/draw/${encodeURIComponent(drawDate)}`;
+            console.log('Fetching analytics from:', analyticsUrl);
+            const aresp = await fetch(analyticsUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+            if (aresp.ok) {
+                analyticsData = await aresp.json();
+                console.log('Analytics data:', analyticsData);
+            } else {
+                console.warn('Analytics endpoint returned', aresp.status);
+            }
+        } catch (ae) {
+            console.warn('Failed to fetch analytics endpoint:', ae.message || ae);
+            analyticsData = null;
+        }
+
+        // If analytics returned top_predictions, render those as the modal predictions
+        if (analyticsData && analyticsData.top_predictions && analyticsData.top_predictions.length > 0) {
+            const merged = {
+                draw_date: drawDate,
+                winning_numbers: analyticsData.winning_numbers,
+                predictions: analyticsData.top_predictions
+            };
+            updateDrawMatchesModal(merged);
+            return;
+        }
+
+        // Fallback: Try multiple API endpoints for prediction lists for better compatibility
         const apiEndpoints = [
             `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`,
             `/api/v1/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`,
-            `/api/v1/predictions/public/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`
+            `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`
         ];
 
         let response = null;
@@ -280,7 +417,7 @@ async function showDrawMatchesModal(drawDateInput) {
         const data = await response.json();
         console.log('Draw matches data:', data);
 
-        // Update modal with results
+        // Update modal with results (predictions)
         updateDrawMatchesModal(data);
 
     } catch (error) {

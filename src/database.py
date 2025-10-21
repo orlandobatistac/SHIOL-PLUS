@@ -743,30 +743,34 @@ def _create_core_tables(cursor):
 
 def _create_prediction_tables(cursor):
     """Create prediction-related tables."""
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS predictions_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            n1 INTEGER NOT NULL,
-            n2 INTEGER NOT NULL,
-            n3 INTEGER NOT NULL,
-            n4 INTEGER NOT NULL,
-            n5 INTEGER NOT NULL,
-            powerball INTEGER NOT NULL,
-            score_total REAL NOT NULL,
-            model_version TEXT NOT NULL,
-            dataset_hash TEXT NOT NULL,
-            json_details_path TEXT,
-            target_draw_date DATE,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            evaluated BOOLEAN DEFAULT FALSE,
-            matches_wb INTEGER DEFAULT 0,
-            matches_pb BOOLEAN DEFAULT FALSE,
-            prize_amount REAL DEFAULT 0.0,
-            prize_description TEXT DEFAULT 'Not evaluated',
-            evaluation_date DATETIME
-        )
-    """)
+    # Legacy table: predictions_log
+    # The original DDL for the legacy `predictions_log` table is preserved below as a
+    # historical reference only. The runtime code now uses `generated_tickets` and the
+    # legacy DDL is intentionally commented out to avoid recreating or mutating the
+    # archived table during normal initialization.
+    #
+    # CREATE TABLE IF NOT EXISTS predictions_log (
+    #     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #     timestamp TEXT NOT NULL,
+    #     n1 INTEGER NOT NULL,
+    #     n2 INTEGER NOT NULL,
+    #     n3 INTEGER NOT NULL,
+    #     n4 INTEGER NOT NULL,
+    #     n5 INTEGER NOT NULL,
+    #     powerball INTEGER NOT NULL,
+    #     score_total REAL NOT NULL,
+    #     model_version TEXT NOT NULL,
+    #     dataset_hash TEXT NOT NULL,
+    #     json_details_path TEXT,
+    #     target_draw_date DATE,
+    #     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    #     evaluated BOOLEAN DEFAULT FALSE,
+    #     matches_wb INTEGER DEFAULT 0,
+    #     matches_pb BOOLEAN DEFAULT FALSE,
+    #     prize_amount REAL DEFAULT 0.0,
+    #     prize_description TEXT DEFAULT 'Not evaluated',
+    #     evaluation_date DATETIME
+    # )
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS validation_results (
@@ -783,42 +787,45 @@ def _create_prediction_tables(cursor):
         )
     """)
 
-    # Migration for target_draw_date column
-    try:
-        cursor.execute("PRAGMA table_info(predictions_log)")
-        columns = [column[1] for column in cursor.fetchall()]
-
-        if 'target_draw_date' not in columns:
-            logger.info("Adding target_draw_date column to existing predictions_log table...")
-            cursor.execute("ALTER TABLE predictions_log ADD COLUMN target_draw_date DATE")
-            cursor.execute("""
-                UPDATE predictions_log
-                SET target_draw_date = DATE(created_at)
-                WHERE target_draw_date IS NULL
-            """)
-            logger.info("target_draw_date column added and populated")
-
-        # Migration for evaluation columns
-        evaluation_columns = ['evaluated', 'matches_wb', 'matches_pb', 'prize_amount', 'prize_description', 'evaluation_date']
-        for col in evaluation_columns:
-            if col not in columns:
-                logger.info(f"Adding {col} column to predictions_log table...")
-                if col == 'evaluated':
-                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN evaluated BOOLEAN DEFAULT FALSE")
-                elif col == 'matches_wb':
-                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN matches_wb INTEGER DEFAULT 0")
-                elif col == 'matches_pb':
-                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN matches_pb BOOLEAN DEFAULT FALSE")
-                elif col == 'prize_amount':
-                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN prize_amount REAL DEFAULT 0.0")
-                elif col == 'prize_description':
-                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN prize_description TEXT DEFAULT 'Not evaluated'")
-                elif col == 'evaluation_date':
-                    cursor.execute("ALTER TABLE predictions_log ADD COLUMN evaluation_date DATETIME")
-                logger.info(f"{col} column added successfully")
-
-    except sqlite3.Error as e:
-        logger.error(f"Error during migrations: {e}")
+    # Legacy migrations for `predictions_log` are preserved below as commented
+    # historical notes. These ALTER TABLE and PRAGMA operations were used during
+    # prior schema evolution but should not run in the current runtime because
+    # the legacy table has been archived and dropped from the active database.
+    #
+    # try:
+    #     cursor.execute("PRAGMA table_info(predictions_log)")
+    #     columns = [column[1] for column in cursor.fetchall()]
+    #
+    #     if 'target_draw_date' not in columns:
+    #         logger.info("Adding target_draw_date column to existing predictions_log table...")
+    #         cursor.execute("ALTER TABLE predictions_log ADD COLUMN target_draw_date DATE")
+    #         cursor.execute("""
+    #             UPDATE predictions_log
+    #             SET target_draw_date = DATE(created_at)
+    #             WHERE target_draw_date IS NULL
+    #         """)
+    #         logger.info("target_draw_date column added and populated")
+    #
+    #     evaluation_columns = ['evaluated', 'matches_wb', 'matches_pb', 'prize_amount', 'prize_description', 'evaluation_date']
+    #     for col in evaluation_columns:
+    #         if col not in columns:
+    #             logger.info(f"Adding {col} column to predictions_log table...")
+    #             if col == 'evaluated':
+    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN evaluated BOOLEAN DEFAULT FALSE")
+    #             elif col == 'matches_wb':
+    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN matches_wb INTEGER DEFAULT 0")
+    #             elif col == 'matches_pb':
+    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN matches_pb BOOLEAN DEFAULT FALSE")
+    #             elif col == 'prize_amount':
+    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN prize_amount REAL DEFAULT 0.0")
+    #             elif col == 'prize_description':
+    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN prize_description TEXT DEFAULT 'Not evaluated'")
+    #             elif col == 'evaluation_date':
+    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN evaluation_date DATETIME")
+    #             logger.info(f"{col} column added successfully")
+#
+    # except sqlite3.Error as e:
+    #     logger.error(f"Error during migrations: {e}")
 
 
 def _create_feedback_tables(cursor):
@@ -917,8 +924,11 @@ def _create_feedback_tables(cursor):
 def _create_indexes(cursor):
     """Create performance indexes for frequently queried columns."""
     indexes = [
-        ("idx_predictions_log_created_at", "predictions_log", "created_at DESC"),
-        ("idx_predictions_log_target_date", "predictions_log", "target_draw_date"),
+        # Legacy indexes for `predictions_log` (preserved as history; the active
+        # runtime schema uses `generated_tickets` and these indexes should not
+        # be created against the dropped/archived legacy table.)
+        # ("idx_predictions_log_created_at", "predictions_log", "created_at DESC"),
+        # ("idx_predictions_log_target_date", "predictions_log", "target_draw_date"),
         ("idx_performance_tracking_prediction_id", "performance_tracking", "prediction_id"),
         ("idx_performance_tracking_draw_date", "performance_tracking", "draw_date"),
         ("idx_powerball_draws_date", "powerball_draws", "draw_date"),
@@ -1148,7 +1158,7 @@ def get_prediction_history(limit: int = 100):
                 SELECT id, timestamp, n1, n2, n3, n4, n5, powerball,
                        score_total, model_version, dataset_hash,
                        json_details_path, created_at
-                FROM predictions_log
+                FROM generated_tickets
                 ORDER BY created_at DESC
                 LIMIT ?
             """
@@ -1398,7 +1408,7 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
                     AVG(pt.matches_pb) as avg_pb_matches,
                     COUNT(CASE WHEN pt.prize_tier != 'Non-winning' THEN 1 END) as winning_predictions
                 FROM performance_tracking pt
-                JOIN predictions_log pl ON pt.prediction_id = pl.id
+                JOIN generated_tickets pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
             """, (days_back,))
 
@@ -1408,7 +1418,7 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
                 """
                 SELECT pt.prize_tier, COUNT(*) as count
                 FROM performance_tracking pt
-                JOIN predictions_log pl ON pt.prediction_id = pl.id
+                JOIN generated_tickets pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
                 GROUP BY pt.prize_tier
                 ORDER BY count DESC
@@ -1420,7 +1430,7 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
                 """
                 SELECT DATE(pt.created_at) as date, AVG(pt.score_accuracy) as avg_accuracy
                 FROM performance_tracking pt
-                JOIN predictions_log pl ON pt.prediction_id = pl.id
+                JOIN generated_tickets pl ON pt.prediction_id = pl.id
                 WHERE pt.created_at >= datetime('now', '-' || ? || ' days')
                 GROUP BY DATE(pt.created_at)
                 ORDER BY date
@@ -1456,13 +1466,235 @@ def get_performance_analytics(days_back: int = 30) -> Dict:
         }
 
 
+def get_draw_analytics(draw_date: str, limit: int = 50) -> Dict[str, Any]:
+    """Return analytics for a specific draw date based on generated_tickets.
+
+    Returns counts, total prizes, top predictions (by confidence) and the official draw numbers.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Official draw numbers
+        cursor.execute("SELECT n1, n2, n3, n4, n5, pb FROM powerball_draws WHERE draw_date = ?", (draw_date,))
+        draw_row = cursor.fetchone()
+        if draw_row:
+            winning_numbers = list(draw_row[:5])
+            winning_pb = draw_row[5]
+        else:
+            winning_numbers = []
+            winning_pb = None
+
+        # Load all predictions for draw_date to compute richer analytics
+        cursor.execute(
+            """
+            SELECT id, n1, n2, n3, n4, n5, powerball, confidence_score, strategy_used, prize_won, created_at
+            FROM generated_tickets
+            WHERE draw_date = ?
+            """,
+            (draw_date,)
+        )
+        rows = cursor.fetchall()
+
+        total_predictions = len(rows)
+        winning_predictions = 0
+        total_prize = 0.0
+
+        # Structures for analytics
+        prize_tiers: Dict[str, Dict[str, Any]] = {}
+        strategy_counts: Dict[str, Dict[str, Any]] = {}
+        match_distribution: Dict[int, Dict[str, int]] = {i: {'with_pb': 0, 'without_pb': 0} for i in range(0, 6)}
+        confidence_buckets = {'high': {'count': 0, 'sum_conf': 0.0},
+                              'medium': {'count': 0, 'sum_conf': 0.0},
+                              'low': {'count': 0, 'sum_conf': 0.0}}
+
+        try:
+            from src.prize_calculator import calculate_prize_amount
+        except Exception:
+            # Fallback mapping if prize_calculator unavailable
+            def calculate_prize_amount(main_matches, pb):
+                if main_matches == 5 and pb:
+                    return (100000000.0, 'Jackpot')
+                if main_matches == 5:
+                    return (1000000.0, 'Match 5')
+                if main_matches == 4 and pb:
+                    return (50000.0, 'Match 4 + PB')
+                if main_matches == 4:
+                    return (100.0, 'Match 4')
+                if main_matches == 3 and pb:
+                    return (100.0, 'Match 3 + PB')
+                if main_matches == 3:
+                    return (7.0, 'Match 3')
+                if main_matches == 2 and pb:
+                    return (7.0, 'Match 2 + PB')
+                if main_matches == 1 and pb:
+                    return (4.0, 'Match 1 + PB')
+                if main_matches == 0 and pb:
+                    return (4.0, 'Powerball Only')
+                return (0.0, 'No Prize')
+
+        # Compute analytics by iterating tickets
+        for r in rows:
+            tid, a, b, c, d, e, pb, conf, strat, prize_val, created_at = r
+            ticket_nums = [a, b, c, d, e]
+            # Compute main matches by counting intersections
+            matches_main = 0
+            for n in ticket_nums:
+                if n in winning_numbers:
+                    matches_main += 1
+
+            pb_match = (pb == winning_pb)
+
+            prize_amount, prize_desc = calculate_prize_amount(matches_main, pb_match)
+
+            # Accumulate totals
+            total_prize += float(prize_amount or 0.0)
+            if prize_amount and prize_amount > 0:
+                winning_predictions += 1
+
+            # Prize tier breakdown
+            tier = prize_desc or str(prize_amount)
+            if tier not in prize_tiers:
+                prize_tiers[tier] = {'count': 0, 'total_prize': 0.0}
+            prize_tiers[tier]['count'] += 1
+            prize_tiers[tier]['total_prize'] += float(prize_amount or 0.0)
+
+            # Strategy counts
+            strat_key = strat if strat else 'unknown'
+            if strat_key not in strategy_counts:
+                strategy_counts[strat_key] = {'count': 0, 'wins': 0, 'total_prize': 0.0}
+            strategy_counts[strat_key]['count'] += 1
+            if prize_amount and prize_amount > 0:
+                strategy_counts[strat_key]['wins'] += 1
+                strategy_counts[strat_key]['total_prize'] += float(prize_amount or 0.0)
+
+            # Match distribution (0-5 main matches) split by PB
+            md = match_distribution.get(matches_main)
+            if pb_match:
+                md['with_pb'] += 1
+            else:
+                md['without_pb'] += 1
+
+            # Confidence buckets
+            conf_val = float(conf) if conf is not None else 0.0
+            if conf_val >= 0.75:
+                bucket = 'high'
+            elif conf_val >= 0.5:
+                bucket = 'medium'
+            else:
+                bucket = 'low'
+            confidence_buckets[bucket]['count'] += 1
+            confidence_buckets[bucket]['sum_conf'] += conf_val
+
+        # Prepare top predictions by confidence (limit)
+        cursor.execute(
+            """
+            SELECT id, n1, n2, n3, n4, n5, powerball, confidence_score, strategy_used, prize_won
+            FROM generated_tickets
+            WHERE draw_date = ?
+            ORDER BY confidence_score DESC
+            LIMIT ?
+            """,
+            (draw_date, limit)
+        )
+        top_rows = cursor.fetchall()
+        top_predictions = []
+        for r in top_rows:
+            top_predictions.append({
+                'id': r[0],
+                'n1': r[1], 'n2': r[2], 'n3': r[3], 'n4': r[4], 'n5': r[5],
+                'powerball': r[6],
+                'confidence_score': float(r[7]) if r[7] is not None else 0.0,
+                'strategy_used': r[8],
+                'prize_won': float(r[9]) if r[9] is not None else 0.0
+            })
+
+        conn.close()
+
+        # finalize confidence metrics
+        confidence_summary = {}
+        for k, v in confidence_buckets.items():
+            confidence_summary[k] = {
+                'count': v['count'],
+                'avg_confidence': (v['sum_conf'] / v['count']) if v['count'] > 0 else 0.0
+            }
+
+        return {
+            'draw_date': draw_date,
+            'winning_numbers': {
+                'main_numbers': winning_numbers,
+                'powerball': winning_pb
+            },
+            'total_predictions': total_predictions,
+            'predictions_with_prizes': winning_predictions,
+            'total_prize': total_prize,
+            'prize_tiers': prize_tiers,
+            'strategy_counts': strategy_counts,
+            'match_distribution': match_distribution,
+            'confidence_summary': confidence_summary,
+            'top_predictions': top_predictions
+        }
+
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error in get_draw_analytics: {e}")
+        return {
+            'draw_date': draw_date,
+            'winning_numbers': {'main_numbers': [], 'powerball': None},
+            'total_predictions': 0,
+            'predictions_with_prizes': 0,
+            'total_prize': 0.0,
+            'top_predictions': []
+        }
+
+
+def get_analytics_summary(days_back: int = 30) -> Dict[str, Any]:
+    """Return high-level analytics summary for the site over the given period."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(*) as total_predictions,
+                COUNT(CASE WHEN prize_won > 0 THEN 1 END) as winning_predictions,
+                COALESCE(SUM(prize_won), 0) as total_prize,
+                AVG(confidence_score) as avg_confidence
+            FROM generated_tickets
+            WHERE created_at >= datetime('now', '-' || ? || ' days')
+            """,
+            (days_back,)
+        )
+
+        row = cursor.fetchone() or (0, 0, 0, 0.0)
+        conn.close()
+
+        return {
+            'period_days': days_back,
+            'total_predictions': int(row[0] or 0),
+            'winning_predictions': int(row[1] or 0),
+            'total_prize': float(row[2] or 0.0),
+            'avg_confidence': float(row[3] or 0.0)
+        }
+
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error in get_analytics_summary: {e}")
+        return {
+            'period_days': days_back,
+            'total_predictions': 0,
+            'winning_predictions': 0,
+            'total_prize': 0.0,
+            'avg_confidence': 0.0
+        }
+
+
 def get_prediction_details(prediction_id: int) -> Optional[Dict[str, Any]]:
     """Retrieve complete prediction details from the JSON file."""
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT json_details_path FROM predictions_log WHERE id = ?",
+                "SELECT json_details_path FROM generated_tickets WHERE id = ?",
                 (prediction_id,))
 
             result = cursor.fetchone()
@@ -1493,7 +1725,7 @@ def get_evaluated_predictions_count(execution_id: str) -> int:
             # Count evaluated predictions for this execution timeframe
             cursor.execute("""
                 SELECT COUNT(*) 
-                FROM predictions_log 
+                FROM generated_tickets 
                 WHERE evaluated = 1 
                 AND target_draw_date IS NOT NULL
                 AND prize_amount IS NOT NULL
@@ -1525,7 +1757,7 @@ def get_evaluated_predictions_for_execution(execution_id: str) -> Optional[Dict[
             cursor.execute("""
                 SELECT 
                     numbers, powerball, prize_amount, matches, target_draw_date, rank
-                FROM predictions_log 
+                FROM generated_tickets 
                 WHERE evaluated = 1 
                 AND target_draw_date IS NOT NULL
                 AND created_at >= (
@@ -1581,7 +1813,7 @@ def get_predictions_by_dataset_hash(dataset_hash: str) -> pd.DataFrame:
             query = """
                 SELECT id, timestamp, n1, n2, n3, n4, n5, powerball,
                        score_total, model_version, created_at
-                FROM predictions_log
+                FROM generated_tickets
                 WHERE dataset_hash = ?
                 ORDER BY created_at DESC
             """
@@ -1614,7 +1846,7 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                     COUNT(CASE WHEN pl.evaluated = 1 THEN 1 END) as evaluated_predictions,
                     SUM(CASE WHEN pl.evaluated = 1 THEN pl.prize_amount ELSE 0 END) as total_prizes
                 FROM powerball_draws pd
-                INNER JOIN predictions_log pl ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
+                INNER JOIN generated_tickets pl ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
                 WHERE pl.created_at IS NOT NULL 
                     AND pl.model_version NOT IN ('fallback', 'test', 'simulated', '1.0.0-test', 'default')
                     AND pl.dataset_hash NOT IN ('simulated', 'test', 'fallback', 'default')
@@ -1648,7 +1880,7 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                         pt.matches_main, pt.matches_pb, pt.prize_tier,
                         COALESCE(pl.target_draw_date, DATE(pl.created_at)) as target_draw_date,
                         pl.created_at
-                    FROM predictions_log pl
+                    FROM generated_tickets pl
                     LEFT JOIN performance_tracking pt ON pl.id = pt.prediction_id
                     WHERE COALESCE(pl.target_draw_date, DATE(pl.created_at)) = ?
                     ORDER BY pl.score_total DESC
@@ -1778,7 +2010,7 @@ def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
                     pd.draw_date, pd.n1 as actual_n1, pd.n2 as actual_n2, pd.n3 as actual_n3,
                     pd.n4 as actual_n4, pd.n5 as actual_n5, pd.pb as actual_pb,
                     pt.matches_main, pt.matches_pb, pt.prize_tier
-                FROM predictions_log pl
+                    FROM generated_tickets pl
                 LEFT JOIN performance_tracking pt ON pl.id = pt.prediction_id
                 LEFT JOIN powerball_draws pd ON pt.draw_date = pd.draw_date
                 WHERE pt.id IS NOT NULL
@@ -1876,7 +2108,7 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                     SELECT
                         pl.id, pl.timestamp, pl.n1, pl.n2, pl.n3, pl.n4, pl.n5, pl.powerball,
                         pt.matches_main, pt.matches_pb, pt.prize_tier
-                    FROM predictions_log pl
+                    FROM generated_tickets pl
                     INNER JOIN performance_tracking pt ON pl.id = pt.prediction_id
                     WHERE pt.draw_date = ?
                     ORDER BY pl.created_at ASC

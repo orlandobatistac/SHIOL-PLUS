@@ -69,10 +69,10 @@ async def get_public_predictions_by_draw(
         
         # Query predictions for the specific draw date
         cursor.execute("""
-            SELECT id, timestamp, target_draw_date, n1, n2, n3, n4, n5, powerball, 
-                   model_version, score_total, created_at, evaluated, matches_wb, matches_pb
-            FROM predictions_log 
-            WHERE target_draw_date = ?
+            SELECT id, timestamp, draw_date as target_draw_date, n1, n2, n3, n4, n5, powerball, 
+                   strategy_used as model_version, confidence_score as score_total, created_at, evaluated, matches_wb, matches_pb
+            FROM generated_tickets 
+            WHERE draw_date = ?
             AND (matches_wb + CASE WHEN matches_pb THEN 1 ELSE 0 END) >= ?
             ORDER BY score_total DESC, created_at DESC 
             LIMIT ?
@@ -419,7 +419,7 @@ async def get_winners_stats():
         
         cursor.execute("""
             SELECT matches_wb, matches_pb, prize_amount
-            FROM predictions_log
+            FROM generated_tickets
             WHERE evaluated = TRUE
             AND (matches_wb > 0 OR matches_pb = TRUE)
         """)
@@ -484,7 +484,7 @@ async def get_public_stats():
         # Get all evaluated predictions with matches
         cursor.execute("""
             SELECT matches_wb, matches_pb
-            FROM predictions_log
+            FROM generated_tickets
             WHERE evaluated = 1 
             AND (matches_wb > 0 OR matches_pb = 1)
         """)
@@ -508,7 +508,7 @@ async def get_public_stats():
         week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         cursor.execute("""
             SELECT COUNT(*)
-            FROM predictions_log
+            FROM generated_tickets
             WHERE evaluated = 1
             AND (matches_wb > 0 OR matches_pb = 1)
             AND created_at >= ?
@@ -664,3 +664,28 @@ async def get_counters():
             "visits": 0,
             "installs": 0
         }
+
+
+
+@public_frontend_router.get("/api/v1/public/analytics/draw/{draw_date}")
+async def get_public_draw_analytics(draw_date: str, limit: int = 50):
+    """Return draw-level analytics powered by generated_tickets."""
+    try:
+        from src.database import get_draw_analytics
+        analytics = get_draw_analytics(draw_date, limit=limit)
+        return analytics
+    except Exception as e:
+        logger.error(f"Error fetching draw analytics for {draw_date}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@public_frontend_router.get("/api/v1/public/analytics/summary")
+async def get_public_analytics_summary(days_back: int = 30):
+    """Return site-wide analytics summary for dashboard."""
+    try:
+        from src.database import get_analytics_summary
+        summary = get_analytics_summary(days_back=days_back)
+        return summary
+    except Exception as e:
+        logger.error(f"Error fetching analytics summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

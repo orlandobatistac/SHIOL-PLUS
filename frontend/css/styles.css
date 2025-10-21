@@ -394,6 +394,39 @@ input:focus,
     filter: blur(4px);
     opacity: 0.6;
 }
+    /* Analytics dashboard styles (added) */
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem;
+    }
+    .analytics-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+    }
+    .progress-bar {
+        background: #f3f4f6;
+        border-radius: 999px;
+        height: 10px;
+        overflow: hidden;
+    }
+    .progress-bar > .progress {
+        height: 100%;
+        transition: width 300ms ease;
+    }
+    .progress-high { background: #10b981; } /* green */
+    .progress-medium { background: #f59e0b; } /* amber */
+    .progress-low { background: #9ca3af; } /* gray */
+    .badge-high { background: linear-gradient(90deg,#10b981,#059669); color: white; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; }
+    .badge-medium { background: linear-gradient(90deg,#f59e0b,#d97706); color: white; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; }
+    .badge-low { background: #9ca3af; color: white; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; }
+    .strategy-table { width: 100%; border-collapse: collapse; }
+    .strategy-table th, .strategy-table td { padding: 0.5rem 0.4rem; text-align: left; border-bottom: 1px solid #f3f4f6; }
+    .strategy-table th { cursor: pointer; user-select: none; }
+    .icon { margin-right: 0.35rem; }
+    .analytics-summary-title { display:flex; align-items:center; gap:0.5rem; }
 
 /* Locked table row styling (for table predictions) */
 .locked-prediction .numbers-visual {

@@ -152,7 +152,7 @@ async def evaluate_predictions_for_draw(draw_date: str):
 
         # Find predictions for this draw that haven't been evaluated
         cursor.execute(
-            "SELECT id, n1, n2, n3, n4, n5, powerball FROM predictions_log WHERE COALESCE(target_draw_date, DATE(created_at)) = ? AND evaluated = 0",
+            "SELECT id, n1, n2, n3, n4, n5, powerball FROM generated_tickets WHERE COALESCE(target_draw_date, DATE(created_at)) = ? AND evaluated = 0",
             (draw_date,)
         )
 
@@ -184,7 +184,7 @@ async def evaluate_predictions_for_draw(draw_date: str):
             # Update predictions_log evaluated fields
             try:
                 cursor.execute(
-                    "UPDATE predictions_log SET evaluated = 1, matches_wb = ?, matches_pb = ?, prize_amount = ?, prize_description = ?, evaluation_date = CURRENT_TIMESTAMP WHERE id = ?",
+                    "UPDATE generated_tickets SET evaluated = 1, matches_wb = ?, matches_pb = ?, prize_amount = ?, prize_description = ?, evaluation_date = CURRENT_TIMESTAMP WHERE id = ?",
                     (matches_main, matches_pb, float(prize_amount), prize_description or '', pred_id)
                 )
             except Exception as ex:
@@ -688,8 +688,8 @@ async def get_system_stats():
         # Get database statistics
         cursor.execute("SELECT COUNT(*) FROM powerball_draws")
         total_draws = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM predictions_log")
+
+        cursor.execute("SELECT COUNT(*) FROM generated_tickets")
         total_predictions = cursor.fetchone()[0]
         
         cursor.execute("SELECT COUNT(*) FROM users")
@@ -701,7 +701,7 @@ async def get_system_stats():
         # Get latest pipeline execution
         cursor.execute("""
             SELECT created_at, prize_description 
-            FROM predictions_log 
+            FROM generated_tickets 
             ORDER BY created_at DESC 
             LIMIT 1
         """)
@@ -718,7 +718,7 @@ async def get_system_stats():
         
         # Get predictions with matches
         cursor.execute("""
-            SELECT COUNT(*) FROM predictions_log 
+            SELECT COUNT(*) FROM generated_tickets 
             WHERE evaluated = 1 
             AND matches_wb > 0
         """)
