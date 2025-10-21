@@ -69,14 +69,13 @@ async def get_public_predictions_by_draw(
         
         # Query predictions for the specific draw date
         cursor.execute("""
-            SELECT id, timestamp, draw_date as target_draw_date, n1, n2, n3, n4, n5, powerball, 
-                   strategy_used as model_version, confidence_score as score_total, created_at, evaluated, matches_wb, matches_pb
+            SELECT id, created_at, draw_date, n1, n2, n3, n4, n5, powerball, 
+                   strategy_used, confidence_score, created_at, was_played, 0, 0
             FROM generated_tickets 
             WHERE draw_date = ?
-            AND (matches_wb + CASE WHEN matches_pb THEN 1 ELSE 0 END) >= ?
-            ORDER BY score_total DESC, created_at DESC 
+            ORDER BY confidence_score DESC, created_at DESC 
             LIMIT ?
-        """, (draw_date, min_matches, limit))
+        """, (draw_date, limit))
         
         predictions = cursor.fetchall()
         conn.close()
@@ -174,7 +173,7 @@ async def get_public_recent_draws(limit: int = Query(default=6, le=20)):
         # Ultra-fast query with minimal data and better error handling
         try:
             cursor.execute("""
-                SELECT draw_date, n1, n2, n3, n4, n5, pb
+                SELECT rowid, draw_date, n1, n2, n3, n4, n5, pb
                 FROM powerball_draws 
                 ORDER BY draw_date DESC 
                 LIMIT ?
@@ -200,13 +199,14 @@ async def get_public_recent_draws(limit: int = Query(default=6, le=20)):
         for draw in draws:
             try:
                 draws_list.append({
-                    "draw_date": str(draw[0]) if draw[0] else "",
-                    "n1": int(draw[1]) if draw[1] is not None else 0,
-                    "n2": int(draw[2]) if draw[2] is not None else 0, 
-                    "n3": int(draw[3]) if draw[3] is not None else 0,
-                    "n4": int(draw[4]) if draw[4] is not None else 0,
-                    "n5": int(draw[5]) if draw[5] is not None else 0,
-                    "pb": int(draw[6]) if draw[6] is not None else 0,
+                    "id": int(draw[0]) if draw[0] is not None else 0,
+                    "draw_date": str(draw[1]) if draw[1] else "",
+                    "n1": int(draw[2]) if draw[2] is not None else 0,
+                    "n2": int(draw[3]) if draw[3] is not None else 0, 
+                    "n3": int(draw[4]) if draw[4] is not None else 0,
+                    "n4": int(draw[5]) if draw[5] is not None else 0,
+                    "n5": int(draw[6]) if draw[6] is not None else 0,
+                    "pb": int(draw[7]) if draw[7] is not None else 0,
                     "jackpot": "Not available"
                 })
             except (ValueError, TypeError) as format_error:
