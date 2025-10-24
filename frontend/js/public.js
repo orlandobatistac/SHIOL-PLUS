@@ -37,6 +37,85 @@ function enableStrategyTableSorting() {
     });
 }
 
+// Helper: format draw date like "Draw Date: Wednesday, September 17, 2025"
+function formatDrawDateLabel(dateStr) {
+    if (!dateStr) return 'Draw Date: —';
+    try {
+        const [y, m, d] = String(dateStr).split('-').map(Number);
+        const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+        const formatted = dt.toLocaleDateString('en-US', {
+            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC'
+        });
+        return `Draw Date: ${formatted}`;
+    } catch {
+        return `Draw Date: ${dateStr}`;
+    }
+}
+
+// Helper: normalize prize tier label to abbreviated form like "3+PB", "3", "PB", or "None"
+function abbreviatePrizeTierLabel(raw) {
+    if (!raw) return 'None';
+    const s = String(raw).trim();
+    if (/no\s*prize/i.test(s) || /^none$/i.test(s)) return 'None';
+    if (/^(pb\s*only|powerball\s*only)$/i.test(s)) return 'PB';
+    let m = s.match(/(\d+)\s*\+\s*(?:pb|powerball)/i);
+    if (m) return `${m[1]}+PB`;
+    m = s.match(/(?:match\s*)?(\d+)\s*(?:white|numbers?)?/i);
+    if (m) return `${m[1]}`;
+    if (/\b(pb|powerball)\b/i.test(s)) return 'PB';
+    return s;
+}
+
+// Fetch and display draw analytics in modal with dashboard-like content
+async function fetchDrawAnalytics(drawDate) {
+    // Delegate to the complete analytics modal implementation
+    if (typeof fetchDrawAnalyticsComplete === 'function') {
+        return await fetchDrawAnalyticsComplete(drawDate);
+    }
+    
+    // Fallback to basic implementation if complete version not loaded
+    console.warn('Complete analytics modal not loaded, using fallback');
+    const modal = document.getElementById('drawMatchesModal');
+    const loadingEl = document.getElementById('modal-loading');
+    const emptyEl = document.getElementById('modal-empty');
+    const contentEl = document.getElementById('modal-content');
+    
+    if (!modal) {
+        console.error('Analytics modal not found');
+        return;
+    }
+    
+    modal.classList.remove('hidden');
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (contentEl) contentEl.classList.add('hidden');
+    
+    try {
+        const url = `/api/v1/public/analytics/draw/${encodeURIComponent(drawDate)}`;
+        const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        
+        if (!data || (data.total_predictions || 0) === 0) {
+            if (loadingEl) loadingEl.classList.add('hidden');
+            if (emptyEl) emptyEl.classList.remove('hidden');
+            return;
+        }
+        
+        // Basic rendering (will be enhanced by complete version)
+        const modalDrawDate = document.getElementById('modal-draw-date');
+        if (modalDrawDate) modalDrawDate.textContent = formatDrawDateLabel(data.draw_date || drawDate);
+        
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (contentEl) contentEl.classList.remove('hidden');
+        
+    } catch (e) {
+        console.error('Error fetching analytics:', e);
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (emptyEl) emptyEl.classList.remove('hidden');
+    }
+}
+
 // Utility function to display matches in the modal
 function updateDrawMatchesModal(data) {
     const modalContent = document.getElementById('modalContent');
@@ -228,377 +307,18 @@ function updateDrawMatchesModal(data) {
     }
 }
 
-// Function to handle showing the detailed prediction modal
-function showDetailedPredictionModal(drawDateInput) {
-    console.log(`Loading detailed predictions for draw: ${drawDateInput}`);
-
-    const modal = document.getElementById('drawMatchesModal');
-    const modalContent = document.getElementById('modalContent');
-
-    if (!modal || !modalContent) {
-        console.error('Modal elements not found');
-        return;
-    }
-
-    modal.classList.remove('hidden');
-    modalContent.innerHTML = `
-        <div class="flex items-center justify-center p-8">
-            <i class="fas fa-spinner fa-spin text-2xl text-blue-500 mr-3"></i>
-            <span class="text-lg">Loading predictions...</span>
-        </div>
-    `;
-
-    // Fetch predictions for the specific draw
-    const apiUrl = `/api/v1/predictions/public/by-draw/${encodeURIComponent(drawDateInput)}?min_matches=1`;
-    console.log('Fetching detailed predictions from:', apiUrl);
-
-    fetch(apiUrl)
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => { throw new Error(`HTTP ${response.status}: ${text}`) });
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Detailed prediction data received:', data);
-            updateDrawMatchesModal(data); // Reuse the existing modal update function
-        })
-        .catch(error => {
-            console.error('Error loading detailed predictions:', error);
-            const errorMessage = error.message || 'Unknown error occurred';
-            // Show error message to user in the modal
-            modalContent.innerHTML = `
-                <div class="p-6 text-center">
-                    <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-4"></i>
-                    <h3 class="text-lg font-semibold text-red-600 mb-2">Error Loading Data</h3>
-                    <p class="text-gray-400 mb-2">Unable to load prediction details for this draw.</p>
-                    <p class="text-sm text-gray-400 mb-4">Draw date: ${drawDateInput}</p>
-                    <p class="text-xs text-gray-300 mb-4">Error: ${errorMessage}</p>
-                    <button onclick="closeDrawMatchesModal()" class="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
-                        Close
-                    </button>
-                </div>
-            `;
-        });
-}
+// (Removed legacy showDetailedPredictionModal; analytics modal is the single source of truth)
 
 
-// Function to handle showing the draw matches modal
+// Function to handle showing the draw matches modal (now delegates to analytics)
 async function showDrawMatchesModal(drawDateInput) {
-    try {
-        // Keep the original date format if it's already YYYY-MM-DD
-        let drawDate = drawDateInput;
-
-        console.log(`Modal requested for: ${drawDateInput}`);
-
-        // Only parse if it's not already in YYYY-MM-DD format
-        if (typeof drawDate === 'string' && !drawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            try {
-                // Parse the date - try different formats
-                let parsedDate = new Date(drawDate);
-                
-                // If that fails, try adding T12:00:00Z
-                if (isNaN(parsedDate.getTime())) {
-                    parsedDate = new Date(drawDate + 'T12:00:00Z');
-                }
-                
-                // If still fails, try manual parsing for format like "Mon, Sep 1, 2025"
-                if (isNaN(parsedDate.getTime()) && drawDate.includes(',')) {
-                    const parts = drawDate.replace(/[^a-zA-Z0-9,\s]/g, '').split(/\s+/);
-                    if (parts.length >= 4) {
-                        const monthMap = {'Jan':0, 'Feb':1, 'Mar':2, 'Apr':3, 'May':4, 'Jun':5, 'Jul':6, 'Aug':7, 'Sep':8, 'Oct':9, 'Nov':10, 'Dec':11};
-                        const month = monthMap[parts[1]];
-                        const day = parseInt(parts[2].replace(',', ''));
-                        const year = parseInt(parts[3]);
-                        if (month !== undefined && !isNaN(day) && !isNaN(year)) {
-                            parsedDate = new Date(year, month, day);
-                        }
-                    }
-                }
-                
-                if (!isNaN(parsedDate.getTime())) {
-                    drawDate = parsedDate.getFullYear() + '-' + 
-                              String(parsedDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                              String(parsedDate.getDate()).padStart(2, '0');
-                }
-            } catch (e) {
-                console.warn('Could not parse date format, using as-is:', drawDate);
-            }
-        }
-
-        console.log(`Final draw date for API: ${drawDate} (from input: ${drawDateInput})`);
-
-    // Show modal immediately with loading state
-        const modal = document.getElementById('drawMatchesModal');
-        const modalContent = document.getElementById('modalContent');
-
-        if (!modal || !modalContent) {
-            console.error('Modal elements not found');
-            return;
-        }
-
-        modal.classList.remove('hidden');
-        modalContent.innerHTML = `
-            <div class="flex items-center justify-center p-8">
-                <i class="fas fa-spinner fa-spin text-2xl text-blue-500 mr-3"></i>
-                <span class="text-lg">Loading predictions...</span>
-            </div>
-        `;
-
-        // First try the analytics endpoint which returns summary + top_predictions
-        let analyticsData = null;
-        try {
-            const analyticsUrl = `/api/v1/public/analytics/draw/${encodeURIComponent(drawDate)}`;
-            console.log('Fetching analytics from:', analyticsUrl);
-            const aresp = await fetch(analyticsUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
-            if (aresp.ok) {
-                analyticsData = await aresp.json();
-                console.log('Analytics data:', analyticsData);
-            } else {
-                console.warn('Analytics endpoint returned', aresp.status);
-            }
-        } catch (ae) {
-            console.warn('Failed to fetch analytics endpoint:', ae.message || ae);
-            analyticsData = null;
-        }
-
-        // If analytics returned top_predictions, render those as the modal predictions
-        if (analyticsData && analyticsData.top_predictions && analyticsData.top_predictions.length > 0) {
-            const merged = {
-                draw_date: drawDate,
-                winning_numbers: analyticsData.winning_numbers,
-                predictions: analyticsData.top_predictions
-            };
-            updateDrawMatchesModal(merged);
-            return;
-        }
-
-        // Fallback: Try multiple API endpoints for prediction lists for better compatibility
-        const apiEndpoints = [
-            `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`,
-            `/api/v1/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`,
-            `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`
-        ];
-
-        let response = null;
-        let lastError = null;
-
-        for (const apiUrl of apiEndpoints) {
-            try {
-                console.log('Trying API URL:', apiUrl);
-                response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (response.ok) {
-                    console.log('✅ Success with endpoint:', apiUrl);
-                    break;
-                } else {
-                    console.warn(`❌ Failed with status ${response.status} for: ${apiUrl}`);
-                    const errorText = await response.text();
-                    lastError = new Error(`HTTP ${response.status}: ${errorText}`);
-                    response = null;
-                }
-            } catch (fetchError) {
-                console.warn('❌ Network error for', apiUrl, ':', fetchError.message);
-                lastError = fetchError;
-                response = null;
-            }
-        }
-
-        if (!response || !response.ok) {
-            throw lastError || new Error('All API endpoints failed');
-        }
-
-        const data = await response.json();
-        console.log('Draw matches data:', data);
-
-        // Update modal with results (predictions)
-        updateDrawMatchesModal(data);
-
-    } catch (error) {
-        console.error('Error loading draw matches:', error);
-        const modalContent = document.getElementById('modalContent');
-        if (modalContent) {
-            const errorMessage = error.message || error.toString() || 'Unknown error occurred';
-            console.error('Full error details:', error);
-            modalContent.innerHTML = `
-                <div class="p-6 text-center">
-                    <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-4"></i>
-                    <h3 class="text-lg font-semibold text-red-600 mb-2">Error Loading Data</h3>
-                    <p class="text-gray-400 mb-2">Unable to load prediction matches for this draw.</p>
-                    <p class="text-sm text-gray-400 mb-4">Draw date: ${drawDateInput}</p>
-                    <p class="text-xs text-gray-300 mb-4">Error: ${errorMessage}</p>
-                    <div class="space-x-3">
-                        <button onclick="showDrawMatchesModal('${drawDateInput}')" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                            <i class="fas fa-redo mr-2"></i>Retry
-                        </button>
-                        <button onclick="closeDrawMatchesModal()" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
-                            Close
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-    }
+    return fetchDrawAnalytics(drawDateInput);
 }
-
-
-// Load recent draws
-async function loadRecentDraws() {
-    try {
-        console.log('Loading recent draws...');
-
-        // Try multiple endpoint variations to ensure compatibility
-        const endpointVariations = [
-            `/api/v1/public/recent-draws?limit=10`,
-            `/api/v1/public/draws/recent?limit=10`,
-            `/api/v1/public/recent-draws?limit=10`,
-            `/api/v1/public/draws/recent?limit=10`
-        ];
-
-        let response;
-        let lastError;
-
-        for (let i = 0; i < endpointVariations.length; i++) {
-            const endpoint = endpointVariations[i];
-            console.log(`Trying endpoint ${i + 1}/${endpointVariations.length}: ${endpoint}`);
-
-            try {
-                response = await fetch(endpoint, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    }
-                });
-
-                console.log(`Response status for ${endpoint}:`, response.status);
-
-                if (response.ok) {
-                    console.log(`✅ Success with endpoint: ${endpoint}`);
-                    break;
-                } else {
-                    console.warn(`❌ Failed with status ${response.status} for: ${endpoint}`);
-                    lastError = new Error(`HTTP error! status: ${response.status}`);
-                }
-            } catch (fetchError) {
-                console.warn(`❌ Network error for ${endpoint}:`, fetchError.message);
-                lastError = fetchError;
-            }
-        }
-
-        if (!response || !response.ok) {
-            throw lastError || new Error('All endpoint variations failed');
-        }
-
-        const data = await response.json();
-        console.log('Recent draws response:', data);
-
-        if (data.draws && data.draws.length > 0) {
-            displayRecentDraws(data.draws);
-        } else {
-            console.warn('No recent draws data available');
-            const recentDrawsContainer = document.getElementById('recentDrawsContainer');
-            if (recentDrawsContainer) {
-                recentDrawsContainer.innerHTML = `
-                    <div class="text-center p-6 text-gray-400">
-                        <i class="fas fa-info-circle text-2xl mb-2"></i>
-                        <p>No recent draws available</p>
-                    </div>
-                `;
-            }
-        }
-    } catch (error) {
-        console.error('Error loading recent draws:', error);
-        const container = document.getElementById('recentDrawsContainer');
-        if (container) {
-            const errorMessage = error.message || error.toString() || 'Error loading recent draws';
-            container.innerHTML = `
-                <div class="text-center p-6 text-red-500">
-                    <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                    <p>Error: ${errorMessage}</p>
-                    <p class="text-sm text-gray-400 mt-2">Check console for details</p>
-                    <button onclick="loadRecentDraws()" class="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                        Retry
-                    </button>
-                </div>
-            `;
-        }
-    }
-}
-
-// Function to display recent draws
-function displayRecentDraws(draws) {
-    const recentDrawsContainer = document.getElementById('recentDrawsContainer');
-    if (!recentDrawsContainer) {
-        console.error('Recent draws container not found');
-        return;
-    }
-
-    let html = '';
-    draws.forEach(draw => {
-        // Use the exact draw date from the API without conversion
-        const drawDate = draw.draw_date || draw.date;
-        
-        // Format date safely for display with weekday
-        let formattedDate;
-        try {
-            const dateObj = new Date(drawDate + 'T00:00:00'); // Force to start of day
-            formattedDate = dateObj.toLocaleDateString('en-US', {
-                weekday: 'short',
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric',
-                timeZone: 'UTC' // Force UTC to avoid timezone shifts
-            });
-        } catch (e) {
-            console.warn('Date parsing error for:', drawDate, e);
-            formattedDate = drawDate; // Fallback to raw date
-        }
-
-        console.log(`Draw date mapping: ${drawDate} -> ${formattedDate}`);
-
-        html += `
-            <div class="draw-item p-4 mb-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 flex justify-between items-center border border-gray-200 cursor-pointer"
-                 data-draw-date="${drawDate}"
-                 onclick="showDrawMatchesModal('${drawDate}')">
-                <div class="flex items-center">
-                    <i class="fas fa-calendar-alt text-blue-500 mr-3 text-lg"></i>
-                    <div>
-                        <p class="font-semibold text-gray-800">${formattedDate}</p>
-                        <p class="text-sm text-gray-400">Draw ID: ${draw.id}</p>
-                        <div class="bg-gray-50 p-2 rounded mt-2">
-                            <div class="flex space-x-1 mb-1">
-                                ${[draw.n1, draw.n2, draw.n3, draw.n4, draw.n5].map(num => 
-                                    `<span class="inline-flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded-full text-xs font-bold">${num}</span>`
-                                ).join('')}
-                            </div>
-                            <div class="flex items-center">
-                                <span class="text-xs text-gray-400 mr-2">PB:</span>
-                                <span class="inline-flex items-center justify-center w-6 h-6 bg-red-600 text-white rounded-full text-xs font-bold">${draw.pb}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <span class="text-gray-400 hover:text-blue-500 transition-colors duration-200">
-                    View Matches <i class="fas fa-arrow-right ml-1"></i>
-                </span>
-            </div>
-        `;
-    });
-
-    recentDrawsContainer.innerHTML = html;
-}
-
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-    loadRecentDraws();
+    // Draw loading is now handled by index.html inline code
+
 
     // Add event listener for the modal overlay to close it when clicked
     const modalOverlay = document.getElementById('drawMatchesModal');
@@ -616,16 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Handle draw card clicks for detailed view
-    document.addEventListener('click', function(e) {
-        const drawCard = e.target.closest('.draw-card');
-        if (drawCard && !e.target.closest('button')) {
-            const drawDate = drawCard.dataset.drawDate;
-            if (drawDate) {
-                showDetailedPredictionModal(drawDate);
-            }
-        }
-    });
+    // Legacy draw-card click handler removed; cards call showDrawMatchesModal via inline onclick
 });
 
 // Mock PowerballUtils and createErrorPlaceholder for demonstration if they are not defined

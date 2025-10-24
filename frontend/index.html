@@ -1,6 +1,30 @@
 <!doctype html>
 <html lang="en" class="dark">
     <head>
+        <!-- Tailwind CSS CDN (utilities used throughout the page) -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- Font Awesome (icons used in UI) -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- Project styles (loaded after Tailwind to allow overrides) -->
+    <link rel="stylesheet" href="/css/styles.css?v=20251022c">
+    <!-- Dark theme tokens and overrides -->
+    <link rel="stylesheet" href="/css/dark-theme.css?v=20251022c">
+        <!-- Strengthen no-cache for HTML in proxies/browsers -->
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta http-equiv="Pragma" content="no-cache" />
+        <meta http-equiv="Expires" content="0" />
+        <!-- Early Service Worker cleanup to avoid stale cached assets on first load -->
+        <script>
+        if ('serviceWorker' in navigator) {
+            try {
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                    for (const r of regs) { r.unregister(); }
+                });
+            } catch (e) {
+                console.log('SW early cleanup failed', e);
+            }
+        }
+        </script>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#00e0ff" />
@@ -14,68 +38,10 @@
         <meta property="og:description" content="AI-powered Powerball analysis platform with instant ticket scanning and data-driven insights." />
         <meta property="og:url" content="https://shiolplus.com" />
         <meta property="og:image" content="/static/og-image.png" />
-        
-        <!-- Twitter Card -->
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="SHIOL+ | Smart Outcomes Platform" />
-        <meta name="twitter:description" content="AI-powered Powerball analysis platform with instant ticket scanning." />
-        <meta name="twitter:image" content="/static/og-image.png" />
-
-        <!-- PWA Manifest -->
-        <link rel="manifest" href="/manifest.json" />
-        
-        <!-- Favicons -->
-        <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-        <link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32x32.png">
-        <link rel="icon" type="image/png" sizes="16x16" href="/static/icon-16x16.png">
-        <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script>
-            tailwind.config = {
-                theme: {
-                    extend: {
-                        colors: {
-                            canvas: {
-                                DEFAULT: '#0d0f1a',
-                                card: '#141726',
-                                surface: '#1a1f33',
-                                line: 'rgba(255,255,255,0.08)',
-                                accent: '#00e0ff',
-                                accent2: '#ff4d6d'
-                            }
-                        }
-                    }
-                }
-            }
-        </script>
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-        />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap"
-            rel="stylesheet"
-        />
-        <link rel="stylesheet" href="css/dark-theme.css" />
-        <link rel="stylesheet" href="css/styles.css" />
-        <style>
-            body {
-                font-family: "Inter", sans-serif;
-            }
-            .gradient-text {
-                background: linear-gradient(to right, #00e0ff, #ff4d6d);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-            }
-        </style>
     </head>
-    <body class="bg-canvas text-gray-100 antialiased font-sans">
-        <!-- Header -->
-        <header
-            class="sticky top-0 z-50 bg-canvas-card/95 backdrop-blur border-b border-canvas-line"
-        >
+    <body class="bg-canvas-bg min-h-screen">
+        <!-- Header / Navigation -->
+        <header class="border-b border-canvas-line bg-canvas-card sticky top-0 z-50 shadow-sm">
             <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center h-16">
                     <div class="flex items-center">
@@ -509,7 +475,7 @@
                         >
                             <button
                                 id="preview-numbers-btn"
-                                class="inline-flex items-center px-6 py-3 bg-canvas-accent hover:opacity-90 text-white font-semibold rounded-lg transition-opacity duration-200"
+                                class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-[#00e0ff] via-[#8b5cf6] to-[#ff4d6d] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity duration-200 shadow-lg"
                             >
                                 <i class="fas fa-eye mr-2"></i>
                                 Preview Numbers Detected
@@ -833,7 +799,7 @@
                                                 type="number"
                                                 id="play-1-num-1"
                                                 min="1"
-                                                max="69"
+                                               
                                                 placeholder="1-69"
                                                 class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                                             />
@@ -841,7 +807,7 @@
                                                 type="number"
                                                 id="play-1-num-2"
                                                 min="1"
-                                                max="69"
+                                               
                                                 placeholder="1-69"
                                                 class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                                             />
@@ -1327,12 +1293,20 @@
                             <div
                                 class="bg-[#1a1f2e] p-5 rounded-lg border border-white/5"
                             >
-                                <div
-                                    class="text-3xl font-bold text-white mb-1"
+                                    <div class="flex items-baseline gap-2">
+                                        <div
+                                            class="text-3xl font-bold text-white"
                                     id="modal-matches-found"
                                 >
                                     0
                                 </div>
+                                        <div
+                                            class="text-sm text-white/40"
+                                            id="modal-win-rate"
+                                        >
+                                            (0%)
+                                        </div>
+                                    </div>
                                 <div
                                     class="text-sm text-white/60"
                                 >
@@ -1395,6 +1369,11 @@
                                         </th>
                                         <th
                                             class="px-4 py-3 text-left text-xs font-medium text-white/60 uppercase tracking-wider"
+                                            >
+                                                Strategy
+                                            </th>
+                                            <th
+                                                class="px-4 py-3 text-left text-xs font-medium text-white/60 uppercase tracking-wider"
                                         >
                                             Matches
                                         </th>
@@ -1412,8 +1391,66 @@
                                     <!-- AI insight matches will be loaded here -->
                                 </tbody>
                             </table>
+                                <div id="modal-no-winners" class="hidden text-center py-8 text-white/60">
+                                    <i class="fas fa-info-circle text-2xl mb-2"></i>
+                                    <p>No winning outcomes for this draw.</p>
+                                </div>
                         </div>
                         
+                            <!-- Strategy Breakdown Section -->
+                            <div id="modal-strategy-section" class="hidden mt-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-chart-bar text-canvas-secondary"></i>
+                                        <h4 class="text-lg font-semibold text-white">Strategy Breakdown</h4>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button
+                                            onclick="window.switchStrategyView('ranking')"
+                                            id="btn-strategy-ranking"
+                                            class="px-3 py-1 text-sm rounded bg-canvas-accent text-white font-medium"
+                                        >
+                                            Ranking
+                                        </button>
+                                        <button
+                                            onclick="window.switchStrategyView('bars')"
+                                            id="btn-strategy-bars"
+                                            class="px-3 py-1 text-sm rounded bg-canvas-surface text-white/70 hover:bg-canvas-accent/30"
+                                        >
+                                            Bars
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="strategy-content-container">
+                                    <!-- Strategy content will be rendered here -->
+                                </div>
+                            </div>
+
+                            <!-- Match Distribution + Prize Tiers (Two Columns) -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                                <!-- Match Distribution -->
+                                <div id="modal-distribution-section" class="hidden">
+                                    <div class="flex items-center gap-2 mb-4">
+                                        <i class="fas fa-chart-pie text-canvas-accent"></i>
+                                        <h4 class="text-lg font-semibold text-white">Match Distribution</h4>
+                                    </div>
+                                    <div id="distribution-content" class="space-y-3">
+                                        <!-- Distribution bars will be rendered here -->
+                                    </div>
+                                </div>
+
+                                <!-- Prize Tiers -->
+                                <div id="modal-prize-tiers-section" class="hidden">
+                                    <div class="flex items-center gap-2 mb-4">
+                                        <i class="fas fa-trophy text-yellow-400"></i>
+                                        <h4 class="text-lg font-semibold text-white">Prize Tiers</h4>
+                                    </div>
+                                    <div id="prize-tiers-content" class="space-y-2">
+                                        <!-- Prize tiers will be rendered here -->
+                                    </div>
+                                </div>
+                            </div>
+
                         <!-- Close Button -->
                         <div class="mt-6 text-center">
                             <button
@@ -2012,6 +2049,28 @@
                             },
                         );
 
+                        // Format total prize
+                        let prizeDisplay = '';
+                        let prizeClass = '';
+                        const totalPrize = draw.total_prize || 0;
+                        
+                        if (totalPrize >= 100000000) {
+                            prizeDisplay = '💰 JACKPOT!';
+                            prizeClass = 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-white font-bold px-3 py-1 rounded-full shadow-lg text-xs';
+                        } else if (totalPrize >= 1000000) {
+                            prizeDisplay = `$${(totalPrize / 1000000).toFixed(1)}M`;
+                            prizeClass = 'bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold px-3 py-1 rounded-full shadow-md text-xs';
+                        } else if (totalPrize >= 1000) {
+                            prizeDisplay = `$${(totalPrize / 1000).toFixed(1)}K`;
+                            prizeClass = 'bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold px-3 py-1 rounded-full shadow-md text-xs';
+                        } else if (totalPrize > 0) {
+                            prizeDisplay = `$${totalPrize.toFixed(0)}`;
+                            prizeClass = 'bg-gradient-to-r from-gray-400 to-gray-500 text-white font-medium px-3 py-1 rounded-full text-xs';
+                        } else {
+                            prizeDisplay = '$0';
+                            prizeClass = 'bg-gray-700/50 text-gray-400 font-medium px-3 py-1 rounded-full text-xs';
+                        }
+
                         drawCard.innerHTML = `
                         <div class="flex items-center justify-between">
                             <div class="flex items-center space-x-3">
@@ -2031,8 +2090,14 @@
                                     <span class="num-chip powerball-chip">${draw.pb}</span>
                                 </div>
                             </div>
-                            <div class="text-right">
-                                <i class="fas fa-chevron-right text-white/40"></i>
+                            <div class="flex items-center space-x-4">
+                                <div class="text-center">
+                                    <p class="text-xs text-white/50 mb-1">Total Prize</p>
+                                    <span class="${prizeClass}">${prizeDisplay}</span>
+                                </div>
+                                <div class="text-right">
+                                    <i class="fas fa-chevron-right text-white/40"></i>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -2098,121 +2163,8 @@
                 }
             });
 
-            // Modal functions
-            async function showDrawMatchesModal(drawDate) {
-                console.log("Opening modal for draw date:", drawDate);
-
-                const modal = document.getElementById("drawMatchesModal");
-                if (!modal) {
-                    console.error("Modal element not found");
-                    return;
-                }
-
-                // Show modal
-                modal.classList.remove("hidden");
-
-                // Reset states
-                document
-                    .getElementById("modal-loading")
-                    .classList.remove("hidden");
-                document.getElementById("modal-empty").classList.add("hidden");
-                document
-                    .getElementById("modal-content")
-                    .classList.add("hidden");
-
-                try {
-                    // Fetch draw matches data
-                    const response = await fetch(
-                        `/api/v1/public/predictions/by-draw/${encodeURIComponent(drawDate)}?min_matches=0&limit=200`,
-                    );
-                    if (!response.ok) {
-                        throw new Error(
-                            `HTTP ${response.status}: ${response.statusText}`,
-                        );
-                    }
-
-                    const data = await response.json();
-                    console.log("Modal data received:", data);
-
-                    // Hide loading
-                    document
-                        .getElementById("modal-loading")
-                        .classList.add("hidden");
-
-                    if (data.predictions && data.predictions.length > 0) {
-                        // Show draw date
-                        displayModalDrawDate(data.draw_date);
-
-                        // Show winning numbers
-                        displayModalWinningNumbers(data.draw_numbers);
-
-                        // Calculate prizes for all predictions
-                        const predictionsWithPrizes = data.predictions.map(
-                            (pred) => ({
-                                ...pred,
-                                prize_info: calculatePrizeAmount(
-                                    pred.matches_main || 0,
-                                    pred.matches_powerball || false,
-                                ),
-                            }),
-                        );
-
-                        // Filter to show only winning predictions and sort by original ID to maintain original rank
-                        const winningPredictions = predictionsWithPrizes
-                            .filter((p) => p.prize_info.amount > 0)
-                            .sort((a, b) => a.id - b.id); // Sort by ID to maintain original order
-
-                        // Create a map of ID to original rank (1-100)
-                        const allPredictionsSorted = data.predictions.sort(
-                            (a, b) => a.id - b.id,
-                        );
-                        const idToRankMap = {};
-                        allPredictionsSorted.forEach((pred, index) => {
-                            idToRankMap[pred.id] = index + 1;
-                        });
-
-                        // Calculate total prizes
-                        const totalPrizes = winningPredictions.reduce(
-                            (sum, pred) => sum + (pred.prize_info.amount || 0),
-                            0,
-                        );
-
-                        // Create summary from data
-                        const summary = {
-                            total_predictions: data.predictions.length,
-                            total_with_matches: winningPredictions.length,
-                            best_match_description:
-                                getBestMatchDescription(winningPredictions),
-                            total_prizes: totalPrizes,
-                        };
-                        displayModalSummary(summary);
-
-                        // Show predictions table
-                        displayModalPredictions(
-                            winningPredictions,
-                            data.draw_numbers,
-                            idToRankMap,
-                        );
-
-                        // Show content
-                        document
-                            .getElementById("modal-content")
-                            .classList.remove("hidden");
-                    } else {
-                        document
-                            .getElementById("modal-empty")
-                            .classList.remove("hidden");
-                    }
-                } catch (error) {
-                    console.error("Error loading modal data:", error);
-                    document
-                        .getElementById("modal-loading")
-                        .classList.add("hidden");
-                    document
-                        .getElementById("modal-empty")
-                        .classList.remove("hidden");
-                }
-            }
+            // Modal functions: legacy inline implementation removed to avoid conflict with centralized public.js
+            // The global `showDrawMatchesModal` now delegates to `fetchDrawAnalytics` when available.
 
             function closeDrawMatchesModal() {
                 const modal = document.getElementById("drawMatchesModal");
@@ -2708,6 +2660,8 @@
         <script src="js/device-fingerprint.js"></script>
         <script src="js/auth-manager.js"></script>
         <script src="js/ticket-verification.js"></script>
+        <script src="js/analytics-modal.js"></script>
+        <script src="js/public.js"></script>
         
         <!-- Unregister Service Worker (PWA Removed) -->
         <script>

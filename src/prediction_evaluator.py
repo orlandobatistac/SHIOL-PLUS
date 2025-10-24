@@ -7,46 +7,12 @@ This module is called as part of the pipeline to automatically
 evaluate predictions from previous drawings.
 """
 
-import sqlite3
-from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Tuple
+from typing import Dict
 from loguru import logger
 import traceback
 
 from src.database import get_db_connection
-
-
-def calculate_prize_amount(main_matches, powerball_match):
-    """
-    Calculate prize amount based on matches.
-    
-    Args:
-        main_matches: Number of main number matches (0-5)
-        powerball_match: Boolean indicating if powerball matched
-        
-    Returns:
-        tuple: (prize_amount, prize_description)
-    """
-    if main_matches == 5 and powerball_match:
-        return (100000000.0, "Jackpot - 5 + Powerball")
-    elif main_matches == 5:
-        return (1000000.0, "Match 5")
-    elif main_matches == 4 and powerball_match:
-        return (50000.0, "Match 4 + Powerball")
-    elif main_matches == 4:
-        return (100.0, "Match 4")
-    elif main_matches == 3 and powerball_match:
-        return (100.0, "Match 3 + Powerball")
-    elif main_matches == 3:
-        return (7.0, "Match 3")
-    elif main_matches == 2 and powerball_match:
-        return (7.0, "Match 2 + Powerball")
-    elif main_matches == 1 and powerball_match:
-        return (4.0, "Match 1 + Powerball")
-    elif powerball_match:
-        return (4.0, "Powerball Only")
-    else:
-        return (0.0, "No Prize")
+from src.prize_calculator import calculate_prize_amount
 
 
 class PredictionEvaluator:
@@ -142,7 +108,7 @@ class PredictionEvaluator:
                 if not actual_result:
                     logger.warning(f"No actual drawing result found for {draw_date}")
                     return {'error': f'No drawing result for {draw_date}'}
-                
+
                 # Validate draw result data
                 if any(x is None for x in actual_result[:5]) or actual_result[5] is None:
                     logger.error(f"Invalid draw result data for {draw_date}: {actual_result}")
@@ -174,7 +140,7 @@ class PredictionEvaluator:
                 for prediction in predictions:
                     try:
                         pred_id, n1, n2, n3, n4, n5, powerball, already_evaluated = prediction
-                        
+
                         # Validate prediction data
                         if any(x is None for x in prediction[:6]) or powerball is None:
                             logger.warning(f"Skipping prediction {pred_id} due to invalid data")
@@ -390,7 +356,7 @@ class PredictionEvaluator:
                 """, (days_back,))
 
                 overall_stats = cursor.fetchone()
-                
+
                 # Handle case where no evaluated predictions are found
                 if not overall_stats:
                     return {
@@ -446,30 +412,3 @@ class PredictionEvaluator:
         except Exception as e:
             logger.error(f"Error getting evaluation statistics: {e}")
             return {'error': str(e)}
-
-
-def run_prediction_evaluation() -> Dict:
-    """
-    Main function to run prediction evaluation.
-    Called by the pipeline after data update step.
-
-    Returns:
-        Dict with evaluation results
-    """
-    logger.info("Starting prediction evaluation process...")
-
-    evaluator = PredictionEvaluator()
-    results = evaluator.evaluate_recent_predictions(days_back=7)
-
-    if 'error' not in results:
-        logger.info(f"Prediction evaluation completed successfully: {results.get('total_predictions_evaluated', 0)} predictions evaluated")
-    else:
-        logger.error(f"Prediction evaluation failed: {results['error']}")
-
-    return results
-
-
-if __name__ == "__main__":
-    # For testing
-    results = run_prediction_evaluation()
-    print("Evaluation Results:", results)

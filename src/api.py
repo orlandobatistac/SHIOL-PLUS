@@ -1,14 +1,11 @@
-from fastapi import FastAPI, APIRouter, Query, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from loguru import logger
 import os
 from datetime import datetime
-import asyncio
 import uuid
-from typing import Optional, Dict, Any, List
-from pathlib import Path
+from typing import Dict, List
 import traceback
 import subprocess
 
@@ -22,18 +19,13 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 import pytz
-from pydantic import BaseModel
-from starlette import status
 from starlette.responses import Response
 
 # Import remaining API components (simplified)
-from src.simple_utils import convert_numpy_types, format_prediction_response
 from src.api_prediction_endpoints import prediction_router, draw_router, set_prediction_components
 from src.api_public_endpoints import public_frontend_router, set_public_components
 from src.api_ticket_endpoints import ticket_router
 from src.api_auth_endpoints import auth_router
-from src.auth_middleware import require_admin_access
-import subprocess
 import psutil
 import shutil
 import platform
@@ -47,7 +39,6 @@ pipeline_logs = []  # Store recent pipeline logs
 # --- Scheduler and App Lifecycle ---
 # Configure persistent jobstore using SQLite
 # Use relative path from project root for portability (Replit/VPS)
-import os
 scheduler_db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'scheduler.db')
 scheduler_db_url = f'sqlite:///{scheduler_db_path}'
 
@@ -184,7 +175,7 @@ async def evaluate_predictions_for_draw(draw_date: str):
             # Update predictions_log evaluated fields
             try:
                 cursor.execute(
-                    "UPDATE generated_tickets SET evaluated = 1, matches_wb = ?, matches_pb = ?, prize_amount = ?, prize_description = ?, evaluation_date = CURRENT_TIMESTAMP WHERE id = ?",
+                    "UPDATE generated_tickets SET evaluated = 1, matches_wb = ?, matches_pb = ?, prize_won = ?, prize_description = ?, evaluation_date = CURRENT_TIMESTAMP WHERE id = ?",
                     (matches_main, matches_pb, float(prize_amount), prize_description or '', pred_id)
                 )
             except Exception as ex:
@@ -283,7 +274,7 @@ async def trigger_full_pipeline_automatically():
         try:
             latest_draw = db.get_latest_draw_date()
             if latest_draw:
-                evaluation_results = await evaluate_predictions_for_draw(latest_draw)
+                await evaluate_predictions_for_draw(latest_draw)
                 logger.info(f"[{execution_id}] ✅ Evaluated predictions for {latest_draw}")
             else:
                 logger.warning(f"[{execution_id}] No draw to evaluate against")
@@ -478,7 +469,7 @@ async def lifespan(app: FastAPI):
     # Pipeline orchestrator is deprecated and removed
     # On startup
     logger.info("Application startup...")
-    
+
     # Initialize database and create tables
     from src.database import initialize_database
     try:
@@ -649,7 +640,7 @@ async def get_scheduler_health():
     """
     try:
         jobs = scheduler.get_jobs()
-        
+
         return {
             "scheduler_running": scheduler.running,
             "total_jobs": len(jobs),
@@ -684,29 +675,29 @@ async def get_system_stats():
         from src.database import get_db_connection
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Get database statistics
         cursor.execute("SELECT COUNT(*) FROM powerball_draws")
         total_draws = cursor.fetchone()[0]
 
         cursor.execute("SELECT COUNT(*) FROM generated_tickets")
         total_predictions = cursor.fetchone()[0]
-        
+
         cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
-        
+
         cursor.execute("SELECT COUNT(*) FROM users WHERE is_premium = 1")
         premium_users = cursor.fetchone()[0]
-        
+
         # Get latest pipeline execution
         cursor.execute("""
-            SELECT created_at, prize_description 
+            SELECT created_at, strategy_used 
             FROM generated_tickets 
             ORDER BY created_at DESC 
             LIMIT 1
         """)
         latest_prediction = cursor.fetchone()
-        
+
         # Get latest draw
         cursor.execute("""
             SELECT draw_date, n1, n2, n3, n4, n5, pb 
@@ -715,7 +706,7 @@ async def get_system_stats():
             LIMIT 1
         """)
         latest_draw = cursor.fetchone()
-        
+
         # Get predictions with matches
         cursor.execute("""
             SELECT COUNT(*) FROM generated_tickets 
@@ -723,9 +714,9 @@ async def get_system_stats():
             AND matches_wb > 0
         """)
         winning_predictions = cursor.fetchone()[0]
-        
+
         conn.close()
-        
+
         return {
             "database": {
                 "total_draws": total_draws,
@@ -907,17 +898,17 @@ async def status_dashboard_page(request: Request):
     """Serve system status dashboard page (Admin access required)"""
     from fastapi.responses import RedirectResponse
     from src.auth_middleware import get_user_from_request
-    
+
     # Check authentication manually to provide better UX
     user = get_user_from_request(request)
-    
+
     if not user:
         # Not authenticated - redirect to home page and trigger login modal
         return RedirectResponse(url="/?login=required", status_code=302)
-    
+
     # Debug logging
     logger.info(f"User accessing /status: {user.get('username')} - is_admin: {user.get('is_admin', False)}")
-    
+
     if not user.get("is_admin", False):
         # Authenticated but not admin - show friendly error page
         error_html = """
@@ -945,7 +936,7 @@ async def status_dashboard_page(request: Request):
         </html>
         """
         return Response(content=error_html, media_type="text/html", status_code=403)
-    
+
     # User is authenticated and admin - serve status page
     status_path = os.path.join(FRONTEND_DIR, "status.html")
     if os.path.exists(status_path):
@@ -975,13 +966,13 @@ async def cache_control_middleware(request, call_next):
     This prevents PWA service worker cache issues and ensures updates are visible immediately.
     """
     response = await call_next(request)
-    
+
     # Apply no-cache headers to HTML, CSS, and JS files
     if request.url.path.endswith(('.html', '.css', '.js')) or request.url.path == '/':
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
-    
+
     return response
 
 # Mount frontend last (catch-all for HTML)

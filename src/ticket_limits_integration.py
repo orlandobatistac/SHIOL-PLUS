@@ -5,9 +5,9 @@ Implements weekly limits: Guest (1), Free (3), Premium (unlimited).
 """
 
 import sqlite3
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Optional, Any
 from datetime import datetime, timedelta
-from fastapi import Request, HTTPException
+from fastapi import Request
 from loguru import logger
 
 # Import existing authentication functions
@@ -20,7 +20,7 @@ from src.device_fingerprint import generate_device_fingerprint, validate_fingerp
 # Weekly verification limits by user type
 VERIFICATION_LIMITS = {
     "guest": 1,        # Guest users: 1 verification per week
-    "free_user": 3,    # Registered free users: 3 verifications per week  
+    "free_user": 3,    # Registered free users: 3 verifications per week
     "premium": -1      # Premium users: unlimited verifications
 }
 
@@ -51,12 +51,12 @@ def check_verification_access(request: Request, device_info: Optional[Dict] = No
     try:
         # 1. Get user from existing authentication system
         user = get_user_from_request(request)
-        
+
         # 2. Check IP rate limiting first (abuse protection)
         ip_check = check_ip_rate_limit(request)
         if not ip_check["allowed"]:
             return ip_check
-        
+
         # 3. Handle authenticated users
         if user:
             if user.get("is_premium", False):
@@ -64,7 +64,7 @@ def check_verification_access(request: Request, device_info: Optional[Dict] = No
                 return {
                     "allowed": True,
                     "remaining": -1,
-                    "user_type": "premium", 
+                    "user_type": "premium",
                     "weekly_limit": -1,
                     "reset_time": get_next_reset_datetime(),
                     "is_registered": True,
@@ -74,7 +74,7 @@ def check_verification_access(request: Request, device_info: Optional[Dict] = No
             else:
                 # Free registered users: 3 verifications per week
                 return check_user_weekly_limit(user["id"], VERIFICATION_LIMITS["free_user"])
-        
+
         # 4. Handle guest users (unauthenticated)
         else:
             if not device_info:
@@ -84,7 +84,7 @@ def check_verification_access(request: Request, device_info: Optional[Dict] = No
                     "user_type": "guest",
                     "is_registered": False
                 }
-            
+
             # Validate and generate device fingerprint
             try:
                 validated_data = validate_fingerprint_data(device_info)
@@ -93,13 +93,13 @@ def check_verification_access(request: Request, device_info: Optional[Dict] = No
                 return {
                     "allowed": False,
                     "error": f"Invalid device data: {str(e)}",
-                    "user_type": "guest", 
+                    "user_type": "guest",
                     "is_registered": False
                 }
-            
+
             # Guest users: 1 verification per week
             return check_guest_weekly_limit(device_fingerprint, VERIFICATION_LIMITS["guest"])
-    
+
     except Exception as e:
         logger.error(f"Error checking verification access: {e}")
         return {
@@ -124,18 +124,18 @@ def check_user_weekly_limit(user_id: int, weekly_limit: int) -> Dict[str, Any]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             week_start = get_week_start_sunday_et()
-            
+
             # Get or create weekly limit record
             cursor.execute("""
                 SELECT verification_count, last_verification
                 FROM weekly_verification_limits
                 WHERE user_id = ? AND week_start_date = ?
             """, (user_id, week_start))
-            
+
             result = cursor.fetchone()
-            
+
             if result:
                 verification_count, last_verification = result
             else:
@@ -148,10 +148,10 @@ def check_user_weekly_limit(user_id: int, weekly_limit: int) -> Dict[str, Any]:
                 conn.commit()
                 verification_count = 0
                 last_verification = None
-            
+
             # Check if limit exceeded
             remaining = weekly_limit - verification_count
-            
+
             return {
                 "allowed": remaining > 0,
                 "remaining": remaining,
@@ -163,7 +163,7 @@ def check_user_weekly_limit(user_id: int, weekly_limit: int) -> Dict[str, Any]:
                 "used_this_week": verification_count,
                 "last_verification": last_verification
             }
-    
+
     except sqlite3.Error as e:
         logger.error(f"Database error checking user weekly limit: {e}")
         return {
@@ -188,18 +188,18 @@ def check_guest_weekly_limit(device_fingerprint: str, weekly_limit: int) -> Dict
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             week_start = get_week_start_sunday_et()
-            
+
             # Get or create weekly limit record for device
             cursor.execute("""
                 SELECT verification_count, last_verification
                 FROM weekly_verification_limits
                 WHERE device_fingerprint = ? AND week_start_date = ?
             """, (device_fingerprint, week_start))
-            
+
             result = cursor.fetchone()
-            
+
             if result:
                 verification_count, last_verification = result
             else:
@@ -212,10 +212,10 @@ def check_guest_weekly_limit(device_fingerprint: str, weekly_limit: int) -> Dict
                 conn.commit()
                 verification_count = 0
                 last_verification = None
-            
+
             # Check if limit exceeded
             remaining = weekly_limit - verification_count
-            
+
             return {
                 "allowed": remaining > 0,
                 "remaining": remaining,
@@ -227,7 +227,7 @@ def check_guest_weekly_limit(device_fingerprint: str, weekly_limit: int) -> Dict
                 "used_this_week": verification_count,
                 "last_verification": last_verification
             }
-    
+
     except sqlite3.Error as e:
         logger.error(f"Database error checking guest weekly limit: {e}")
         return {
@@ -251,21 +251,21 @@ def record_verification_usage(request: Request, device_info: Optional[Dict] = No
         True if recorded successfully, False on error
     """
     from src.device_fingerprint import get_client_ip
-    
+
     # Enhanced logging for troubleshooting
     client_ip = get_client_ip(request)
     logger.info(f"Recording verification usage - IP: {client_ip}, has_device_info: {device_info is not None}")
-    
+
     try:
         user = get_user_from_request(request)
-        
+
         if user:
             user_id = user.get("id")
             is_premium = user.get("is_premium", False)
             username = user.get("username", "unknown")
-            
+
             logger.info(f"User verification recording - user_id: {user_id}, username: {username}, is_premium: {is_premium}")
-            
+
             # Registered user
             if is_premium:
                 # Premium users don't have limits - no need to record
@@ -281,22 +281,22 @@ def record_verification_usage(request: Request, device_info: Optional[Dict] = No
         else:
             # Guest user
             logger.info("Recording verification for guest user")
-            
+
             if not device_info:
                 logger.error("Device info required for guest verification recording")
                 return False
-                
+
             try:
                 validated_data = validate_fingerprint_data(device_info)
                 device_fingerprint = generate_device_fingerprint(request, validated_data)
-                
+
                 logger.info(f"Guest verification recording - fingerprint: {device_fingerprint[:16]}..., IP: {client_ip}")
-                
+
                 return record_guest_verification(device_fingerprint)
             except ValueError as e:
                 logger.error(f"Invalid device data for verification recording: {e}")
                 return False
-    
+
     except Exception as e:
         logger.error(f"Error recording verification usage: {e}")
         return False
@@ -308,22 +308,22 @@ def record_user_verification(user_id: int) -> bool:
         with get_db_connection() as conn:
             # Use IMMEDIATE transaction to prevent race conditions
             conn.execute("BEGIN IMMEDIATE")
-            
+
             try:
                 cursor = conn.cursor()
                 week_start = get_week_start_sunday_et()
                 now = datetime.now()
-                
+
                 # Get weekly limit for free registered users (5 verifications)
                 weekly_limit = 5
-                
+
                 # Ensure weekly row exists (INSERT OR IGNORE for atomicity)
                 cursor.execute("""
                     INSERT OR IGNORE INTO weekly_verification_limits 
                     (user_id, week_start_date, verification_count, user_type, created_at, updated_at)
                     VALUES (?, ?, 0, 'registered', ?, ?)
                 """, (user_id, week_start, now, now))
-                
+
                 # Atomic check-and-increment: only update if under limit
                 cursor.execute("""
                     UPDATE weekly_verification_limits
@@ -332,7 +332,7 @@ def record_user_verification(user_id: int) -> bool:
                         updated_at = ?
                     WHERE user_id = ? AND week_start_date = ? AND verification_count < ?
                 """, (now, now, user_id, week_start, weekly_limit))
-                
+
                 if cursor.rowcount == 0:
                     # Update failed - either limit exceeded or race condition
                     cursor.execute("""
@@ -340,25 +340,25 @@ def record_user_verification(user_id: int) -> bool:
                         FROM weekly_verification_limits
                         WHERE user_id = ? AND week_start_date = ?
                     """, (user_id, week_start))
-                    
+
                     current_result = cursor.fetchone()
                     if current_result:
                         current = current_result[0]
                         logger.warning(f"ATOMIC LIMIT ENFORCEMENT: User {user_id} limit exceeded or race condition: {current}/{weekly_limit}")
                     else:
                         logger.error(f"ATOMIC LIMIT ENFORCEMENT: Failed to find verification record for user {user_id}")
-                    
+
                     conn.rollback()
                     return False
-                
+
                 conn.commit()
                 logger.info(f"ATOMIC SUCCESS: Recorded verification for user {user_id} - limit enforced atomically")
                 return True
-                
+
             except Exception as e:
                 conn.rollback()
                 raise e
-    
+
     except sqlite3.Error as e:
         logger.error(f"Database error recording user verification: {e}")
         return False
@@ -370,22 +370,22 @@ def record_guest_verification(device_fingerprint: str) -> bool:
         with get_db_connection() as conn:
             # Use IMMEDIATE transaction to prevent race conditions
             conn.execute("BEGIN IMMEDIATE")
-            
+
             try:
                 cursor = conn.cursor()
                 week_start = get_week_start_sunday_et()
                 now = datetime.now()
-                
+
                 # Get weekly limit for guest users (3 verifications)
                 weekly_limit = 3
-                
+
                 # Ensure weekly row exists (INSERT OR IGNORE for atomicity)
                 cursor.execute("""
                     INSERT OR IGNORE INTO weekly_verification_limits 
                     (device_fingerprint, week_start_date, verification_count, user_type, created_at, updated_at)
                     VALUES (?, ?, 0, 'guest', ?, ?)
                 """, (device_fingerprint, week_start, now, now))
-                
+
                 # Atomic check-and-increment: only update if under limit
                 cursor.execute("""
                     UPDATE weekly_verification_limits
@@ -394,7 +394,7 @@ def record_guest_verification(device_fingerprint: str) -> bool:
                         updated_at = ?
                     WHERE device_fingerprint = ? AND week_start_date = ? AND verification_count < ?
                 """, (now, now, device_fingerprint, week_start, weekly_limit))
-                
+
                 if cursor.rowcount == 0:
                     # Update failed - either limit exceeded or race condition
                     cursor.execute("""
@@ -402,25 +402,25 @@ def record_guest_verification(device_fingerprint: str) -> bool:
                         FROM weekly_verification_limits
                         WHERE device_fingerprint = ? AND week_start_date = ?
                     """, (device_fingerprint, week_start))
-                    
+
                     current_result = cursor.fetchone()
                     if current_result:
                         current = current_result[0]
                         logger.warning(f"ATOMIC LIMIT ENFORCEMENT: Device {device_fingerprint[:16]}... limit exceeded or race condition: {current}/{weekly_limit}")
                     else:
                         logger.error(f"ATOMIC LIMIT ENFORCEMENT: Failed to find verification record for device {device_fingerprint[:16]}...")
-                    
+
                     conn.rollback()
                     return False
-                
+
                 conn.commit()
                 logger.info(f"ATOMIC SUCCESS: Recorded verification for guest device {device_fingerprint[:16]}... - limit enforced atomically")
                 return True
-                
+
             except Exception as e:
                 conn.rollback()
                 raise e
-    
+
     except sqlite3.Error as e:
         logger.error(f"Database error recording guest verification: {e}")
         return False
@@ -438,28 +438,28 @@ def check_ip_rate_limit(request: Request) -> Dict[str, Any]:
     """
     try:
         from src.device_fingerprint import get_client_ip
-        
+
         client_ip = get_client_ip(request)
         if not client_ip:
             # If we can't get IP, allow through (don't block legitimate users)
             return {"allowed": True}
-        
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Current hour window (truncated to hour)
             now = datetime.now()
             hour_window = now.replace(minute=0, second=0, microsecond=0)
-            
+
             # Check current hour's request count
             cursor.execute("""
                 SELECT request_count
                 FROM ip_rate_limits
                 WHERE ip_address = ? AND hour_window = ?
             """, (client_ip, hour_window))
-            
+
             result = cursor.fetchone()
-            
+
             if result:
                 request_count = result[0]
                 if request_count >= IP_RATE_LIMIT_PER_HOUR:
@@ -470,16 +470,16 @@ def check_ip_rate_limit(request: Request) -> Dict[str, Any]:
                         "user_type": "rate_limited",
                         "is_registered": False
                     }
-            
+
             # Allow request and increment counter
             cursor.execute("""
                 INSERT OR REPLACE INTO ip_rate_limits (ip_address, hour_window, request_count)
                 VALUES (?, ?, COALESCE((SELECT request_count FROM ip_rate_limits WHERE ip_address = ? AND hour_window = ?), 0) + 1)
             """, (client_ip, hour_window, client_ip, hour_window))
-            
+
             conn.commit()
             return {"allowed": True}
-    
+
     except sqlite3.Error as e:
         logger.error(f"Database error checking IP rate limit: {e}")
         # On database error, don't block requests
@@ -501,54 +501,19 @@ def get_limits_info(request: Request, device_info: Optional[Dict] = None) -> Dic
         Complete limits information for frontend
     """
     access_info = check_verification_access(request, device_info)
-    
+
     # Add time formatting for frontend
     if "reset_time" in access_info:
         reset_time = access_info["reset_time"]
         time_until_reset = get_time_until_reset()
-        
+
         access_info.update({
             "reset_time_formatted": reset_time.strftime("%A at %H:%M ET"),
             "time_until_reset_hours": int(time_until_reset.total_seconds() // 3600),
             "time_until_reset_readable": str(time_until_reset).split('.')[0],  # Remove microseconds
         })
-    
+
     return access_info
-
-
-def cleanup_old_limits_records():
-    """
-    Cleanup old weekly limits records (older than 4 weeks).
-    Run this periodically to prevent database growth.
-    """
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Delete records older than 4 weeks
-            cutoff_date = get_week_start_sunday_et() - timedelta(weeks=4)
-            
-            cursor.execute("""
-                DELETE FROM weekly_verification_limits
-                WHERE week_start_date < ?
-            """, (cutoff_date,))
-            
-            deleted_count = cursor.rowcount
-            
-            # Also cleanup old IP rate limit records (older than 48 hours)
-            ip_cutoff = datetime.now() - timedelta(hours=48)
-            cursor.execute("""
-                DELETE FROM ip_rate_limits
-                WHERE hour_window < ?
-            """, (ip_cutoff,))
-            
-            deleted_ip_count = cursor.rowcount
-            conn.commit()
-            
-            logger.info(f"Cleanup: Deleted {deleted_count} old weekly limits, {deleted_ip_count} old IP limits")
-            
-    except sqlite3.Error as e:
-        logger.error(f"Error cleaning up old limits records: {e}")
 
 
 if __name__ == "__main__":

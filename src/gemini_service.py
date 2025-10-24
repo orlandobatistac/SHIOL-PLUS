@@ -6,7 +6,7 @@ Replaces Google Vision API with Gemini Pro Vision for enhanced ticket number ext
 import os
 import base64
 import json
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from loguru import logger
 import google.generativeai as genai
 
@@ -22,11 +22,11 @@ class GeminiService:
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
-        
+
         # Configure Gemini AI
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel('gemini-2.5-flash-lite')  # Use most cost-efficient model with vision
-        
+
         # Define the prompt template for lottery ticket analysis
         self.prompt_template = """
 Analyze this lottery ticket image. Extract ALL the lottery plays, numbers, and draw date information. 
@@ -95,10 +95,10 @@ IMPORTANT:
         """
         try:
             logger.debug("Starting Gemini image processing")
-            
+
             # Encode image to base64
             base64_image = self.encode_image_to_base64(image_data)
-            
+
             # Prepare content for Gemini
             contents = [
                 self.prompt_template,
@@ -107,11 +107,11 @@ IMPORTANT:
                     'data': base64_image
                 }
             ]
-            
+
             # Generate response from Gemini
             logger.debug("Sending request to Gemini API")
             response = self.model.generate_content(contents)
-            
+
             if not response.text:
                 logger.error("Empty response from Gemini API")
                 return {
@@ -120,12 +120,12 @@ IMPORTANT:
                     'plays': [],
                     'extraction_method': 'gemini_vision'
                 }
-            
+
             logger.debug(f"Raw Gemini response: {response.text}")
-            
+
             # Clean and parse JSON response
             json_text = response.text.strip()
-            
+
             # Remove any markdown code blocks if present
             if json_text.startswith('```json'):
                 json_text = json_text[7:]
@@ -133,13 +133,13 @@ IMPORTANT:
                 json_text = json_text[3:]
             if json_text.endswith('```'):
                 json_text = json_text[:-3]
-            
+
             json_text = json_text.strip()
-            
+
             # Parse JSON
             try:
                 response_data = json.loads(json_text)
-                
+
                 # Handle new format with draw_date and plays
                 if isinstance(response_data, dict) and 'plays' in response_data:
                     plays_data = response_data['plays']
@@ -158,12 +158,12 @@ IMPORTANT:
                         'plays': [],
                         'extraction_method': 'gemini_vision'
                     }
-                
+
                 # Convert to internal format and validate
                 processed_plays = self._process_and_validate_plays(plays_data)
-                
+
                 logger.info(f"Gemini successfully extracted {len(processed_plays)} plays")
-                
+
                 return {
                     'success': True,
                     'plays': processed_plays,
@@ -172,7 +172,7 @@ IMPORTANT:
                     'extraction_method': 'gemini_vision',
                     'raw_response': response.text
                 }
-                
+
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse Gemini JSON response: {e}")
                 logger.error(f"Response text: {json_text}")
@@ -183,7 +183,7 @@ IMPORTANT:
                     'extraction_method': 'gemini_vision',
                     'raw_response': response.text
                 }
-                
+
         except Exception as e:
             logger.error(f"Gemini processing error: {str(e)}")
             return {
@@ -204,58 +204,58 @@ IMPORTANT:
             List of validated play dictionaries
         """
         processed_plays = []
-        
+
         for i, play in enumerate(plays_data):
             try:
                 # Extract data
                 jugada = play.get('jugada', f'Play{i+1}').upper()
                 numeros = play.get('numeros', [])
                 powerball = play.get('powerball')
-                
+
                 # Validate main numbers
                 if not isinstance(numeros, list) or len(numeros) != 5:
                     logger.warning(f"Play {jugada}: Invalid main numbers count: {len(numeros)}")
                     continue
-                
+
                 # Convert to integers and validate range
                 try:
                     main_numbers = [int(n) for n in numeros]
                     if any(n < 1 or n > 69 for n in main_numbers):
                         logger.warning(f"Play {jugada}: Main numbers out of range 1-69: {main_numbers}")
                         continue
-                    
+
                     # Sort main numbers
                     main_numbers = sorted(main_numbers)
-                    
+
                 except (ValueError, TypeError):
                     logger.warning(f"Play {jugada}: Invalid main number format: {numeros}")
                     continue
-                
+
                 # Validate Powerball
                 try:
                     powerball_num = int(powerball)
                     if powerball_num < 1 or powerball_num > 26:
                         logger.warning(f"Play {jugada}: Powerball out of range 1-26: {powerball_num}")
                         continue
-                        
+
                 except (ValueError, TypeError):
                     logger.warning(f"Play {jugada}: Invalid Powerball format: {powerball}")
                     continue
-                
+
                 # Create validated play
                 processed_play = {
                     'line': jugada,
                     'main_numbers': main_numbers,
                     'powerball': powerball_num
                 }
-                
+
                 processed_plays.append(processed_play)
                 logger.debug(f"Validated play {jugada}: {main_numbers} PB:{powerball_num}")
-                
+
             except Exception as e:
                 logger.error(f"Error processing play {i}: {str(e)}")
                 continue
-        
+
         return processed_plays
 
     def test_connection(self) -> Dict[str, Any]:
@@ -269,7 +269,7 @@ IMPORTANT:
             # Simple text generation test
             model = genai.GenerativeModel('gemini-2.5-flash-lite')
             response = model.generate_content("Hello")
-            
+
             if response.text:
                 logger.info("Gemini API connection test successful")
                 return {
@@ -282,7 +282,7 @@ IMPORTANT:
                     'success': False,
                     'error': 'No response from Gemini API'
                 }
-                
+
         except Exception as e:
             logger.error(f"Gemini API connection test failed: {str(e)}")
             return {

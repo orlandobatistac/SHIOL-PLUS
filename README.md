@@ -61,8 +61,10 @@ Access the full system monitoring interface:
 
 ```
 Username: admin
-Password: [Contact me for demo access]
+Password: Admin123!
 ```
+
+> Security note: These demo admin credentials are for local/testing use only. Change the password and migrate to bcrypt hashing before any public deployment.
 
 **Admin Features:**
 - 📊 Real-time system status and health metrics

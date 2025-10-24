@@ -5,7 +5,6 @@ Uses separate secret key to isolate premium functionality from auth system.
 """
 
 import os
-import secrets
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
@@ -32,31 +31,31 @@ def get_premium_pass_secret() -> str:
         RuntimeError: In production if PREMIUM_PASS_SECRET_KEY not set
     """
     global _premium_pass_secret
-    
+
     if _premium_pass_secret is not None:
         return _premium_pass_secret
-        
+
     # Try to get from environment first
     _premium_pass_secret = os.getenv("PREMIUM_PASS_SECRET_KEY")
-    
+
     if _premium_pass_secret:
         logger.info("PREMIUM_PASS_SECRET_KEY loaded from environment variable")
         return _premium_pass_secret
-    
+
     # Development fallback - different from auth JWT secret
     environment = os.getenv("ENVIRONMENT", "development")
-    
+
     if environment == "production":
         logger.error("PREMIUM_PASS_SECRET_KEY environment variable is required in production!")
         raise RuntimeError("PREMIUM_PASS_SECRET_KEY must be set in production environment")
-    
+
     # Fixed development secret for Premium Pass (different from auth)
     _premium_pass_secret = "SHIOL_PLUS_PREMIUM_PASS_DEV_SECRET_2025_STRIPE_INTEGRATION"
     logger.warning(
         "Using fixed development Premium Pass secret. "
         "Set PREMIUM_PASS_SECRET_KEY environment variable in production!"
     )
-    
+
     return _premium_pass_secret
 
 def generate_jti() -> str:
@@ -78,7 +77,7 @@ def create_premium_pass_token(email: str, stripe_subscription_id: str, user_id: 
     jti = generate_jti()
     now = datetime.utcnow()
     expires_at = now + timedelta(days=PREMIUM_PASS_EXPIRATION_DAYS)
-    
+
     payload = {
         "jti": jti,
         "email": email,
@@ -88,13 +87,13 @@ def create_premium_pass_token(email: str, stripe_subscription_id: str, user_id: 
         "exp": expires_at,
         "type": "premium_pass"
     }
-    
+
     token = jwt.encode(
         payload,
         get_premium_pass_secret(),
         algorithm=PREMIUM_PASS_ALGORITHM
     )
-    
+
     return {
         "token": token,
         "jti": jti,
@@ -123,13 +122,13 @@ def decode_premium_pass_token(token: str) -> Dict[str, Any]:
             get_premium_pass_secret(),
             algorithms=[PREMIUM_PASS_ALGORITHM]
         )
-        
+
         # Validate token type
         if payload.get("type") != "premium_pass":
             raise jwt.InvalidTokenError("Invalid token type")
-            
+
         return payload
-        
+
     except jwt.ExpiredSignatureError:
         logger.info("Premium Pass token has expired")
         raise

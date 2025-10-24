@@ -6,11 +6,9 @@ Uses browser characteristics and HTTP headers to create unique identifiers.
 
 import hashlib
 import json
-import secrets
 from typing import Dict, Optional, Any
 from fastapi import Request
 from loguru import logger
-from datetime import datetime
 
 
 def generate_device_fingerprint(request: Request, frontend_data: Optional[Dict] = None) -> str:
@@ -30,7 +28,7 @@ def generate_device_fingerprint(request: Request, frontend_data: Optional[Dict] 
         - Not designed to track users permanently, just for weekly limits
     """
     fingerprint_components = {}
-    
+
     # HTTP Headers (stable browser characteristics)
     headers = request.headers
     fingerprint_components.update({
@@ -42,7 +40,7 @@ def generate_device_fingerprint(request: Request, frontend_data: Optional[Dict] 
         'sec_ch_ua_platform': headers.get('sec-ch-ua-platform', ''),
         'sec_ch_ua_mobile': headers.get('sec-ch-ua-mobile', ''),
     })
-    
+
     # Client IP (for additional uniqueness, not for tracking)
     client_ip = get_client_ip(request)
     if client_ip:
@@ -50,7 +48,7 @@ def generate_device_fingerprint(request: Request, frontend_data: Optional[Dict] 
         ip_parts = client_ip.split('.')
         if len(ip_parts) == 4:
             fingerprint_components['ip_subnet'] = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.0"
-    
+
     # Frontend JavaScript fingerprint data (if available)
     if frontend_data:
         # Safe characteristics that don't identify users personally
@@ -67,18 +65,18 @@ def generate_device_fingerprint(request: Request, frontend_data: Optional[Dict] 
             'hardware_concurrency': frontend_data.get('hardware_concurrency'),
             'device_memory': frontend_data.get('device_memory'),
         }
-        
+
         # Only include non-null values
         fingerprint_components['frontend'] = {
             k: v for k, v in safe_frontend_data.items() if v is not None
         }
-    
+
     # Create deterministic hash
     fingerprint_string = json.dumps(fingerprint_components, sort_keys=True)
     fingerprint_hash = hashlib.sha256(fingerprint_string.encode('utf-8')).hexdigest()
-    
+
     logger.debug(f"Generated device fingerprint: {fingerprint_hash[:16]}... from {len(fingerprint_components)} components")
-    
+
     return fingerprint_hash
 
 
@@ -97,12 +95,12 @@ def get_client_ip(request: Request, trust_forwarded: bool = False) -> Optional[s
     if trust_forwarded:
         forwarded_headers = [
             'x-forwarded-for',
-            'x-real-ip', 
+            'x-real-ip',
             'cf-connecting-ip',  # Cloudflare
             'x-cluster-client-ip',
             'forwarded'
         ]
-        
+
         for header in forwarded_headers:
             value = request.headers.get(header)
             if value:
@@ -111,11 +109,11 @@ def get_client_ip(request: Request, trust_forwarded: bool = False) -> Optional[s
                 ip = value.split(',')[0].strip()
                 if is_valid_ip(ip):
                     return ip
-    
+
     # Fallback to direct client IP (default secure behavior)
     if request.client and hasattr(request.client, 'host') and request.client.host:
         return request.client.host
-        
+
     return None
 
 
@@ -133,12 +131,12 @@ def is_valid_ip(ip: str) -> bool:
         parts = ip.split('.')
         if len(parts) != 4:
             return False
-            
+
         for part in parts:
             num = int(part)
             if num < 0 or num > 255:
                 return False
-                
+
         return True
     except (ValueError, AttributeError):
         return False
@@ -159,9 +157,9 @@ def validate_fingerprint_data(frontend_data: Dict) -> Dict[str, Any]:
     """
     if not isinstance(frontend_data, dict):
         raise ValueError("Frontend data must be a dictionary")
-    
+
     validated = {}
-    
+
     # Screen resolution (format: "1920x1080")
     if 'screen_resolution' in frontend_data:
         resolution = frontend_data['screen_resolution']
@@ -172,59 +170,59 @@ def validate_fingerprint_data(frontend_data: Dict) -> Dict[str, Any]:
                     validated['screen_resolution'] = resolution
             except (ValueError, AttributeError):
                 pass
-    
+
     # Timezone offset (minutes from UTC)
     if 'timezone_offset' in frontend_data:
         offset = frontend_data['timezone_offset']
         if isinstance(offset, (int, float)) and -720 <= offset <= 720:  # ±12 hours
             validated['timezone_offset'] = int(offset)
-    
+
     # Color depth (bits per pixel)
     if 'color_depth' in frontend_data:
         depth = frontend_data['color_depth']
         if isinstance(depth, int) and depth in [1, 4, 8, 15, 16, 24, 32]:
             validated['color_depth'] = depth
-    
+
     # Platform string
     if 'platform' in frontend_data:
         platform = frontend_data['platform']
         if isinstance(platform, str) and 1 <= len(platform) <= 100:
             validated['platform'] = platform[:100]  # Truncate if too long
-    
-    # Language 
+
+    # Language
     if 'language' in frontend_data:
         language = frontend_data['language']
         if isinstance(language, str) and 1 <= len(language) <= 20:
             validated['language'] = language[:20]
-    
+
     # Boolean flags
     for bool_field in ['cookie_enabled', 'touch_support']:
         if bool_field in frontend_data:
             value = frontend_data[bool_field]
             if isinstance(value, bool):
                 validated[bool_field] = value
-    
+
     # Fingerprint hashes (for canvas, webgl)
     for hash_field in ['canvas_fingerprint', 'webgl_fingerprint']:
         if hash_field in frontend_data:
             value = frontend_data[hash_field]
             if isinstance(value, str) and 10 <= len(value) <= 200:
                 validated[hash_field] = value[:200]
-    
+
     # Hardware specs (integers with reasonable bounds)
     if 'hardware_concurrency' in frontend_data:
         cores = frontend_data['hardware_concurrency']
         if isinstance(cores, int) and 1 <= cores <= 256:
             validated['hardware_concurrency'] = cores
-            
+
     if 'device_memory' in frontend_data:
         memory = frontend_data['device_memory']
         if isinstance(memory, (int, float)) and 0.25 <= memory <= 512:
             validated['device_memory'] = float(memory)
-    
+
     if not validated:
         raise ValueError("No valid fingerprint components found")
-        
+
     return validated
 
 
@@ -239,7 +237,7 @@ def log_fingerprint_generation(fingerprint: str, request: Request, components_co
     """
     client_ip = get_client_ip(request)
     user_agent = request.headers.get('user-agent', 'Unknown')
-    
+
     logger.info(
         f"Device fingerprint generated: {fingerprint[:16]}... "
         f"(components: {components_count}, IP: {client_ip or 'Unknown'}, "
@@ -259,77 +257,5 @@ def create_fallback_fingerprint(request: Request) -> str:
         Fallback fingerprint hash
     """
     logger.warning("Creating fallback fingerprint - frontend data not available")
-    
+
     return generate_device_fingerprint(request, frontend_data=None)
-
-
-def test_fingerprint_consistency():
-    """
-    Test fingerprint generation consistency.
-    """
-    from fastapi.testclient import TestClient
-    from fastapi import FastAPI
-    
-    app = FastAPI()
-    client = TestClient(app)
-    
-    # Mock request data
-    test_frontend_data = {
-        'screen_resolution': '1920x1080',
-        'timezone_offset': -300,
-        'color_depth': 24,
-        'platform': 'MacIntel',
-        'language': 'en-US',
-        'cookie_enabled': True,
-        'canvas_fingerprint': 'test_canvas_hash_123',
-        'webgl_fingerprint': 'test_webgl_hash_456',
-        'touch_support': False,
-        'hardware_concurrency': 8,
-        'device_memory': 8.0
-    }
-    
-    # Test consistency
-    headers = {
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'accept-language': 'en-US,en;q=0.9',
-        'accept-encoding': 'gzip, deflate, br'
-    }
-    
-    with client:
-        response1 = client.get("/", headers=headers)
-        response2 = client.get("/", headers=headers)
-        
-        # Create mock request objects (this is simplified for testing)
-        # In practice, you would use actual Request objects
-        print("Fingerprint consistency test would require actual Request objects")
-        return True
-
-
-if __name__ == "__main__":
-    """Run tests when executed directly."""
-    print("Testing fingerprint validation...")
-    
-    test_data = {
-        'screen_resolution': '1920x1080',
-        'timezone_offset': -300,
-        'color_depth': 24,
-        'platform': 'MacIntel',
-        'language': 'en-US',
-        'cookie_enabled': True,
-        'canvas_fingerprint': 'test_hash_12345',
-        'webgl_fingerprint': 'test_webgl_67890',
-        'touch_support': False,
-        'hardware_concurrency': 8,
-        'device_memory': 8.0
-    }
-    
-    try:
-        validated = validate_fingerprint_data(test_data)
-        print(f"Validation successful: {len(validated)} components validated")
-        for key, value in validated.items():
-            print(f"  {key}: {value}")
-            
-    except ValueError as e:
-        print(f"Validation error: {e}")
-        
-    print("Device fingerprint module tests completed")

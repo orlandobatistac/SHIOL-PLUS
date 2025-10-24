@@ -49,6 +49,21 @@ body {
   color: #ffffff !important;
 }
 
+/* Matched numbers - highlighted in green */
+.num-chip-match {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6) !important;
+  font-weight: 800 !important;
+}
+
+.num-chip-match-pb {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6) !important;
+  font-weight: 800 !important;
+}
+
 /* Blurred State for Locked Predictions */
 .blurred {
   filter: blur(4px);
@@ -157,6 +172,23 @@ body {
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
+}
+
+/* Utility mappings for Tailwind-like custom tokens (no Tailwind build) */
+.bg-canvas-bg { background-color: var(--canvas) !important; }
+.bg-canvas-card { background-color: var(--canvas-card) !important; }
+.bg-canvas-surface { background-color: var(--canvas-surface) !important; }
+.border-canvas-line { border-color: var(--canvas-line) !important; }
+.border-canvas-accent { border-color: var(--canvas-accent) !important; }
+.text-canvas-accent { color: var(--canvas-accent) !important; }
+.text-canvas-accent2 { color: var(--canvas-accent2) !important; }
+
+/* Common gradient combinations used in index.html */
+.bg-gradient-to-b.from-canvas-card.to-canvas-surface {
+  background-image: linear-gradient(to bottom, var(--canvas-card), var(--canvas-surface)) !important;
+}
+.bg-gradient-to-r.from-canvas-accent.to-canvas-accent2 {
+  background-image: linear-gradient(to right, var(--canvas-accent), var(--canvas-accent2)) !important;
 }
 
 ::-webkit-scrollbar-track {

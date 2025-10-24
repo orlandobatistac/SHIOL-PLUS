@@ -1,4 +1,3 @@
-import os
 import traceback
 from datetime import datetime
 from typing import List, Optional
@@ -347,7 +346,7 @@ async def get_detailed_predictions_by_draw(
     try:
         # Validate date format
         try:
-            parsed_date = datetime.strptime(draw_date, '%Y-%m-%d')
+            datetime.strptime(draw_date, '%Y-%m-%d')
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
@@ -474,7 +473,7 @@ async def get_predictions_by_draw_date(
                         continue
                 else:
                     raise ValueError("Invalid date format")
-        except ValueError as e:
+        except ValueError:
             logger.error(f"Invalid date format: {draw_date}")
             raise HTTPException(status_code=400, detail=f"Invalid date format: {draw_date}. Use YYYY-MM-DD")
 
@@ -741,29 +740,29 @@ async def generate_tickets_multi_strategy(count: int = Query(5, ge=1, le=100)):
     """
     try:
         from src.strategy_generators import StrategyManager
-        
+
         logger.info(f"Generating {count} tickets using multi-strategy system")
-        
+
         manager = StrategyManager()
         tickets = manager.generate_balanced_tickets(count)
-        
+
         # Calculate metadata
         all_numbers = set()
         all_powerballs = set()
         strategy_dist = {}
-        
+
         for ticket in tickets:
             all_numbers.update(ticket['white_balls'])
             all_powerballs.add(ticket['powerball'])
-            
+
             strategy = ticket['strategy']
             strategy_dist[strategy] = strategy_dist.get(strategy, 0) + 1
-        
+
         coverage_pct = len(all_numbers) / 69 * 100
-        
+
         # Get current strategy weights
         weights = manager.get_strategy_weights()
-        
+
         response = {
             "success": True,
             "tickets": tickets,
@@ -781,10 +780,10 @@ async def generate_tickets_multi_strategy(count: int = Query(5, ge=1, le=100)):
                 "strategies": f"Tickets generated using {len(strategy_dist)} different strategies based on adaptive weights"
             }
         }
-        
+
         logger.info(f"✅ Generated {count} tickets successfully")
         return response
-        
+
     except Exception as e:
         logger.error(f"Error generating multi-strategy tickets: {e}")
         logger.exception("Full traceback:")
@@ -801,17 +800,17 @@ async def get_strategy_performance():
     """
     try:
         from src.strategy_generators import StrategyManager
-        
+
         manager = StrategyManager()
         summary = manager.get_strategy_summary()
-        
+
         # Sort by ROI
         sorted_strategies = sorted(
             summary.items(),
             key=lambda x: x[1].get('roi', 0),
             reverse=True
         )
-        
+
         return {
             "success": True,
             "strategies": dict(sorted_strategies),
@@ -819,7 +818,7 @@ async def get_strategy_performance():
             "best_strategy": sorted_strategies[0][0] if sorted_strategies else None,
             "explanation": "Strategies ranked by ROI (Return on Investment). Higher is better."
         }
-        
+
     except Exception as e:
         logger.error(f"Error fetching strategy performance: {e}")
         raise HTTPException(status_code=500, detail=str(e))

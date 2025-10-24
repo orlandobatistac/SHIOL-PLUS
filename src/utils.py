@@ -21,23 +21,23 @@ def get_latest_draw_date():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT draw_date 
             FROM powerball_draws 
             ORDER BY draw_date DESC 
             LIMIT 1
         """)
-        
+
         result = cursor.fetchone()
         conn.close()
-        
+
         if result:
             return result[0]
         else:
             logger.warning("No draw dates found in database")
             return None
-            
+
     except Exception as e:
         logger.error(f"Error getting latest draw date: {e}")
         return None

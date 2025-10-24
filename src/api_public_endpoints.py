@@ -9,17 +9,12 @@ These endpoints provide public access to predictions and historical data.
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from typing import Optional, Dict, Any, List
-from datetime import datetime
 from loguru import logger
 import os
-from pathlib import Path
 from src.auth_middleware import apply_freemium_restrictions
 
-from src.simple_utils import convert_numpy_types, format_prediction_response
-from src.database import get_all_draws, get_prediction_history, get_grouped_predictions_with_results_comparison
-from src.predictor import Predictor
-from src.intelligent_generator import IntelligentGenerator, DeterministicGenerator
+from src.simple_utils import convert_numpy_types
+from src.database import get_grouped_predictions_with_results_comparison
 
 # Create router for public frontend endpoints
 public_frontend_router = APIRouter(tags=["public_frontend"])
@@ -46,7 +41,7 @@ async def serve_index(request: Request):
     """Serve the main public index page"""
     return templates.TemplateResponse("index.html", {"request": request})
 
-@public_frontend_router.get("/public", response_class=HTMLResponse)  
+@public_frontend_router.get("/public", response_class=HTMLResponse)
 async def serve_public(request: Request):
     """Serve the public static page"""
     return templates.TemplateResponse("static_public.html", {"request": request})
@@ -61,12 +56,12 @@ async def get_public_predictions_by_draw(
     """Get predictions for a specific draw date (public endpoint)"""
     try:
         logger.info(f"Public API request for predictions by draw date: {draw_date} (min_matches: {min_matches}, limit: {limit})")
-        
+
         # Connect to database and get predictions
         from src.database import get_db_connection
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Query predictions for the specific draw date
         cursor.execute("""
             SELECT id, created_at, draw_date, n1, n2, n3, n4, n5, powerball, 
@@ -76,10 +71,10 @@ async def get_public_predictions_by_draw(
             ORDER BY confidence_score DESC, created_at DESC 
             LIMIT ?
         """, (draw_date, limit))
-        
+
         predictions = cursor.fetchall()
         conn.close()
-        
+
         # Format predictions for frontend
         predictions_list = []
         for pred in predictions:
@@ -89,7 +84,7 @@ async def get_public_predictions_by_draw(
                     "prediction_date": str(pred[1]) if pred[1] else "",
                     "draw_date": str(pred[2]) if pred[2] else "",
                     "n1": int(pred[3]) if pred[3] is not None else 0,
-                    "n2": int(pred[4]) if pred[4] is not None else 0, 
+                    "n2": int(pred[4]) if pred[4] is not None else 0,
                     "n3": int(pred[5]) if pred[5] is not None else 0,
                     "n4": int(pred[6]) if pred[6] is not None else 0,
                     "n5": int(pred[7]) if pred[7] is not None else 0,
@@ -104,25 +99,25 @@ async def get_public_predictions_by_draw(
             except (ValueError, TypeError) as format_error:
                 logger.warning(f"Error formatting prediction data: {format_error}, skipping prediction")
                 continue
-        
+
         # Get actual draw numbers for comparison
         cursor = get_db_connection().cursor()
         cursor.execute("SELECT n1, n2, n3, n4, n5, pb FROM powerball_draws WHERE draw_date = ?", (draw_date,))
         draw_result = cursor.fetchone()
         cursor.connection.close()
-        
+
         draw_numbers = None
         if draw_result:
             draw_numbers = {
                 "n1": draw_result[0], "n2": draw_result[1], "n3": draw_result[2],
                 "n4": draw_result[3], "n5": draw_result[4], "pb": draw_result[5]
             }
-        
+
         logger.info(f"Found {len(predictions_list)} predictions for draw {draw_date}")
-        
+
         # Apply freemium restrictions based on user authentication status with day-based quota
         freemium_result = apply_freemium_restrictions(predictions_list, request, draw_date)
-        
+
         return {
             "success": True,
             "draw_date": draw_date,
@@ -134,7 +129,7 @@ async def get_public_predictions_by_draw(
             "user": freemium_result["user"],
             "draw_numbers": draw_numbers
         }
-        
+
     except Exception as e:
         logger.error(f"Error fetching predictions by draw date {draw_date}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch predictions: {str(e)}")
@@ -145,7 +140,7 @@ async def get_public_smart_predictions(limit: int = 100):
     Use database queries for existing pipeline predictions only."""
     logger.warning("Attempt to use disabled public smart prediction generation")
     raise HTTPException(
-        status_code=410, 
+        status_code=410,
         detail={
             "error": "Public prediction generation disabled",
             "message": "This endpoint no longer generates new predictions.",
@@ -158,18 +153,18 @@ async def get_public_smart_predictions(limit: int = 100):
 async def get_public_recent_draws(limit: int = Query(default=6, le=20)):
     """Get recent powerball draws for public access - optimized version"""
     try:
-        from src.database import get_db_connection
+        from src.database import get_db_connection, calculate_prize_amount
         import time
-        
+
         start_time = time.time()
         conn = get_db_connection()
-        
+
         if not conn:
             logger.error("Database connection failed")
             raise HTTPException(status_code=503, detail="Database temporarily unavailable")
-            
+
         cursor = conn.cursor()
-        
+
         # Ultra-fast query with minimal data and better error handling
         try:
             cursor.execute("""
@@ -184,37 +179,73 @@ async def get_public_recent_draws(limit: int = Query(default=6, le=20)):
             logger.error(f"Database query error: {query_error}")
             conn.close()
             raise HTTPException(status_code=500, detail="Database query failed")
-        
-        conn.close()
-        
+
         elapsed = time.time() - start_time
         logger.info(f"Recent draws query completed in {elapsed:.3f}s, found {len(draws) if draws else 0} draws")
 
         if not draws:
+            conn.close()
             logger.warning("No draws found in database")
             return {"draws": [], "count": 0, "status": "no_data"}
 
-        # Minimal formatting for maximum speed
+        # Format draws with prize calculations
         draws_list = []
         for draw in draws:
             try:
+                draw_date = str(draw[1]) if draw[1] else ""
+                winning_numbers = [
+                    int(draw[2]) if draw[2] is not None else 0,
+                    int(draw[3]) if draw[3] is not None else 0,
+                    int(draw[4]) if draw[4] is not None else 0,
+                    int(draw[5]) if draw[5] is not None else 0,
+                    int(draw[6]) if draw[6] is not None else 0
+                ]
+                winning_pb = int(draw[7]) if draw[7] is not None else 0
+
+                # Calculate total prize for this draw by checking predictions
+                total_prize = 0.0
+                try:
+                    cursor.execute("""
+                        SELECT n1, n2, n3, n4, n5, powerball
+                        FROM generated_tickets
+                        WHERE draw_date = ?
+                    """, (draw_date,))
+
+                    predictions = cursor.fetchall()
+                    for pred in predictions:
+                        pred_numbers = [pred[0], pred[1], pred[2], pred[3], pred[4]]
+                        pred_pb = pred[5]
+
+                        main_matches = len(set(pred_numbers) & set(winning_numbers))
+                        pb_match = pred_pb == winning_pb
+
+                        prize_amount, _ = calculate_prize_amount(main_matches, pb_match)
+                        total_prize += prize_amount
+
+                except Exception as prize_error:
+                    logger.warning(f"Error calculating prize for draw {draw_date}: {prize_error}")
+                    total_prize = 0.0
+
                 draws_list.append({
                     "id": int(draw[0]) if draw[0] is not None else 0,
-                    "draw_date": str(draw[1]) if draw[1] else "",
-                    "n1": int(draw[2]) if draw[2] is not None else 0,
-                    "n2": int(draw[3]) if draw[3] is not None else 0, 
-                    "n3": int(draw[4]) if draw[4] is not None else 0,
-                    "n4": int(draw[5]) if draw[5] is not None else 0,
-                    "n5": int(draw[6]) if draw[6] is not None else 0,
-                    "pb": int(draw[7]) if draw[7] is not None else 0,
-                    "jackpot": "Not available"
+                    "draw_date": draw_date,
+                    "n1": winning_numbers[0],
+                    "n2": winning_numbers[1],
+                    "n3": winning_numbers[2],
+                    "n4": winning_numbers[3],
+                    "n5": winning_numbers[4],
+                    "pb": winning_pb,
+                    "jackpot": "Not available",
+                    "total_prize": total_prize
                 })
             except (ValueError, TypeError) as format_error:
                 logger.warning(f"Error formatting draw data: {format_error}, skipping draw")
                 continue
 
+        conn.close()
+
         return {
-            "draws": draws_list, 
+            "draws": draws_list,
             "count": len(draws_list),
             "status": "success",
             "query_time": f"{elapsed:.3f}s"
@@ -243,16 +274,16 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
     try:
         from src.database import get_db_connection
         import time
-        
+
         start_time = time.time()
         conn = get_db_connection()
-        
+
         if not conn:
             logger.error("Database connection failed")
             raise HTTPException(status_code=503, detail="Database temporarily unavailable")
-            
+
         cursor = conn.cursor()
-        
+
         # Query latest predictions
         # ✅ FIXED: Changed from predictions_log to generated_tickets
         # Added column aliases for frontend compatibility
@@ -276,9 +307,9 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
             logger.error(f"Database query error: {query_error}")
             conn.close()
             raise HTTPException(status_code=500, detail="Database query failed")
-        
+
         conn.close()
-        
+
         elapsed = time.time() - start_time
         logger.info(f"Latest predictions query completed in {elapsed:.3f}s, found {len(predictions) if predictions else 0} predictions")
 
@@ -295,7 +326,7 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
                     "prediction_date": str(pred[1]) if pred[1] else "",
                     "draw_date": str(pred[2]) if pred[2] else "",
                     "n1": int(pred[3]) if pred[3] is not None else 0,
-                    "n2": int(pred[4]) if pred[4] is not None else 0, 
+                    "n2": int(pred[4]) if pred[4] is not None else 0,
                     "n3": int(pred[5]) if pred[5] is not None else 0,
                     "n4": int(pred[6]) if pred[6] is not None else 0,
                     "n5": int(pred[7]) if pred[7] is not None else 0,
@@ -310,11 +341,11 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
 
         # Apply freemium restrictions based on user authentication status
         freemium_result = apply_freemium_restrictions(predictions_list, request)
-        
+
         return {
-            "predictions": freemium_result["predictions"], 
+            "predictions": freemium_result["predictions"],
             "accessible_count": freemium_result["accessible_count"],
-            "locked_count": freemium_result["locked_count"], 
+            "locked_count": freemium_result["locked_count"],
             "total_count": freemium_result["total_count"],
             "access_info": freemium_result["access_info"],
             "user": freemium_result["user"],
@@ -339,12 +370,12 @@ async def get_public_next_drawing():
     try:
         from src.date_utils import DateManager
         from datetime import datetime
-        
+
         # Get next drawing date
         current_et = DateManager.get_current_et_time()
         next_draw_str = DateManager.calculate_next_drawing_date(reference_date=current_et)
         next_draw = datetime.strptime(next_draw_str, "%Y-%m-%d")
-        
+
         return {
             "next_draw_date": next_draw.strftime("%Y-%m-%d"),
             "next_draw_datetime": next_draw.isoformat(),
@@ -352,7 +383,7 @@ async def get_public_next_drawing():
             "formatted_date": next_draw.strftime("%B %d, %Y"),
             "status": "success"
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting next drawing date: {e}")
         # Fallback response
@@ -360,7 +391,7 @@ async def get_public_next_drawing():
             "next_draw_date": "2025-09-03",
             "next_draw_datetime": "2025-09-03T22:00:00-04:00",
             "day_of_week": "Tuesday",
-            "formatted_date": "September 03, 2025", 
+            "formatted_date": "September 03, 2025",
             "status": "fallback"
         }
 
@@ -369,9 +400,9 @@ async def get_public_jackpot():
     """Get current Powerball jackpot with cash value from MUSL API"""
     try:
         from src.loader import fetch_musl_jackpot
-        
+
         jackpot_data = fetch_musl_jackpot()
-        
+
         if not jackpot_data:
             logger.warning("Could not fetch jackpot from MUSL API, returning fallback data")
             return {
@@ -381,7 +412,7 @@ async def get_public_jackpot():
                 "nextDrawDate": "",
                 "status": "fallback"
             }
-        
+
         return {
             "annuity": jackpot_data.get("annuity", 0),
             "cash": jackpot_data.get("cash", 0),
@@ -397,7 +428,7 @@ async def get_public_jackpot():
             "nextDrawDate": jackpot_data.get("nextDrawDate", ""),
             "status": "success"
         }
-        
+
     except Exception as e:
         logger.error(f"Error fetching jackpot data: {e}")
         return {
@@ -413,39 +444,39 @@ async def get_winners_stats():
     """Calculate total prizes won by Shiol+ users based on evaluated predictions"""
     try:
         from src.database import get_db_connection
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT matches_wb, matches_pb, prize_amount
+
+        # Use the current schema: sum prize_won from generated_tickets
+        cursor.execute(
+            """
+            SELECT COUNT(CASE WHEN prize_won > 0 THEN 1 END) as winning_predictions,
+                   COALESCE(SUM(CASE WHEN prize_won > 0 THEN prize_won ELSE 0 END), 0) as total_won
             FROM generated_tickets
-            WHERE evaluated = TRUE
-            AND (matches_wb > 0 OR matches_pb = TRUE)
-        """)
-        
-        winning_predictions = cursor.fetchall()
+            """
+        )
+        row = cursor.fetchone() or (0, 0.0)
         conn.close()
-        
-        total_won = 0.0
-        
-        for matches_wb, matches_pb, prize_amount in winning_predictions:
-            if prize_amount and prize_amount > 0:
-                total_won += prize_amount
-        
+
+        winning_count = int(row[0] or 0)
+        total_won = float(row[1] or 0.0)
+
         formatted_total = f"${total_won:,.0f}"
-        
-        logger.info(f"Calculated total prizes won: {formatted_total} from {len(winning_predictions)} winning predictions")
-        
+
+        logger.info(
+            f"Calculated total prizes won: {formatted_total} from {winning_count} winning predictions"
+        )
+
         return {
             "total_won": formatted_total,
             "formatted_amount": f"{formatted_total} won",
             "period": "all time",
             "description": "won by users who used Shiol+ AI insights",
-            "winning_predictions_count": len(winning_predictions),
-            "status": "success"
+            "winning_predictions_count": winning_count,
+            "status": "success",
         }
-        
+
     except Exception as e:
         logger.error(f"Error calculating winners stats: {e}")
         return {
@@ -464,76 +495,53 @@ async def get_public_stats():
     try:
         from src.database import get_db_connection
         from datetime import datetime, timedelta
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Powerball prize table (without jackpot)
-        PRIZE_TABLE = {
-            (5, True): 0,  # Jackpot - exclude from calculation
-            (5, False): 1000000,
-            (4, True): 50000,
-            (4, False): 100,
-            (3, True): 100,
-            (3, False): 7,
-            (2, True): 7,
-            (1, True): 4,
-            (0, True): 4
-        }
-        
-        # Get all evaluated predictions with matches
-        cursor.execute("""
-            SELECT matches_wb, matches_pb
+
+        # Compute from current schema
+        # 1) Total winning sets and total prize value from generated_tickets.prize_won
+        cursor.execute(
+            """
+            SELECT COUNT(CASE WHEN prize_won > 0 THEN 1 END) as winning_predictions,
+                   COALESCE(SUM(CASE WHEN prize_won > 0 THEN prize_won ELSE 0 END), 0) as total_won
             FROM generated_tickets
-            WHERE evaluated = 1 
-            AND (matches_wb > 0 OR matches_pb = 1)
-        """)
-        
-        all_matches = cursor.fetchall()
-        
-        # Calculate stats
-        total_winning_sets = len(all_matches)
-        total_prize_value = 0
-        
-        for match in all_matches:
-            main_matches = match[0] if match[0] is not None else 0
-            pb_match = bool(match[1])
-            
-            # Type-safe lookup with explicit handling
-            if (main_matches, pb_match) in PRIZE_TABLE:
-                prize = PRIZE_TABLE[(main_matches, pb_match)]  # type: ignore[index]
-                total_prize_value += prize
-        
-        # Get weekly stats (last 7 days)
+            """
+        )
+        row = cursor.fetchone() or (0, 0.0)
+        total_winning_sets = int(row[0] or 0)
+        total_prize_value = float(row[1] or 0.0)
+
+        # 2) Weekly winning sets (last 7 days) by created_at
         week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*)
             FROM generated_tickets
-            WHERE evaluated = 1
-            AND (matches_wb > 0 OR matches_pb = 1)
-            AND created_at >= ?
-        """, (week_ago,))
-        
+            WHERE prize_won > 0 AND created_at >= ?
+            """,
+            (week_ago,),
+        )
         weekly_matches = cursor.fetchone()[0] or 0
-        
+
         conn.close()
-        
-        # Format prize value (use decimals to avoid overstating)
-        if total_prize_value >= 1000000:
-            prize_text = f"${total_prize_value/1000000:.1f}M"
-        elif total_prize_value >= 1000:
-            prize_text = f"${total_prize_value/1000:.1f}K"
+
+        # Format prize value for display
+        if total_prize_value >= 1_000_000:
+            prize_text = f"${total_prize_value/1_000_000:.1f}M"
+        elif total_prize_value >= 1_000:
+            prize_text = f"${total_prize_value/1_000:.1f}K"
         else:
             prize_text = f"${total_prize_value:,.0f}"
-        
+
         return {
             "totalWinningSets": total_winning_sets,
             "totalPrizeValue": total_prize_value,
             "prizeText": prize_text,
             "weeklyMatches": weekly_matches,
-            "status": "success"
+            "status": "success",
         }
-        
+
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
         return {
@@ -549,26 +557,25 @@ async def register_unique_visit(request: Request):
     """Register unique visit per device"""
     try:
         from src.database import get_db_connection
-        import json
-        
+
         # Get device fingerprint from request body
         body = await request.json()
         device_fingerprint = body.get("fingerprint", "")
-        
+
         if not device_fingerprint:
             return {"status": "error", "message": "No fingerprint provided"}
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Check if device already visited
         cursor.execute("""
             SELECT id, visit_count FROM unique_visits 
             WHERE device_fingerprint = ?
         """, (device_fingerprint,))
-        
+
         existing_visit = cursor.fetchone()
-        
+
         if existing_visit:
             # Update last visit time and increment count
             cursor.execute("""
@@ -583,12 +590,12 @@ async def register_unique_visit(request: Request):
                 INSERT INTO unique_visits (device_fingerprint)
                 VALUES (?)
             """, (device_fingerprint,))
-        
+
         conn.commit()
         conn.close()
-        
+
         return {"status": "success", "new_visit": existing_visit is None}
-        
+
     except Exception as e:
         logger.error(f"Error registering visit: {e}")
         return {"status": "error", "message": str(e)}
@@ -598,38 +605,38 @@ async def register_pwa_install(request: Request):
     """Register PWA installation"""
     try:
         from src.database import get_db_connection
-        
+
         # Get device fingerprint from request body
         body = await request.json()
         device_fingerprint = body.get("fingerprint", "")
-        
+
         if not device_fingerprint:
             return {"status": "error", "message": "No fingerprint provided"}
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Check if already installed
         cursor.execute("""
             SELECT id FROM pwa_installs 
             WHERE device_fingerprint = ?
         """, (device_fingerprint,))
-        
+
         if cursor.fetchone():
             conn.close()
             return {"status": "already_installed"}
-        
+
         # Insert new installation
         cursor.execute("""
             INSERT INTO pwa_installs (device_fingerprint)
             VALUES (?)
         """, (device_fingerprint,))
-        
+
         conn.commit()
         conn.close()
-        
+
         return {"status": "success"}
-        
+
     except Exception as e:
         logger.error(f"Error registering PWA install: {e}")
         return {"status": "error", "message": str(e)}
@@ -639,25 +646,25 @@ async def get_counters():
     """Get visit and PWA install counters"""
     try:
         from src.database import get_db_connection
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Count unique visits
         cursor.execute("SELECT COUNT(*) FROM unique_visits")
         unique_visits = cursor.fetchone()[0]
-        
+
         # Count PWA installations
         cursor.execute("SELECT COUNT(*) FROM pwa_installs")
         pwa_installs = cursor.fetchone()[0]
-        
+
         conn.close()
-        
+
         return {
             "visits": unique_visits,
             "installs": pwa_installs
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting counters: {e}")
         return {

@@ -250,3 +250,40 @@ backups/
 main.py.backup
 data/*.backup*
 data/*_backup_*
+
+# ============================================
+# Additional common ignores (repo hygiene)
+# ============================================
+
+# Virtual environments (hidden)
+.venv/
+
+# Coverage reports
+coverage.xml
+coverage.json
+.coverage.*
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Generic caches
+.cache/
+
+# Node projects (if any)
+node_modules/
+
+# Pyenv / asdf
+.python-version
+.tool-versions
+
+# Pip build metadata
+pip-wheel-metadata/
+pip-log.txt
+
+# Direnv
+.envrc
+
+# Local SQLite artifacts (journals are already ignored)
+data/*.db.tmp
+data/*.sqlite
+data/*.sqlite3

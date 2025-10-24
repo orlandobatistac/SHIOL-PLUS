@@ -6,9 +6,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from loguru import logger
-from typing import Dict, Any, List, Optional
-import io
-import json
+from typing import List, Optional
 
 from src.ticket_processor import create_ticket_processor
 from src.ticket_verifier import create_ticket_verifier
@@ -56,17 +54,17 @@ async def check_verification_limits(request: Request, body: LimitsCheckRequest =
         device_info = None
         if body.device_info:
             device_info = body.device_info.dict(exclude_none=True)
-        
+
         limits_info = get_limits_info(request, device_info)
-        
+
         logger.info(f"Limits check: {limits_info.get('user_type', 'unknown')} user, "
                    f"remaining: {limits_info.get('remaining', 'N/A')}")
-        
+
         return {
             "success": True,
             "limits": limits_info
         }
-        
+
     except Exception as e:
         logger.error(f"Error checking verification limits: {e}")
         return {
@@ -102,7 +100,7 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                 device_info = json.loads(fingerprint_header)
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Invalid device fingerprint header: {e}")
-        
+
         # CHECK VERIFICATION LIMITS FIRST (Critical security check)
         try:
             access_result = check_verification_access(request, device_info)
@@ -123,34 +121,34 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                 status_code=500,
                 detail="Unable to verify access limits. Please try again later."
             )
-        
+
         # Validate file type
         if not file.content_type or not file.content_type.startswith('image/'):
             raise HTTPException(
                 status_code=400,
                 detail="File must be an image (JPG, PNG, etc.)"
             )
-        
+
         # Read image data
         image_data = await file.read()
-        
+
         if len(image_data) == 0:
             raise HTTPException(
                 status_code=400,
                 detail="Uploaded file is empty"
             )
-        
+
         if len(image_data) > 25 * 1024 * 1024:  # 25MB limit (increased for mobile support)
             raise HTTPException(
                 status_code=400,
                 detail="File size too large. Maximum size is 25MB"
             )
-        
+
         logger.info(f"Processing ticket image: {file.filename}, size: {len(image_data)} bytes")
-        
+
         # Process the image to extract ticket data
         ticket_data = ticket_processor.process_ticket_image(image_data)
-        
+
         # Override date if manual date is provided
         if manual_date:
             try:
@@ -165,7 +163,7 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                     status_code=400,
                     detail="Invalid date format. Please use YYYY-MM-DD format."
                 )
-        
+
         if not ticket_data.get('success', False):
             return JSONResponse(
                 status_code=422,
@@ -176,14 +174,14 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                     "raw_text_lines": ticket_data.get('raw_text_lines', [])
                 }
             )
-        
+
         # Final validation check: Ensure we have valid plays
         plays = ticket_data.get('plays', [])
         if not plays:
             # Check if we had validation errors
             validation_summary = ticket_data.get('validation_summary', {})
             validation_errors = validation_summary.get('validation_errors', [])
-            
+
             if validation_errors:
                 return JSONResponse(
                     status_code=422,
@@ -205,16 +203,16 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                         "raw_text_lines": ticket_data.get('raw_text_lines', [])
                     }
                 )
-        
+
         # Log validation results
         validation_summary = ticket_data.get('validation_summary', {})
         if validation_summary.get('invalid_plays', 0) > 0:
             logger.warning(f"Rejected {validation_summary['invalid_plays']} invalid plays out of {validation_summary['total_detected']} detected")
             logger.info(f"Proceeding with {len(plays)} valid plays")
-        
+
         # Verify the extracted ticket data against official results
         verification_result = ticket_verifier.verify_ticket(ticket_data)
-        
+
         if not verification_result.get('success', False):
             return JSONResponse(
                 status_code=422,
@@ -225,7 +223,7 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                     "ticket_data": ticket_data
                 }
             )
-        
+
         # Format the response
         response = {
             "success": True,
@@ -246,7 +244,7 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                 "processed_at": verification_result.get('processed_at')
             }
         }
-        
+
         # Add detailed results for each play
         for result in verification_result.get('verification_results', []):
             play_result = {
@@ -260,13 +258,13 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                 "is_winner": result.get('is_winner', False)
             }
             response["ticket_verification"]["play_results"].append(play_result)
-        
+
         # Add summary message
         summary = ticket_verifier.format_verification_summary(verification_result)
         response["summary"] = summary
-        
+
         logger.info(f"Ticket verification completed: {verification_result.get('is_winning_ticket', False)}")
-        
+
         # CRITICAL SECURITY: ATOMIC USAGE RECORDING BEFORE RETURNING RESULTS
         # This prevents race conditions where concurrent requests get free verifications
         device_info = None
@@ -275,7 +273,7 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                 device_info = json.loads(request.headers['x-device-fingerprint'])
             except (json.JSONDecodeError, ValueError):
                 logger.warning("Invalid device fingerprint header format during usage recording")
-        
+
         # Record usage atomically - if it fails, deny the verification even though processing succeeded
         usage_recorded = record_verification_usage(request, device_info)
         if not usage_recorded:
@@ -289,9 +287,9 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
                     "security_note": "Verification was successful but cannot be delivered due to usage limits."
                 }
             )
-        
+
         logger.info("Verification usage recorded successfully - proceeding with result delivery")
-            
+
         # Add usage info to response for frontend tracking
         try:
             access_result = check_verification_access(request, device_info)
@@ -303,9 +301,9 @@ async def verify_ticket_image(request: Request, file: UploadFile = File(...), ma
             }
         except Exception as e:
             logger.warning(f"Could not add verification limits to response: {e}")
-        
+
         return response
-        
+
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
@@ -333,17 +331,17 @@ async def preview_ticket_numbers(request: Request, file: UploadFile = File(...))
     try:
         # NOTE: Preview endpoint does NOT enforce verification limits
         # Only actual verification (/verify) consumes quotas
-        
+
         # Validate file
         if not file.content_type or not file.content_type.startswith('image/'):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid file type. Please upload an image file."
             )
-        
+
         # Read and process the image
         logger.info(f"Processing ticket preview (no limits): {file.filename}, size: {file.size} bytes")
-        
+
         try:
             ticket_processor = create_ticket_processor()
         except Exception as processor_error:
@@ -352,12 +350,12 @@ async def preview_ticket_numbers(request: Request, file: UploadFile = File(...))
                 status_code=503,
                 detail=f"Gemini AI service not initialized: {str(processor_error)}"
             )
-        
+
         image_data = await file.read()
-        
+
         # Extract ticket data (numbers only, no verification)
         ticket_data = ticket_processor.process_ticket_image(image_data)
-        
+
         if not ticket_data or not ticket_data.get('success', False):
             return JSONResponse(
                 status_code=422,
@@ -368,9 +366,9 @@ async def preview_ticket_numbers(request: Request, file: UploadFile = File(...))
                     "raw_text_lines": ticket_data.get('raw_text_lines', [])
                 }
             )
-        
+
         plays = ticket_data.get('plays', [])
-        
+
         # Format the detected plays for preview
         detected_plays = []
         for i, play in enumerate(plays):
@@ -379,10 +377,10 @@ async def preview_ticket_numbers(request: Request, file: UploadFile = File(...))
                 "play_letter": play.get('play_letter', chr(ord('A') + i)),
                 "main_numbers": sorted(play.get('main_numbers', [])),
                 "powerball": play.get('powerball', 0),
-                "is_valid": len(play.get('main_numbers', [])) == 5 and 
+                "is_valid": len(play.get('main_numbers', [])) == 5 and
                            1 <= play.get('powerball', 0) <= 26
             })
-        
+
         response = {
             "success": True,
             "message": "Ticket numbers detected successfully",
@@ -397,14 +395,14 @@ async def preview_ticket_numbers(request: Request, file: UploadFile = File(...))
                 "validation_summary": ticket_data.get('validation_summary', {})
             }
         }
-        
+
         logger.info(f"Ticket preview completed: {len(plays)} plays detected")
-        
+
         # NOTE: Preview endpoint NO LONGER counts as verification usage
         # Only the /verify endpoint should count usage when verification is successful
-        
+
         return response
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -461,18 +459,18 @@ async def debug_extract_ticket_data(file: UploadFile = File(...)):
                 status_code=400,
                 detail="File must be an image"
             )
-        
+
         # Read and process image
         image_data = await file.read()
         ticket_data = ticket_processor.process_ticket_image(image_data)
-        
+
         return {
             "success": True,
             "filename": file.filename,
             "extraction_result": ticket_data,
             "note": "This is a debug endpoint showing raw extraction results"
         }
-        
+
     except Exception as e:
         logger.error(f"Error in debug extraction endpoint: {e}")
         raise HTTPException(
@@ -505,7 +503,7 @@ async def verify_manual_plays(fastapi_request: Request, request: ManualVerificat
     """
     try:
         # NOTE: Limits checking moved to preview endpoint - no limits check needed here
-        
+
         if not request.plays:
             raise HTTPException(
                 status_code=400,
@@ -529,7 +527,7 @@ async def verify_manual_plays(fastapi_request: Request, request: ManualVerificat
             )
 
         logger.info(f"Processing manual verification: {len(request.plays)} plays for date {request.draw_date}")
-        
+
         # Convert Pydantic models to dict format expected by ticket processor
         plays_data = []
         for play in request.plays:
@@ -544,7 +542,7 @@ async def verify_manual_plays(fastapi_request: Request, request: ManualVerificat
         # Create ticket processor and validate all plays
         processor = create_ticket_processor()
         validation_result = processor.validate_all_plays(plays_data)
-        
+
         if not validation_result['valid_plays']:
             # All plays were invalid
             error_details = "; ".join(validation_result['validation_errors'][:3])

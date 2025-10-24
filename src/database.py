@@ -8,7 +8,6 @@ import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 import hashlib
-import secrets
 
 
 def calculate_prize_amount(main_matches: int, powerball_match: bool) -> Tuple[float, str]:
@@ -326,12 +325,16 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
 
 
 def initialize_database():
-    """Initialize the database by creating all required tables if they don't exist."""
+    """Initialize the database by creating all required tables if they don't exist.
+
+    Also ensures analytics tables and triggers exist, and auto-creates an admin user
+    on first run if none exists. Idempotent and safe to call multiple times.
+    """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # Core tables
+            # Core and domain tables
             _create_core_tables(cursor)
             _create_prediction_tables(cursor)
             _create_feedback_tables(cursor)
@@ -339,28 +342,87 @@ def initialize_database():
 
             conn.commit()
 
-            # Initialize configuration system
-            if not is_config_initialized():
-                logger.info("Initializing hybrid configuration system...")
-                migrate_config_from_file()
+        # Create analytics tables and triggers using their own safe connections
+        try:
+            create_analytics_tables()
+        except Exception as e:
+            logger.warning(f"Failed to create analytics tables during initialization: {e}")
 
-            # Create analytics tables for enhanced pipeline
-            try:
-                create_analytics_tables()
-            except Exception as e:
-                logger.warning(f"Failed to create analytics tables during initialization: {e}")
+        try:
+            create_pb_era_triggers()
+        except Exception as e:
+            logger.warning(f"Failed to create pb_era triggers during initialization: {e}")
 
-            # Ensure pb_era triggers exist for fresh deployments
-            try:
-                create_pb_era_triggers()
-            except Exception as e:
-                logger.warning(f"Failed to create pb_era triggers during initialization: {e}")
+        # Ensure at least one admin user exists
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT id FROM users WHERE is_admin = 1 LIMIT 1")
+                exists = cursor.fetchone()
+                if not exists:
+                    admin_email = os.getenv('ADMIN_EMAIL')
+                    admin_username = os.getenv('ADMIN_USERNAME')
+                    admin_password = os.getenv('ADMIN_PASSWORD')
 
-            logger.info("Database initialized successfully with all tables and indexes.")
+                    if not (admin_email and admin_username and admin_password):
+                        # Fallback to config.ini if no env vars
+                        cfg = configparser.ConfigParser()
+                        current_dir = os.path.dirname(os.path.abspath(__file__))
+                        cfg_path = os.path.join(current_dir, '..', 'config', 'config.ini')
+                        cfg.read(cfg_path)
+                        admin_email = cfg.get('admin', 'email', fallback='admin@shiolplus.com')
+                        admin_username = cfg.get('admin', 'username', fallback='admin')
+                        admin_password = cfg.get('admin', 'password', fallback='Admin123!')
+
+                    # Hash password (bcrypt preferred, sha256 fallback)
+                    try:
+                        import bcrypt  # type: ignore
+                        password_hash = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                    except Exception:
+                        password_hash = hashlib.sha256(admin_password.encode('utf-8')).hexdigest()
+
+                    cursor.execute(
+                        """
+                        INSERT INTO users (email, username, password_hash, is_admin, is_active, created_at)
+                        VALUES (?, ?, ?, 1, 1, CURRENT_TIMESTAMP)
+                        """,
+                        (admin_email, admin_username, password_hash)
+                    )
+                    conn.commit()
+                    logger.info(f"Admin user created: {admin_email} / {admin_username}")
+        except Exception as e:
+            logger.warning(f"Admin auto-provisioning skipped due to error: {e}")
+
+        logger.info("Database initialized successfully with all tables and indexes.")
 
     except sqlite3.Error as e:
         logger.error(f"Database error during initialization: {e}")
         raise
+
+def _create_feedback_tables(cursor):
+    """Create feedback/evaluation related tables used by the pipeline."""
+    # Performance tracking table to record evaluation of predictions
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS performance_tracking (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prediction_id INTEGER NOT NULL,
+            draw_date DATE NOT NULL,
+            actual_n1 INTEGER NOT NULL,
+            actual_n2 INTEGER NOT NULL,
+            actual_n3 INTEGER NOT NULL,
+            actual_n4 INTEGER NOT NULL,
+            actual_n5 INTEGER NOT NULL,
+            actual_pb INTEGER NOT NULL,
+            matches_main INTEGER DEFAULT 0,
+            matches_pb INTEGER DEFAULT 0,
+            prize_tier TEXT DEFAULT 'Non-winning',
+            score_accuracy REAL DEFAULT 0.0,
+            component_accuracy TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
 
 
 def create_analytics_tables():
@@ -434,6 +496,11 @@ def create_analytics_tables():
                 was_played BOOLEAN DEFAULT FALSE,
                 prize_won REAL DEFAULT 0.0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                evaluated BOOLEAN DEFAULT FALSE,
+                matches_wb INTEGER DEFAULT 0,
+                matches_pb INTEGER DEFAULT 0,
+                prize_description TEXT DEFAULT '',
+                evaluation_date DATETIME,
                 CHECK (n1 < n2 AND n2 < n3 AND n3 < n4 AND n4 < n5),
                 CHECK (n1 >= 1 AND n5 <= 69),
                 CHECK (powerball >= 1 AND powerball <= 26)
@@ -553,12 +620,12 @@ def _create_core_tables(cursor):
             is_active BOOLEAN DEFAULT TRUE
         )
     """)
-    
+
     # Migration for is_admin column
     try:
         cursor.execute("PRAGMA table_info(users)")
         columns = [column[1] for column in cursor.fetchall()]
-        
+
         if 'is_admin' not in columns:
             logger.info("Adding is_admin column to users table...")
             cursor.execute("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
@@ -598,7 +665,7 @@ def _create_core_tables(cursor):
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
     # Tabla para visitas únicas por dispositivo
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS unique_visits (
@@ -609,7 +676,7 @@ def _create_core_tables(cursor):
             visit_count INTEGER DEFAULT 1
         )
     """)
-    
+
     # Tabla para instalaciones del PWA
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pwa_installs (
@@ -618,7 +685,7 @@ def _create_core_tables(cursor):
             install_date DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
     # Weekly verification limits table for guest and registered users
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS weekly_verification_limits (
@@ -636,7 +703,7 @@ def _create_core_tables(cursor):
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     """)
-    
+
     # Stripe billing tables
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS idempotency_keys (
@@ -650,7 +717,7 @@ def _create_core_tables(cursor):
             processed_at DATETIME
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS webhook_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -664,7 +731,7 @@ def _create_core_tables(cursor):
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stripe_customers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -676,7 +743,7 @@ def _create_core_tables(cursor):
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stripe_subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -694,7 +761,7 @@ def _create_core_tables(cursor):
             FOREIGN KEY (stripe_customer_id) REFERENCES stripe_customers(stripe_customer_id)
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS premium_passes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -715,7 +782,7 @@ def _create_core_tables(cursor):
             FOREIGN KEY (stripe_customer_id) REFERENCES stripe_customers(stripe_customer_id)
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS premium_pass_devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -727,8 +794,8 @@ def _create_core_tables(cursor):
             FOREIGN KEY (pass_id) REFERENCES premium_passes(id)
         )
     """)
-    
-    # IP rate limiting table for abuse protection  
+
+    # IP rate limiting table for abuse protection
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ip_rate_limits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -761,95 +828,9 @@ def _create_prediction_tables(cursor):
     #     score_total REAL NOT NULL,
     #     model_version TEXT NOT NULL,
     #     dataset_hash TEXT NOT NULL,
-    #     json_details_path TEXT,
-    #     target_draw_date DATE,
-    #     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    #     evaluated BOOLEAN DEFAULT FALSE,
-    #     matches_wb INTEGER DEFAULT 0,
-    #     matches_pb BOOLEAN DEFAULT FALSE,
-    #     prize_amount REAL DEFAULT 0.0,
-    #     prize_description TEXT DEFAULT 'Not evaluated',
-    #     evaluation_date DATETIME
-    # )
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS validation_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prediction_id INTEGER NOT NULL,
-            draw_date DATE NOT NULL,
-            matches INTEGER NOT NULL,
-            prize_amount REAL NOT NULL,
-            prize_description TEXT NOT NULL,
-            actual_numbers TEXT NOT NULL,
-            actual_powerball INTEGER NOT NULL,
-            evaluated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (prediction_id) REFERENCES predictions_log (id)
-        )
-    """)
-
-    # Legacy migrations for `predictions_log` are preserved below as commented
-    # historical notes. These ALTER TABLE and PRAGMA operations were used during
-    # prior schema evolution but should not run in the current runtime because
     # the legacy table has been archived and dropped from the active database.
     #
-    # try:
-    #     cursor.execute("PRAGMA table_info(predictions_log)")
-    #     columns = [column[1] for column in cursor.fetchall()]
-    #
-    #     if 'target_draw_date' not in columns:
-    #         logger.info("Adding target_draw_date column to existing predictions_log table...")
-    #         cursor.execute("ALTER TABLE predictions_log ADD COLUMN target_draw_date DATE")
-    #         cursor.execute("""
-    #             UPDATE predictions_log
-    #             SET target_draw_date = DATE(created_at)
-    #             WHERE target_draw_date IS NULL
-    #         """)
-    #         logger.info("target_draw_date column added and populated")
-    #
-    #     evaluation_columns = ['evaluated', 'matches_wb', 'matches_pb', 'prize_amount', 'prize_description', 'evaluation_date']
-    #     for col in evaluation_columns:
-    #         if col not in columns:
-    #             logger.info(f"Adding {col} column to predictions_log table...")
-    #             if col == 'evaluated':
-    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN evaluated BOOLEAN DEFAULT FALSE")
-    #             elif col == 'matches_wb':
-    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN matches_wb INTEGER DEFAULT 0")
-    #             elif col == 'matches_pb':
-    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN matches_pb BOOLEAN DEFAULT FALSE")
-    #             elif col == 'prize_amount':
-    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN prize_amount REAL DEFAULT 0.0")
-    #             elif col == 'prize_description':
-    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN prize_description TEXT DEFAULT 'Not evaluated'")
-    #             elif col == 'evaluation_date':
-    #                 cursor.execute("ALTER TABLE predictions_log ADD COLUMN evaluation_date DATETIME")
-    #             logger.info(f"{col} column added successfully")
-#
-    # except sqlite3.Error as e:
-    #     logger.error(f"Error during migrations: {e}")
-
-
-def _create_feedback_tables(cursor):
-    """Create adaptive feedback system tables."""
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS performance_tracking (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prediction_id INTEGER NOT NULL,
-            draw_date DATE NOT NULL,
-            actual_n1 INTEGER NOT NULL,
-            actual_n2 INTEGER NOT NULL,
-            actual_n3 INTEGER NOT NULL,
-            actual_n4 INTEGER NOT NULL,
-            actual_n5 INTEGER NOT NULL,
-            actual_pb INTEGER NOT NULL,
-            matches_main INTEGER NOT NULL,
-            matches_pb INTEGER NOT NULL,
-            prize_tier TEXT NOT NULL,
-            score_accuracy REAL NOT NULL,
-            component_accuracy TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (prediction_id) REFERENCES predictions_log (id)
-        )
-    """)
+    # ...existing code...
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS adaptive_weights (
@@ -936,8 +917,6 @@ def _create_indexes(cursor):
         ("idx_pipeline_executions_start_time", "pipeline_executions", "start_time DESC"),
         ("idx_pipeline_executions_trigger_type", "pipeline_executions", "trigger_type"),
         ("idx_pipeline_executions_execution_id", "pipeline_executions", "execution_id"),
-        ("idx_validation_results_prediction_id", "validation_results", "prediction_id"),
-        ("idx_validation_results_draw_date", "validation_results", "draw_date"),
         # Weekly verification limits indexes
         ("idx_weekly_limits_user_week", "weekly_verification_limits", "user_id, week_start_date"),
         ("idx_weekly_limits_device_week", "weekly_verification_limits", "device_fingerprint, week_start_date"),
@@ -1046,129 +1025,74 @@ def get_all_draws() -> pd.DataFrame:
 
 
 def save_prediction_log(prediction_data: Dict[str, Any], allow_simulation: bool = False, execution_source: Optional[str] = None) -> Optional[int]:
-    """Save a prediction to the predictions_log table."""
-    logger.debug(f"Received prediction data: {prediction_data}")
+    """Save a prediction into the active generated_tickets table and return its ID.
 
-    # Validate execution source
-    authorized_sources = ["manual_dashboard", "automatic_scheduler", "pipeline_execution"]
+    This function replaces legacy predictions_log usage by mapping fields to the
+    generated_tickets schema. It validates inputs and ensures ascending numbers.
+    """
+    try:
+        logger.debug(f"Received prediction data: {prediction_data}")
 
-    if execution_source and execution_source not in authorized_sources:
-        logger.error(f"UNAUTHORIZED: Rejected prediction from source: {execution_source}")
-        return None
-
-    # Process and validate prediction data
-    model_version = str(prediction_data.get("model_version", "1.0.0-pipeline"))
-    dataset_hash = str(prediction_data.get("dataset_hash", ""))
-
-    if not dataset_hash or len(dataset_hash) < 10:
-        import hashlib
-        import time
-        timestamp_str = str(time.time())
-        dataset_hash = hashlib.md5(f"pipeline_{timestamp_str}".encode()).hexdigest()[:16]
-        logger.info(f"Generated dataset_hash for pipeline prediction: {dataset_hash}")
-
-    # Validate simulated data
-    if not allow_simulation and execution_source != "pipeline_execution":
-        if (model_version in ["fallback", "test", "simulated"] or 
-            dataset_hash in ["simulated", "test", "fallback"]):
-            logger.warning(f"REJECTED: Non-pipeline prediction - model={model_version}, hash={dataset_hash}")
+        # Optional source gating (kept permissive for pipeline)
+        allowed_sources = {None, "manual_dashboard", "automatic_scheduler", "pipeline_execution"}
+        if execution_source not in allowed_sources:
+            logger.error(f"Rejected prediction from unauthorized source: {execution_source}")
             return None
 
-    # Accept all pipeline_execution predictions
-    if execution_source == "pipeline_execution":
-        logger.info(f"ACCEPTING pipeline prediction - model={model_version}, hash={dataset_hash}")
-        prediction_data["model_version"] = model_version
-        prediction_data["dataset_hash"] = dataset_hash
+        # Sanitize and validate
+        sanitized = _sanitize_prediction_data(prediction_data, allow_simulated=allow_simulation)
+        if not sanitized:
+            logger.error("Prediction data failed validation/sanitization")
+            return None
 
-    # Sanitize and validate prediction data
-    sanitized_data = _sanitize_prediction_data(prediction_data, allow_simulation)
-    if sanitized_data is None:
-        logger.error("Prediction data is invalid after sanitization.")
-        return None
+        numbers = sanitized.get('numbers')
+        powerball = int(sanitized.get('powerball')) if sanitized.get('powerball') is not None else None
+        if not numbers or len(numbers) != 5 or powerball is None:
+            logger.error("Prediction must include 5 numbers and a powerball")
+            return None
 
-    # Handle target draw date
-    target_draw_date_str = sanitized_data.get('target_draw_date')
-    if not target_draw_date_str:
-        target_draw_date_str = calculate_next_drawing_date()
-        logger.debug(f"Target draw date not provided, calculated: {target_draw_date_str}")
+        # Ensure numbers are strictly increasing to satisfy CHECK constraint
+        numbers = sorted(int(n) for n in numbers)
 
-    if not _validate_target_draw_date(target_draw_date_str):
-        logger.error(f"Invalid target_draw_date format: {target_draw_date_str}")
-        raise ValueError(f"Invalid target_draw_date format: {target_draw_date_str}")
+        # Decide draw_date
+        draw_date = sanitized.get('target_draw_date') or prediction_data.get('target_draw_date')
+        if not draw_date:
+            try:
+                draw_date = calculate_next_drawing_date()
+            except Exception:
+                # Fallback: use today; CHECK constraints won't validate date format, just store string
+                draw_date = datetime.now().strftime('%Y-%m-%d')
 
-    # Additional validation to prevent data corruption
-    if len(target_draw_date_str) != 10 or target_draw_date_str.count('-') != 2:
-        logger.error(f"CORRUPTION DETECTED: target_draw_date has invalid format: {target_draw_date_str}")
-        raise ValueError(f"Corrupted target_draw_date detected: {target_draw_date_str}")
+        # Map model_version/strategy to strategy_used; score_total -> confidence_score
+        strategy_used = str(prediction_data.get('strategy') or prediction_data.get('model_version') or 'intelligent_ai')
+        confidence = float(prediction_data.get('score_total') or sanitized.get('score_total') or 0.5)
 
-    if not _is_valid_drawing_date(target_draw_date_str):
-        logger.warning(f"Target draw date {target_draw_date_str} is not a valid Powerball drawing day.")
-
-    # Safe type conversion to avoid numpy issues
-    def safe_int(value):
-        if hasattr(value, 'item'):
-            return int(value.item())
-        return int(value)
-
-    def safe_float(value):
-        if hasattr(value, 'item'):
-            return float(value.item())
-        return float(value)
-
-    try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO predictions_log
-                (timestamp, n1, n2, n3, n4, n5, powerball, score_total,
-                 model_version, dataset_hash, json_details_path, target_draw_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                str(sanitized_data['timestamp']),
-                safe_int(sanitized_data['numbers'][0]),
-                safe_int(sanitized_data['numbers'][1]),
-                safe_int(sanitized_data['numbers'][2]),
-                safe_int(sanitized_data['numbers'][3]),
-                safe_int(sanitized_data['numbers'][4]),
-                safe_int(sanitized_data['powerball']),
-                safe_float(sanitized_data['score_total']),
-                str(sanitized_data['model_version']),
-                str(sanitized_data['dataset_hash']),
-                sanitized_data.get('json_details_path', None),
-                target_draw_date_str
-            ))
-
-            prediction_id = cursor.lastrowid
+                INSERT INTO generated_tickets (
+                    draw_date, strategy_used,
+                    n1, n2, n3, n4, n5, powerball,
+                    confidence_score
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    draw_date, strategy_used,
+                    numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], powerball,
+                    confidence
+                )
+            )
+            new_id = cursor.lastrowid
             conn.commit()
-
-            logger.info(f"Prediction saved with ID {prediction_id}.")
-            return prediction_id
-
+            logger.info(f"Saved prediction to generated_tickets with id={new_id} for draw {draw_date}")
+            return int(new_id)
     except sqlite3.Error as e:
-        logger.error(f"Error saving prediction log: {e}")
+        logger.error(f"Database error saving prediction: {e}")
         return None
-
-
-def get_prediction_history(limit: int = 100):
-    """Retrieve prediction history from the database."""
-    try:
-        with get_db_connection() as conn:
-            query = """
-                SELECT id, timestamp, n1, n2, n3, n4, n5, powerball,
-                       score_total, model_version, dataset_hash,
-                       json_details_path, created_at
-                FROM generated_tickets
-                ORDER BY created_at DESC
-                LIMIT ?
-            """
-            df = pd.read_sql(query, conn, params=(limit,))
-            logger.info(f"Retrieved {len(df)} prediction records from history")
-            return df
-
-    except sqlite3.Error as e:
-        logger.error(f"Error retrieving prediction history: {e}")
-        return pd.DataFrame()
+    except Exception as e:
+        logger.error(f"Unexpected error saving prediction: {e}")
+        return None
 
 
 # Phase 4: Adaptive Feedback System Database Methods
@@ -1689,31 +1613,64 @@ def get_analytics_summary(days_back: int = 30) -> Dict[str, Any]:
 
 
 def get_prediction_details(prediction_id: int) -> Optional[Dict[str, Any]]:
-    """Retrieve complete prediction details from the JSON file."""
+    """Retrieve prediction details.
+
+    If a json_details_path column exists and points to a file, load and return it.
+    Otherwise, build a details structure from generated_tickets columns.
+    """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT json_details_path FROM generated_tickets WHERE id = ?",
-                (prediction_id,))
 
-            result = cursor.fetchone()
-            if not result:
+            # Detect if json_details_path column exists
+            cursor.execute("PRAGMA table_info(generated_tickets)")
+            cols = [row[1] for row in cursor.fetchall()]
+            has_json_path = 'json_details_path' in cols
+
+            if has_json_path:
+                cursor.execute(
+                    "SELECT json_details_path FROM generated_tickets WHERE id = ?",
+                    (prediction_id,)
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    json_path = row[0]
+                    try:
+                        if os.path.exists(json_path):
+                            with open(json_path, 'r', encoding='utf-8') as f:
+                                return json.load(f)
+                        else:
+                            logger.warning(f"JSON file not found for prediction {prediction_id}: {json_path}")
+                    except (OSError, json.JSONDecodeError) as e:
+                        logger.warning(f"Failed to read JSON details for prediction {prediction_id}: {e}")
+
+            # Fallback: build details from current columns
+            cursor.execute(
+                """
+                SELECT id, draw_date, n1, n2, n3, n4, n5, powerball,
+                       strategy_used, confidence_score, created_at
+                FROM generated_tickets
+                WHERE id = ?
+                """,
+                (prediction_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
                 logger.warning(f"Prediction with ID {prediction_id} not found")
                 return None
 
-            json_path = result[0]
+            return {
+                'id': row[0],
+                'draw_date': row[1],
+                'numbers': [row[2], row[3], row[4], row[5], row[6]],
+                'powerball': row[7],
+                'strategy_used': row[8],
+                'confidence_score': float(row[9]) if row[9] is not None else 0.0,
+                'created_at': row[10]
+            }
 
-            if os.path.exists(json_path):
-                with open(json_path, 'r', encoding='utf-8') as f:
-                    details = json.load(f)
-                return details
-            else:
-                logger.warning(f"JSON file not found: {json_path}")
-                return None
-
-    except (sqlite3.Error, FileNotFoundError, json.JSONDecodeError) as e:
-        logger.error(f"Error retrieving prediction details for ID {prediction_id}: {e}")
+    except sqlite3.Error as e:
+        logger.error(f"Database error retrieving prediction details for ID {prediction_id}: {e}")
         return None
 
 def get_evaluated_predictions_count(execution_id: str) -> int:
@@ -1985,91 +1942,9 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 }
                 grouped_results.append(grouped_result)
 
-            logger.info(
-                f"Retrieved {len(grouped_results)} grouped prediction dates with {sum(g['total_plays'] for g in grouped_results)} total predictions"
-            )
+            # Return grouped results for requested dates
+            logger.info(f"Retrieved {len(grouped_results)} grouped prediction dates")
             return grouped_results
-
-    except sqlite3.Error as e:
-        logger.error(f"Error retrieving grouped predictions by date: {e}")
-        return []
-
-
-def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
-    """
-    Obtain historical predictions with comparisons against official results,
-    including calculation of prizes won.
-    """
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            query = """
-                SELECT
-                    pl.id, pl.timestamp, pl.n1, pl.n2, pl.n3, pl.n4, pl.n5, pl.powerball,
-                    pd.draw_date, pd.n1 as actual_n1, pd.n2 as actual_n2, pd.n3 as actual_n3,
-                    pd.n4 as actual_n4, pd.n5 as actual_n5, pd.pb as actual_pb,
-                    pt.matches_main, pt.matches_pb, pt.prize_tier
-                    FROM generated_tickets pl
-                LEFT JOIN performance_tracking pt ON pl.id = pt.prediction_id
-                LEFT JOIN powerball_draws pd ON pt.draw_date = pd.draw_date
-                WHERE pt.id IS NOT NULL
-                ORDER BY pl.created_at DESC
-                LIMIT ?
-            """
-
-            cursor.execute(query, (limit,))
-            results = cursor.fetchall()
-
-            comparisons = []
-            for row in results:
-                prediction_numbers = [row[2], row[3], row[4], row[5], row[6]]
-                prediction_pb = row[7]
-                prediction_date = row[1]
-
-                if row[8]:  # If official result exists
-                    actual_numbers = [row[9], row[10], row[11], row[12], row[13]]
-                    actual_pb = row[14]
-                    draw_date = row[8]
-
-                    matched_numbers = []
-                    for pred_num in prediction_numbers:
-                        if pred_num in actual_numbers:
-                            matched_numbers.append(pred_num)
-
-                    powerball_matched = prediction_pb == actual_pb
-                    main_matches = len(matched_numbers)
-                    try:
-                        prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_matched)
-                    except Exception as e:
-                        logger.error(f"Error calculating prize amount: {e}")
-                        prize_amount, prize_description = 0.0, "Error calculating prize"
-
-                    comparison = {
-                        "prediction": {
-                            "numbers": prediction_numbers,
-                            "powerball": prediction_pb,
-                            "date": prediction_date
-                        },
-                        "result": {
-                            "numbers": actual_numbers,
-                            "powerball": actual_pb,
-                            "date": draw_date
-                        },
-                        "comparison": {
-                            "matched_numbers": matched_numbers,
-                            "powerball_matched": powerball_matched,
-                            "total_matches": main_matches,
-                            "prize_amount": prize_amount,
-                            "prize_description": prize_description
-                        }
-                    }
-                    comparisons.append(comparison)
-
-            logger.info(
-                f"Retrieved {len(comparisons)} prediction comparisons with prize calculations"
-            )
-            return comparisons
 
     except sqlite3.Error as e:
         logger.error(
@@ -2078,71 +1953,79 @@ def get_predictions_with_results_comparison(limit: int = 20) -> List[Dict]:
 
 
 def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> List[Dict]:
-    """
-    Get predictions grouped by official result for the hybrid design.
-    Each group contains an official result with its corresponding 5 ADAPTIVE predictions.
+    """Return grouped prediction results by draw_date using generated_tickets + powerball_draws.
+
+    Builds a compact structure the frontend expects, including a summary with totals.
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
+            # Latest draw dates where we have both official results and generated tickets
             cursor.execute(
                 """
-                SELECT pd.draw_date, pd.n1, pd.n2, pd.n3, pd.n4, pd.n5, pd.pb
+                SELECT pd.draw_date
                 FROM powerball_draws pd
+                JOIN generated_tickets gt ON gt.draw_date = pd.draw_date
+                GROUP BY pd.draw_date
                 ORDER BY pd.draw_date DESC
                 LIMIT ?
-            """, (limit_groups,))
+                """,
+                (limit_groups,)
+            )
+            draw_dates = [row[0] for row in cursor.fetchall()]
 
-            official_results = cursor.fetchall()
+            grouped: List[Dict[str, Any]] = []
 
-            grouped_comparisons = []
+            for draw_date in draw_dates:
+                # Official results
+                cursor.execute(
+                    "SELECT n1, n2, n3, n4, n5, pb FROM powerball_draws WHERE draw_date = ?",
+                    (draw_date,)
+                )
+                r = cursor.fetchone()
+                if not r:
+                    # Shouldn't happen due to join above
+                    continue
+                winning_numbers = [r[0], r[1], r[2], r[3], r[4]]
+                winning_powerball = r[5]
 
-            for result_row in official_results:
-                draw_date = result_row[0]
-                winning_numbers = [result_row[1], result_row[2], result_row[3], result_row[4], result_row[5]]
-                winning_powerball = result_row[6]
-
+                # Predictions for this draw
                 cursor.execute(
                     """
-                    SELECT
-                        pl.id, pl.timestamp, pl.n1, pl.n2, pl.n3, pl.n4, pl.n5, pl.powerball,
-                        pt.matches_main, pt.matches_pb, pt.prize_tier
-                    FROM generated_tickets pl
-                    INNER JOIN performance_tracking pt ON pl.id = pt.prediction_id
-                    WHERE pt.draw_date = ?
-                    ORDER BY pl.created_at ASC
-                    LIMIT 5
-                """, (draw_date,))
-
-                predictions_data = cursor.fetchall()
-
-                if not predictions_data:
-                    logger.debug(f"No real predictions found for draw date {draw_date}, skipping group")
+                    SELECT id, created_at, n1, n2, n3, n4, n5, powerball
+                    FROM generated_tickets
+                    WHERE draw_date = ?
+                    ORDER BY created_at ASC
+                    """,
+                    (draw_date,)
+                )
+                preds = cursor.fetchall()
+                if not preds:
                     continue
 
                 predictions = []
-                total_prize = 0
+                total_prize = 0.0
                 total_matches = 0
                 winning_predictions = 0
 
-                for i, pred_row in enumerate(predictions_data):
-                    prediction_numbers = [pred_row[2], pred_row[3], pred_row[4], pred_row[5], pred_row[6]]
-                    prediction_pb = pred_row[7]
-                    prediction_date = pred_row[1]
+                for idx, row in enumerate(preds):
+                    pid, created_at, a, b, c, d, e, pb = row
+                    numbers = [a, b, c, d, e]
+                    number_matches = [{
+                        'number': n,
+                        'position': i,
+                        'is_match': n in winning_numbers
+                    } for i, n in enumerate(numbers)]
 
-                    number_matches = []
-                    for j, pred_num in enumerate(prediction_numbers):
-                        is_match = pred_num in winning_numbers
-                        number_matches.append({"number": pred_num, "position": j, "is_match": is_match})
+                    main_matches = sum(1 for m in number_matches if m['is_match'])
+                    pb_match = (pb == winning_powerball)
+                    prize_amount, prize_desc = calculate_prize_amount(main_matches, pb_match)
 
-                    powerball_match = prediction_pb == winning_powerball
-                    main_matches = sum(1 for match in number_matches if match["is_match"])
-                    try:
-                        prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_match)
-                    except Exception as calc_error:
-                        logger.error(f"Prize calculation failed: {calc_error}")
-                        prize_amount, prize_description = 0.0, "Calculation error"
+                    total_prize += float(prize_amount or 0.0)
+                    total_matches += int(main_matches)
+                    if prize_amount and prize_amount > 0:
+                        winning_predictions += 1
 
                     if prize_amount >= 100000000:
                         prize_display = "JACKPOT!"
@@ -2155,36 +2038,29 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                     else:
                         prize_display = "$0.00"
 
-                    prediction_data = {
-                        "prediction_id": pred_row[0],
-                        "prediction_date": prediction_date,
-                        "prediction_numbers": prediction_numbers,
-                        "prediction_powerball": prediction_pb,
-                        "winning_numbers": winning_numbers,
-                        "winning_powerball": winning_powerball,
-                        "number_matches": number_matches,
-                        "powerball_match": powerball_match,
-                        "total_matches": main_matches,
-                        "prize_amount": prize_amount,
-                        "prize_description": prize_description,
-                        "prize_display": prize_display,
-                        "has_prize": prize_amount > 0,
-                        "play_number": i + 1
-                    }
-                    predictions.append(prediction_data)
-
-                    total_prize += prize_amount
-                    total_matches += main_matches
-                    if prize_amount > 0:
-                        winning_predictions += 1
+                    predictions.append({
+                        'prediction_id': pid,
+                        'prediction_date': created_at,
+                        'prediction_numbers': numbers,
+                        'prediction_powerball': pb,
+                        'winning_numbers': winning_numbers,
+                        'winning_powerball': winning_powerball,
+                        'number_matches': number_matches,
+                        'powerball_match': pb_match,
+                        'total_matches': main_matches,
+                        'prize_amount': float(prize_amount or 0.0),
+                        'prize_description': prize_desc,
+                        'prize_display': prize_display,
+                        'has_prize': bool(prize_amount and prize_amount > 0),
+                        'play_number': idx + 1
+                    })
 
                 num_predictions = len(predictions)
-                avg_matches = total_matches / num_predictions if num_predictions > 0 else 0
-                win_rate = (winning_predictions / num_predictions * 100) if num_predictions > 0 else 0
+                avg_matches = (total_matches / num_predictions) if num_predictions > 0 else 0.0
+                win_rate = (winning_predictions / num_predictions * 100.0) if num_predictions > 0 else 0.0
 
-                jackpot_count = sum(1 for p in predictions if p["prize_amount"] >= 100000000)
-                if jackpot_count > 0:
-                    total_prize_display = f"{jackpot_count} JACKPOT{'S' if jackpot_count > 1 else ''}"
+                if total_prize >= 100000000:
+                    total_prize_display = "JACKPOT!"
                 elif total_prize >= 1000000:
                     total_prize_display = f"${total_prize/1000000:.1f}M"
                 elif total_prize >= 1000:
@@ -2194,54 +2070,50 @@ def get_grouped_predictions_with_results_comparison(limit_groups: int = 5) -> Li
                 else:
                     total_prize_display = "$0"
 
-                best_prediction = max(predictions, key=lambda p: (p["total_matches"], p["powerball_match"], p["prize_amount"]))
-                if best_prediction["total_matches"] == 5 and best_prediction["powerball_match"]:
-                    best_result = "JACKPOT"
-                elif best_prediction["total_matches"] == 5:
-                    best_result = "5 Numbers"
-                elif best_prediction["total_matches"] == 4 and best_prediction["powerball_match"]:
-                    best_result = "4 + PB"
-                elif best_prediction["total_matches"] == 4:
-                    best_result = "4 Numbers"
-                elif best_prediction["total_matches"] == 3 and best_prediction["powerball_match"]:
-                    best_result = "3 + PB"
-                elif best_prediction["total_matches"] == 3:
-                    best_result = "3 Numbers"
-                elif best_prediction["total_matches"] == 2 and best_prediction["powerball_match"]:
-                    best_result = "2 + PB"
-                elif best_prediction["total_matches"] == 1 and best_prediction["powerball_match"]:
-                    best_result = "1 + PB"
-                elif best_prediction["powerball_match"]:
-                    best_result = "PB Only"
-                else:
-                    best_result = "No Match"
+                # Determine best result
+                best_result = "No Match"
+                if predictions:
+                    bp = max(predictions, key=lambda p: (p['total_matches'], p['powerball_match'], p['prize_amount']))
+                    if bp['total_matches'] == 5 and bp['powerball_match']:
+                        best_result = 'JACKPOT'
+                    elif bp['total_matches'] == 5:
+                        best_result = '5 Numbers'
+                    elif bp['total_matches'] == 4 and bp['powerball_match']:
+                        best_result = '4 + PB'
+                    elif bp['total_matches'] == 4:
+                        best_result = '4 Numbers'
+                    elif bp['total_matches'] == 3 and bp['powerball_match']:
+                        best_result = '3 + PB'
+                    elif bp['total_matches'] == 3:
+                        best_result = '3 Numbers'
+                    elif bp['total_matches'] == 2 and bp['powerball_match']:
+                        best_result = '2 + PB'
+                    elif bp['total_matches'] == 1 and bp['powerball_match']:
+                        best_result = '1 + PB'
+                    elif bp['powerball_match']:
+                        best_result = 'PB Only'
 
-                group_data = {
-                    "draw_date": draw_date,
-                    "winning_numbers": winning_numbers,
-                    "winning_powerball": winning_powerball,
-                    "prediction_date": predictions[0]["prediction_date"] if predictions else None,
-                    "predictions": predictions,
-                    "summary": {
-                        "total_prize": total_prize,
-                        "total_prize_display": total_prize_display,
-                        "predictions_with_prizes": winning_predictions,
-                        "win_rate_percentage": f"{win_rate:.0f}",
-                        "avg_matches": f"{avg_matches:.1f}",
-                        "best_result": best_result,
-                        "total_predictions": len(predictions)
+                grouped.append({
+                    'draw_date': draw_date,
+                    'winning_numbers': winning_numbers,
+                    'winning_powerball': winning_powerball,
+                    'prediction_date': predictions[0]['prediction_date'] if predictions else None,
+                    'predictions': predictions,
+                    'summary': {
+                        'total_prize': float(total_prize),
+                        'total_prize_display': total_prize_display,
+                        'predictions_with_prizes': winning_predictions,
+                        'win_rate_percentage': f"{win_rate:.0f}",
+                        'avg_matches': f"{avg_matches:.1f}",
+                        'best_result': best_result,
+                        'total_predictions': num_predictions
                     }
-                }
-                grouped_comparisons.append(group_data)
+                })
 
-            logger.info(
-                f"Retrieved {len(grouped_comparisons)} grouped prediction comparisons with {sum(len(g['predictions']) for g in grouped_comparisons)} total predictions"
-            )
-            return grouped_comparisons
-
+            logger.info(f"Grouped history built for {len(grouped)} draw dates")
+            return grouped
     except sqlite3.Error as e:
-        logger.error(
-            f"Error retrieving grouped predictions with results comparison: {e}")
+        logger.error(f"Error retrieving grouped predictions with results comparison: {e}")
         return []
 
 
@@ -2605,21 +2477,21 @@ def create_user(email: str, username: str, password_or_hash: str) -> Optional[in
             password_hash = password_or_hash  # Store bcrypt hash verbatim
         else:
             password_hash = hash_password(password_or_hash)  # Legacy SHA-256 hash
-        
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 INSERT INTO users (email, username, password_hash)
                 VALUES (?, ?, ?)
             """, (email.lower().strip(), username.strip(), password_hash))
-            
+
             user_id = cursor.lastrowid
             conn.commit()
-            
+
             logger.info(f"New user created: {username} (ID: {user_id})")
             return user_id
-            
+
     except sqlite3.IntegrityError as e:
         if "UNIQUE constraint failed" in str(e):
             logger.warning(f"Duplicate user: {email} / {username}")
@@ -2636,24 +2508,24 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Try login as email first, then username
             cursor.execute("""
                 SELECT id, email, username, password_hash, is_premium, premium_expires_at, is_active, created_at, login_count, is_admin
                 FROM users 
                 WHERE (email = ? OR username = ?) AND is_active = TRUE
             """, (login.lower().strip(), login.strip()))
-            
+
             user_data = cursor.fetchone()
-            
+
             if not user_data:
                 return None
-                
+
             user_id, email, username, stored_hash, is_premium, premium_expires_at, is_active, created_at, login_count, is_admin = user_data
-            
+
             # Deterministic verification based on hash format
             password_valid = False
-            
+
             if stored_hash.startswith(("$2a$", "$2b$", "$2y$")):
                 # Bcrypt hash - use secure verification
                 try:
@@ -2668,11 +2540,11 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
                 password_valid = verify_password(password, stored_hash)
                 if password_valid:
                     logger.info(f"User {login} authenticated with legacy hash - consider migration")
-            
+
             if not password_valid:
                 logger.warning(f"Authentication failed: invalid password for {login}")
                 return None
-                
+
             # Update login statistics
             cursor.execute("""
                 UPDATE users 
@@ -2680,10 +2552,10 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
                 WHERE id = ?
             """, (user_id,))
             conn.commit()
-            
+
             # Get updated login count
             updated_login_count = login_count + 1
-            
+
             # Check if premium has expired
             current_premium_status = is_premium
             if is_premium and premium_expires_at:
@@ -2697,9 +2569,9 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
                         conn.commit()
                 except ValueError:
                     pass
-            
+
             logger.info(f"User authenticated: {username} (Premium: {current_premium_status}, Admin: {bool(is_admin)})")
-            
+
             return {
                 'id': user_id,
                 'email': email,
@@ -2710,7 +2582,7 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
                 'login_count': updated_login_count,
                 'is_admin': bool(is_admin) if is_admin is not None else False
             }
-            
+
     except sqlite3.Error as e:
         logger.error(f"Database error during authentication: {e}")
         return None
@@ -2721,20 +2593,20 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 SELECT id, email, username, is_premium, premium_expires_at, created_at, last_login, login_count, is_admin
                 FROM users 
                 WHERE id = ? AND is_active = TRUE
             """, (user_id,))
-            
+
             user_data = cursor.fetchone()
-            
+
             if not user_data:
                 return None
-                
+
             user_id, email, username, is_premium, premium_expires_at, created_at, last_login, login_count, is_admin = user_data
-            
+
             return {
                 'id': user_id,
                 'email': email,
@@ -2746,7 +2618,7 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
                 'login_count': login_count,
                 'is_admin': bool(is_admin) if is_admin is not None else False
             }
-            
+
     except sqlite3.Error as e:
         logger.error(f"Database error getting user: {e}")
         return None
@@ -2757,13 +2629,13 @@ def upgrade_user_to_premium(user_id: int, expiry_date: datetime) -> bool:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 UPDATE users 
                 SET is_premium = TRUE, premium_expires_at = ?
                 WHERE id = ? AND is_active = TRUE
             """, (expiry_date.isoformat(), user_id))
-            
+
             if cursor.rowcount > 0:
                 conn.commit()
                 logger.info(f"User {user_id} upgraded to premium until {expiry_date}")
@@ -2771,7 +2643,7 @@ def upgrade_user_to_premium(user_id: int, expiry_date: datetime) -> bool:
             else:
                 logger.warning(f"User {user_id} not found for premium upgrade")
                 return False
-                
+
     except sqlite3.Error as e:
         logger.error(f"Database error upgrading user to premium: {e}")
         return False
@@ -2782,11 +2654,11 @@ def get_user_stats() -> Dict[str, int]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Total users
             cursor.execute("SELECT COUNT(*) FROM users WHERE is_active = TRUE")
             total_users = cursor.fetchone()[0]
-            
+
             # Premium users
             cursor.execute("""
                 SELECT COUNT(*) FROM users 
@@ -2794,7 +2666,7 @@ def get_user_stats() -> Dict[str, int]:
                 AND (premium_expires_at IS NULL OR premium_expires_at > CURRENT_TIMESTAMP)
             """)
             premium_users = cursor.fetchone()[0]
-            
+
             # Users created in last 30 days
             cursor.execute("""
                 SELECT COUNT(*) FROM users 
@@ -2802,14 +2674,14 @@ def get_user_stats() -> Dict[str, int]:
                 AND created_at > datetime('now', '-30 days')
             """)
             new_users = cursor.fetchone()[0]
-            
+
             return {
                 'total_users': total_users,
                 'premium_users': premium_users,
                 'new_users_30d': new_users,
                 'free_users': total_users - premium_users
             }
-            
+
     except sqlite3.Error as e:
         logger.error(f"Database error getting user stats: {e}")
         return {

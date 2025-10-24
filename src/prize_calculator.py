@@ -10,7 +10,7 @@ def calculate_prize_amount(main_matches: int, powerball_match: bool) -> tuple[fl
     Returns:
         Tuple of (prize_amount, prize_description)
     """
-    
+
     # Official Powerball prize structure (fixed amounts)
     if main_matches == 5 and powerball_match:
         return (100000000.0, "Jackpot")  # Variable jackpot

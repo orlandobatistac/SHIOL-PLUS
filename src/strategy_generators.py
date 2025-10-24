@@ -13,18 +13,18 @@ from src.database import get_db_connection, get_all_draws
 
 class BaseStrategy:
     """Base class for all ticket generation strategies"""
-    
+
     def __init__(self, name: str):
         self.name = name
         self.draws_df = get_all_draws()
-        
+
         if self.draws_df.empty:
             logger.warning(f"Strategy {name}: No historical data available")
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate tickets. Must be implemented by subclasses"""
         raise NotImplementedError(f"Strategy {self.name} must implement generate()")
-    
+
     def validate_ticket(self, white_balls: List[int], powerball: int) -> bool:
         """Validate ticket constraints"""
         if len(white_balls) != 5:
@@ -40,32 +40,32 @@ class BaseStrategy:
 
 class FrequencyWeightedStrategy(BaseStrategy):
     """Generate tickets using most frequent numbers with weighted probability"""
-    
+
     def __init__(self):
         super().__init__("frequency_weighted")
         self.frequencies = self._calculate_frequencies()
-    
+
     def _calculate_frequencies(self) -> np.ndarray:
         """Calculate normalized frequency of each number 1-69"""
         freq = np.zeros(69)
-        
+
         if self.draws_df.empty:
             # Uniform distribution if no data
             return np.ones(69) / 69
-        
+
         for _, draw in self.draws_df.iterrows():
             for num in [draw['n1'], draw['n2'], draw['n3'], draw['n4'], draw['n5']]:
                 freq[num - 1] += 1
-        
+
         # Normalize to probabilities
         total = freq.sum()
         if total > 0:
             freq = freq / total
         else:
             freq = np.ones(69) / 69
-        
+
         return freq
-    
+
     def _calculate_pb_frequencies(self) -> np.ndarray:
         """Calculate Powerball frequencies using only current-era draws (PB 1-26)"""
         freq = np.zeros(26)
@@ -101,7 +101,7 @@ class FrequencyWeightedStrategy(BaseStrategy):
             return freq / total
         else:
             return np.ones(26) / 26
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate tickets favoring frequent numbers"""
         tickets = []
@@ -117,7 +117,7 @@ class FrequencyWeightedStrategy(BaseStrategy):
                     replace=False,
                     p=self.frequencies
                 ).tolist())
-                
+
                 # Powerball with frequencies (FIXED VERSION)
                 # Validate and normalize
                 if pb_freq.sum() == 0 or len(pb_freq) != 26:
@@ -127,14 +127,14 @@ class FrequencyWeightedStrategy(BaseStrategy):
                     # Normalize to ensure sum = 1.0
                     pb_freq_normalized = pb_freq / pb_freq.sum()
                     powerball = int(np.random.choice(range(1, 27), p=pb_freq_normalized))
-                
+
                 tickets.append({
                     'white_balls': white_balls,
                     'powerball': powerball,
                     'strategy': self.name,
                     'confidence': 0.75
                 })
-                
+
             except Exception as e:
                 logger.error(f"{self.name} generation failed: {e}, using fallback")
                 # Complete fallback
@@ -146,60 +146,60 @@ class FrequencyWeightedStrategy(BaseStrategy):
                     'strategy': self.name,
                     'confidence': 0.50
                 })
-    
+
         logger.debug(f"{self.name}: Generated {count} tickets")
         return tickets
 
 
 class CoverageOptimizerStrategy(BaseStrategy):
     """Maximize unique numbers across all tickets"""
-    
+
     def __init__(self):
         super().__init__("coverage_optimizer")
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate tickets maximizing number coverage"""
         tickets = []
         used_numbers = set()
-        
+
         for _ in range(count):
             # Avoid previously used numbers
             available = [n for n in range(1, 70) if n not in used_numbers]
-            
+
             if len(available) < 5:
                 # Reset if not enough numbers remain
                 used_numbers = set()
                 available = list(range(1, 70))
-            
+
             white_balls = sorted(random.sample(available, 5))
             used_numbers.update(white_balls)
-            
+
             powerball = random.randint(1, 26)
-            
+
             tickets.append({
                 'white_balls': white_balls,
                 'powerball': powerball,
                 'strategy': self.name,
                 'confidence': 0.70
             })
-        
+
         logger.debug(f"{self.name}: Generated {count} tickets with {len(used_numbers)} unique numbers")
         return tickets
 
 
 class CooccurrenceStrategy(BaseStrategy):
     """Use number pairs that frequently appear together"""
-    
+
     def __init__(self):
         super().__init__("cooccurrence")
         self.strong_pairs = self._get_strong_pairs()
-    
+
     def _get_strong_pairs(self) -> List[Tuple[int, int]]:
         """Get pairs with significant positive deviation (>20%)"""
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 SELECT number_a, number_b
                 FROM cooccurrences
@@ -207,23 +207,23 @@ class CooccurrenceStrategy(BaseStrategy):
                 ORDER BY deviation_pct DESC
                 LIMIT 50
             """)
-            
+
             pairs = [(row[0], row[1]) for row in cursor.fetchall()]
             conn.close()
-            
+
             if not pairs:
                 logger.warning("No significant co-occurrence pairs found, using fallback")
                 return [(i, i+10) for i in range(1, 60, 10)]  # Fallback pairs
-            
+
             return pairs
         except Exception as e:
             logger.error(f"Error fetching co-occurrence pairs: {e}")
             return [(1, 11), (5, 15), (10, 20), (20, 30), (30, 40)]  # Fallback
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate using strong co-occurrence pairs"""
         tickets = []
-        
+
         for _ in range(count):
             # Start with a strong pair
             if self.strong_pairs:
@@ -231,44 +231,44 @@ class CooccurrenceStrategy(BaseStrategy):
                 white_balls = list(pair)
             else:
                 white_balls = random.sample(range(1, 70), 2)
-            
+
             # Fill remaining 3 numbers
             available = [n for n in range(1, 70) if n not in white_balls]
             white_balls.extend(random.sample(available, 3))
             white_balls.sort()
-            
+
             powerball = random.randint(1, 26)
-            
+
             tickets.append({
                 'white_balls': white_balls,
                 'powerball': powerball,
                 'strategy': self.name,
                 'confidence': 0.65
             })
-        
+
         logger.debug(f"{self.name}: Generated {count} tickets")
         return tickets
 
 
 class RangeBalancedStrategy(BaseStrategy):
     """Generate with balanced distribution: 2 low, 2 mid, 1 high"""
-    
+
     def __init__(self):
         super().__init__("range_balanced")
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate with typical low/mid/high distribution"""
         tickets = []
-        
+
         for _ in range(count):
             try:
                 low = random.sample(range(1, 24), 2)     # 1-23
                 mid = random.sample(range(24, 47), 2)    # 24-46
                 high = random.sample(range(47, 70), 1)   # 47-69
-                
+
                 white_balls = sorted(low + mid + high)
                 powerball = random.randint(1, 26)
-                
+
                 tickets.append({
                     'white_balls': white_balls,
                     'powerball': powerball,
@@ -286,21 +286,21 @@ class RangeBalancedStrategy(BaseStrategy):
                     'strategy': self.name,
                     'confidence': 0.50
                 })
-        
+
         logger.debug(f"{self.name}: Generated {count} tickets")
         return tickets
 
 
 class AIGuidedStrategy(BaseStrategy):
     """Use existing ML model predictions (backward compatibility)"""
-    
+
     def __init__(self):
         super().__init__("ai_guided")
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate using existing IntelligentGenerator"""
         tickets = []
-        
+
         try:
             from src.intelligent_generator import IntelligentGenerator
             # Try to instantiate IntelligentGenerator with zero args first; if it requires historical_data, handle gracefully
@@ -314,11 +314,11 @@ class AIGuidedStrategy(BaseStrategy):
                 except Exception as inner_e:
                     logger.error(f"IntelligentGenerator instantiation failed: {inner_e}")
                     raise
-            
+
             for _ in range(count):
                 try:
                     prediction = gen.generate_prediction()
-                    
+
                     tickets.append({
                         'white_balls': sorted([
                             prediction['n1'], prediction['n2'], prediction['n3'],
@@ -351,32 +351,32 @@ class AIGuidedStrategy(BaseStrategy):
                     'strategy': self.name,
                     'confidence': 0.50
                 })
-        
+
         logger.debug(f"{self.name}: Generated {count} tickets")
         return tickets
 
 
 class RandomBaselineStrategy(BaseStrategy):
     """Pure random generation (scientific control baseline)"""
-    
+
     def __init__(self):
         super().__init__("random_baseline")
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate completely random tickets"""
         tickets = []
-        
+
         for _ in range(count):
             white_balls = sorted(random.sample(range(1, 70), 5))
             powerball = random.randint(1, 26)
-            
+
             tickets.append({
                 'white_balls': white_balls,
                 'powerball': powerball,
                 'strategy': self.name,
                 'confidence': 0.50
             })
-        
+
         logger.debug(f"{self.name}: Generated {count} tickets")
         return tickets
 
@@ -387,7 +387,7 @@ class StrategyManager:
     
     Uses Bayesian weight updating based on historical performance.
     """
-    
+
     def __init__(self):
         self.strategies = {
             'frequency_weighted': FrequencyWeightedStrategy(),
@@ -397,42 +397,42 @@ class StrategyManager:
             'ai_guided': AIGuidedStrategy(),
             'random_baseline': RandomBaselineStrategy()
         }
-        
+
         self._initialize_strategy_weights()
         logger.info(f"StrategyManager initialized with {len(self.strategies)} strategies")
-    
+
     def _initialize_strategy_weights(self):
         """Initialize strategy_performance table with equal weights (1/6 each)"""
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         for name in self.strategies.keys():
             cursor.execute("""
                 INSERT OR IGNORE INTO strategy_performance 
                 (strategy_name, current_weight, confidence)
                 VALUES (?, 0.1667, 0.5)
             """, (name,))
-        
+
         conn.commit()
         conn.close()
         logger.debug("Strategy weights initialized")
-    
+
     def get_strategy_weights(self) -> Dict[str, float]:
         """Get current adaptive weights from database"""
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("SELECT strategy_name, current_weight FROM strategy_performance")
         weights = {row[0]: row[1] for row in cursor.fetchall()}
         conn.close()
-        
+
         # Ensure all strategies have weights
         for name in self.strategies.keys():
             if name not in weights:
                 weights[name] = 0.1667
-        
+
         return weights
-    
+
     def generate_balanced_tickets(self, total: int = 5) -> List[Dict]:
         """
         Generate tickets using weighted strategy selection.
@@ -447,7 +447,7 @@ class StrategyManager:
             List of ticket dictionaries
         """
         weights = self.get_strategy_weights()
-        
+
         # Normalize weights to sum to 1.0
         total_weight = sum(weights.values())
         if total_weight > 0:
@@ -455,7 +455,7 @@ class StrategyManager:
         else:
             # Fallback to equal weights
             normalized = {k: 1/len(weights) for k in weights.keys()}
-        
+
         # Select strategies proportionally
         try:
             selected = np.random.choice(
@@ -467,7 +467,7 @@ class StrategyManager:
         except ValueError as e:
             logger.error(f"Error in strategy selection: {e}, using uniform")
             selected = np.random.choice(list(self.strategies.keys()), size=total)
-        
+
         # Generate one ticket per selected strategy
         all_tickets = []
         for strategy_name in selected:
@@ -479,39 +479,39 @@ class StrategyManager:
                 # Fallback to random
                 fallback = RandomBaselineStrategy().generate(1)
                 all_tickets.extend(fallback)
-        
+
         # Ensure 5 different Powerballs
         all_tickets = self._ensure_different_powerballs(all_tickets[:total])
-        
+
         logger.info(f"Generated {len(all_tickets)} tickets with balanced strategies")
         return all_tickets
-    
+
     def _ensure_different_powerballs(self, tickets: List[Dict]) -> List[Dict]:
         """Modify Powerballs to ensure all are unique"""
         used_pbs = set()
-        
+
         for ticket in tickets:
             attempts = 0
             while ticket['powerball'] in used_pbs and attempts < 26:
                 ticket['powerball'] = random.randint(1, 26)
                 attempts += 1
-            
+
             used_pbs.add(ticket['powerball'])
-        
+
         return tickets
-    
+
     def get_strategy_summary(self) -> Dict[str, Dict]:
         """Get performance summary of all strategies"""
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT strategy_name, total_plays, total_wins, win_rate, 
                    roi, current_weight, confidence
             FROM strategy_performance
             ORDER BY roi DESC
         """)
-        
+
         summary = {}
         for row in cursor.fetchall():
             summary[row[0]] = {
@@ -522,6 +522,6 @@ class StrategyManager:
                 'current_weight': row[5],
                 'confidence': row[6]
             }
-        
+
         conn.close()
         return summary

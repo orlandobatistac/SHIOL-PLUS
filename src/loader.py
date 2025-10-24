@@ -1,6 +1,5 @@
 import os
 from typing import Optional, Dict, List
-from datetime import datetime
 
 import pandas as pd
 import requests
@@ -70,13 +69,13 @@ def update_database_from_source() -> int:
     initialize_database()
 
     fetched_data = _fetch_powerball_data()
-    
+
     if fetched_data is None or len(fetched_data) == 0:
         logger.error("Update process failed: could not fetch data from any source.")
         return len(get_all_draws())
 
     transformed_df = _transform_api_data(fetched_data)
-    
+
     if transformed_df is None or transformed_df.empty:
         logger.error("Update process failed: could not transform data.")
         return len(get_all_draws())
@@ -173,18 +172,18 @@ def _fetch_powerball_data() -> Optional[List[Dict]]:
         List[Dict]: List of drawing results, or None if all sources fail.
     """
     data = _fetch_from_musl_api()
-    
+
     if data:
         logger.info(f"Successfully fetched {len(data)} draws from MUSL API")
         return data
-    
+
     logger.warning("MUSL API failed, trying NY State fallback...")
     data = _fetch_from_nystate_api()
-    
+
     if data:
         logger.info(f"Successfully fetched {len(data)} draws from NY State Open Data")
         return data
-    
+
     logger.error("All data sources failed")
     return None
 
@@ -201,13 +200,13 @@ def _fetch_from_nystate_api() -> Optional[List[Dict]]:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
-        
+
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
-        
+
         data = response.json()
         return data
-        
+
     except requests.exceptions.RequestException as e:
         logger.warning(f"NY State API request failed: {e}")
         return None
@@ -230,9 +229,9 @@ def _transform_api_data(api_data: List[Dict]) -> Optional[pd.DataFrame]:
     try:
         if not api_data:
             return None
-            
+
         records = []
-        
+
         for item in api_data:
             try:
                 record = _parse_draw_record(item)
@@ -241,19 +240,19 @@ def _transform_api_data(api_data: List[Dict]) -> Optional[pd.DataFrame]:
             except Exception as e:
                 logger.warning(f"Skipping invalid record: {e}")
                 continue
-        
+
         if not records:
             logger.error("No valid records found in API data")
             return None
-        
+
         df = pd.DataFrame(records)
         df["draw_date"] = pd.to_datetime(df["draw_date"])
         df.sort_values(by="draw_date", ascending=True, inplace=True)
         df.drop_duplicates(subset=["draw_date"], inplace=True)
-        
+
         logger.info(f"Transformation complete. {len(df)} valid draws processed.")
         return df
-        
+
     except Exception as e:
         logger.error(f"Error transforming API data: {e}")
         return None
@@ -291,13 +290,13 @@ def _parse_nystate_format(item: Dict) -> Optional[Dict]:
     try:
         numbers_str = item.get("winning_numbers", "")
         numbers = [int(n.strip()) for n in numbers_str.split()]
-        
+
         if len(numbers) != 6:
             return None
-        
+
         draw_date_str = item.get("draw_date", "")
         draw_date = pd.to_datetime(draw_date_str).strftime("%Y-%m-%d")
-        
+
         return {
             "draw_date": draw_date,
             "n1": numbers[0],
@@ -324,20 +323,20 @@ def _fetch_from_musl_api() -> Optional[List[Dict]]:
         if not api_key:
             logger.warning("MUSL_API_KEY not found in environment variables")
             return None
-        
+
         url = "https://api.musl.com/v3/numbers"
         headers = {
             "accept": "application/json",
             "x-api-key": api_key
         }
         params = {"GameCode": "powerball"}
-        
+
         response = requests.get(url, headers=headers, params=params, timeout=15)
         response.raise_for_status()
-        
+
         data = response.json()
         return [data] if data else None
-        
+
     except requests.exceptions.RequestException as e:
         logger.warning(f"MUSL API request failed: {e}")
         return None
@@ -363,24 +362,24 @@ def _parse_musl_format(item: Dict) -> Optional[Dict]:
     try:
         numbers_list = item.get("numbers", [])
         draw_date = item.get("drawDate", "")
-        
+
         white_balls = []
         powerball = None
-        
+
         for num_obj in numbers_list:
             rule_code = num_obj.get("ruleCode", "")
             value = int(num_obj.get("value", 0))
-            
+
             if rule_code == "white-balls":
                 white_balls.append(value)
             elif rule_code == "powerball":
                 powerball = value
-        
+
         if len(white_balls) != 5 or powerball is None:
             return None
-        
+
         white_balls.sort()
-        
+
         return {
             "draw_date": draw_date,
             "n1": white_balls[0],
@@ -416,25 +415,25 @@ def fetch_musl_jackpot() -> Optional[Dict]:
         if not api_key:
             logger.warning("MUSL_API_KEY not found in environment variables")
             return None
-        
+
         url = "https://api.musl.com/v3/grandprize"
         headers = {
             "accept": "application/json",
             "x-api-key": api_key
         }
         params = {"GameCode": "powerball"}
-        
+
         response = requests.get(url, headers=headers, params=params, timeout=15)
         response.raise_for_status()
-        
+
         data = response.json()
-        
+
         if not data or "grandPrize" not in data:
             return None
-        
+
         grand_prize = data["grandPrize"]
         next_drawing = data.get("nextDrawing", {})
-        
+
         return {
             "annuity": grand_prize.get("annuity", 0),
             "cash": grand_prize.get("cash", 0),
@@ -449,7 +448,7 @@ def fetch_musl_jackpot() -> Optional[Dict]:
             "drawDate": data.get("drawDate", ""),
             "nextDrawDate": next_drawing.get("drawDate", "")
         }
-        
+
     except requests.exceptions.RequestException as e:
         logger.error(f"MUSL Grand Prize API request failed: {e}")
         return None

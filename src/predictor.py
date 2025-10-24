@@ -10,13 +10,10 @@ from sklearn.multioutput import MultiOutputClassifier
 from xgboost import XGBClassifier
 from typing import Dict, List, Tuple, Any, Optional
 
-from src.loader import get_data_loader, DataLoader # Assuming DataLoader is available for retraining
+from src.loader import DataLoader # Assuming DataLoader is available for retraining
 from src.intelligent_generator import FeatureEngineer, DeterministicGenerator
 from src.database import save_prediction_log
 
-def get_model_trainer():
-    """Function to get model trainer for external validation"""
-    return ModelTrainer("models/shiolplus.pkl")
 # Assuming EnsemblePredictor and EnsembleMethod are defined elsewhere, e.g., in src.ensemble_predictor
 # Placeholder import for EnsemblePredictor and EnsembleMethod
 try:
@@ -159,7 +156,7 @@ class ModelTrainer:
         if len(available_features) != len(feature_cols):
             missing = set(feature_cols) - set(available_features)
             logger.warning(f"Missing expected features for training: {missing}. Proceeding with available features.")
-        
+
         logger.info(f"Using features for training: {available_features}")
         return features_df[available_features]
 
@@ -179,9 +176,9 @@ class ModelTrainer:
         n_estimators = int(self.config["model_params"]["n_estimators"])
         learning_rate = float(self.config["model_params"].get("learning_rate", 0.1))
         random_state = int(self.config["model_params"]["random_state"])
-        
+
         logger.info(f"Initializing XGBoost model: n_estimators={n_estimators}, learning_rate={learning_rate}")
-        
+
         base_classifier = XGBClassifier(
             n_estimators=n_estimators,
             learning_rate=learning_rate,
@@ -245,11 +242,11 @@ class ModelTrainer:
             self.model = model_bundle.get("model")
             self.target_columns = model_bundle.get("target_columns")
             self.feature_names = model_bundle.get("feature_names", []) # Store feature names if available
-            
+
             if self.model is None or self.target_columns is None:
                 logger.warning(f"Loaded model bundle from {self.model_path} is incomplete or corrupted. Retraining might be necessary.")
                 return None
-            
+
             logger.info(f"Model bundle loaded from {self.model_path}")
             return self.model
         except FileNotFoundError:
@@ -335,7 +332,7 @@ class ModelTrainer:
 
         # Ensure the order is correct
         ordered_features = [f for f in model_features if f in features_df.columns]
-        
+
         # Check for unexpected features in input
         unexpected_features = [f for f in features_df.columns if f not in model_features]
         if unexpected_features:
@@ -903,7 +900,7 @@ class Predictor:
             from src.adaptive_feedback import AdaptivePlayScorer # Assuming this exists
             adaptive_scorer = AdaptivePlayScorer(self.historical_data)
             num_adaptive = int(num_plays * 0.25)
-            
+
             # Use deterministic generator for base plays, then re-score adaptively
             deterministic_gen_for_adaptive = DeterministicGenerator(self.historical_data)
             adaptive_candidates_base = deterministic_gen_for_adaptive.generate_diverse_predictions(
@@ -924,7 +921,7 @@ class Predictor:
                 candidate['ensemble_weight'] = 0.25
                 candidate['ensemble_score'] = candidate.get('score_total', 0) * 0.25
                 adaptive_candidates.append(candidate)
-            
+
             all_candidates.extend(adaptive_candidates)
             logger.info(f"Added {len(adaptive_candidates)} candidates from adaptive scoring.")
 
@@ -938,12 +935,12 @@ class Predictor:
             from src.intelligent_generator import IntelligentGenerator # Assuming this exists
             intelligent_gen = IntelligentGenerator(self.historical_data)
             num_intelligent = int(num_plays * 0.15)
-            
+
             # Generate plays using the intelligent generator
             intelligent_candidates_raw = intelligent_gen.generate_plays(
                  wb_probs, pb_probs, num_plays=num_intelligent, num_candidates=num_intelligent*3
             )
-            
+
             # Need to convert raw output to a consistent format and score them
             intelligent_candidates = []
             # Assuming IntelligentGenerator output needs processing and scoring
@@ -961,7 +958,7 @@ class Predictor:
                     scores = deterministic_gen_for_scoring.scorer.calculate_total_score(
                         numbers, powerball, wb_probs, pb_probs
                     )
-                    
+
                     candidate = {
                         'numbers': numbers, 'powerball': powerball,
                         'score_total': scores['total'], 'score_details': scores,
@@ -986,7 +983,7 @@ class Predictor:
         for candidate in all_candidates:
             # Calculate diversity bonus
             diversity_bonus = self._calculate_ensemble_diversity(candidate, all_candidates)
-            
+
             # Combine weighted score and diversity bonus
             # Adjust contribution of diversity bonus (e.g., weight it less)
             ensemble_score = candidate.get('ensemble_score', 0) + (diversity_bonus * 0.1) # Example: diversity adds up to 0.1
@@ -1064,7 +1061,7 @@ class Predictor:
             # and understanding its output format for comparison.
             from src.intelligent_generator import IntelligentGenerator
             traditional_generator = IntelligentGenerator() # Assuming default initialization
-            
+
             # Generate a single play for comparison
             # The exact parameters might need adjustment based on IntelligentGenerator's API
             traditional_play_list = traditional_generator.generate_plays(
@@ -1075,7 +1072,7 @@ class Predictor:
                 # Process the output to fit the comparison structure
                 # Assuming the output is a list of dicts or similar
                 first_traditional_play = traditional_play_list[0]
-                
+
                 comparison_results['traditional_method'] = {
                     'numbers': first_traditional_play.get('numbers', []),
                     'powerball': first_traditional_play.get('powerball', 1),
@@ -1135,7 +1132,7 @@ class Predictor:
             if not self.historical_data.empty:
                 # Quick frequency analysis for better fallback
                 recent_data = self.historical_data.tail(100)  # Last 100 draws
-                
+
                 # Count frequency of white ball numbers
                 wb_counts = np.zeros(69)
                 for _, row in recent_data.iterrows():
@@ -1144,7 +1141,7 @@ class Predictor:
                             num = int(row[f'n{i}']) - 1  # Convert to 0-based index
                             if 0 <= num < 69:
                                 wb_counts[num] += 1
-                
+
                 # Count frequency of powerball numbers
                 pb_counts = np.zeros(26)
                 if 'pb' in recent_data.columns:
@@ -1152,21 +1149,21 @@ class Predictor:
                         pb_idx = int(pb) - 1  # Convert to 0-based index
                         if 0 <= pb_idx < 26:
                             pb_counts[pb_idx] += 1
-                
+
                 # Normalize to probabilities with smoothing
                 wb_probs = (wb_counts + 1) / (wb_counts.sum() + 69)  # Add-one smoothing
                 pb_probs = (pb_counts + 1) / (pb_counts.sum() + 26)
-                
+
                 # Ensure they sum to 1
                 wb_probs = wb_probs / wb_probs.sum()
                 pb_probs = pb_probs / pb_probs.sum()
-                
+
                 logger.info("Using historical frequency-based fallback probabilities")
                 return wb_probs, pb_probs
-            
+
         except Exception as e:
             logger.warning(f"Failed to create intelligent fallback: {e}")
-        
+
         # Ultimate fallback to uniform
         logger.info("Using uniform fallback probabilities")
         return np.ones(69) / 69, np.ones(26) / 26
@@ -1219,7 +1216,7 @@ class Predictor:
                 # Update the Predictor's model trainer to use the newly trained model
                 self.model_trainer = trainer # Replace the trainer instance
                 self.load_model() # Load the newly trained model into the predictor
-                
+
                 # Re-initialize other components that might depend on model context if necessary
                 self.historical_data = data # Update historical data if it was also reloaded
                 self.feature_engineer = FeatureEngineer(self.historical_data)

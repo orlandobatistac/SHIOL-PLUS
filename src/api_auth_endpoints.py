@@ -9,13 +9,12 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import jwt
-import secrets
 import os
 from loguru import logger
 from passlib.context import CryptContext
 
 from src.database import (
-    create_user, authenticate_user, get_user_by_id, 
+    create_user, authenticate_user, get_user_by_id,
     get_user_stats, upgrade_user_to_premium
 )
 from src.stripe_config import get_stripe_config, get_feature_flag_billing_enabled
@@ -48,7 +47,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     username: str = Field(..., min_length=3, max_length=20, description="Unique username")
     password: str = Field(..., min_length=6, description="Password (minimum 6 characters)")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -62,7 +61,7 @@ class LoginRequest(BaseModel):
     login: str = Field(..., description="Email or username")
     password: str = Field(..., description="Password")
     remember_me: bool = Field(default=False, description="Keep user logged in (30 days)")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -104,7 +103,7 @@ class RegisterAndUpgradeRequest(BaseModel):
     password: str = Field(..., min_length=6, description="Password (minimum 6 characters)")
     success_url: str = Field(..., description="URL to redirect after successful payment")
     cancel_url: str = Field(..., description="URL to redirect if payment cancelled")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -126,7 +125,7 @@ def create_access_token(user_data: Dict[str, Any], remember_me: bool = False) ->
         expiration = datetime.utcnow() + timedelta(days=30)
     else:
         expiration = datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HOURS)
-    
+
     payload = {
         "user_id": user_data["id"],
         "username": user_data["username"],
@@ -156,7 +155,7 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
 def get_user_tier_info(user_data: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate user tier and insights quota information with day-based limits."""
     is_premium = user_data.get("is_premium", False)
-    
+
     # Check if premium is expired
     if is_premium and user_data.get("premium_expires_at"):
         try:
@@ -165,7 +164,7 @@ def get_user_tier_info(user_data: Dict[str, Any]) -> Dict[str, Any]:
                 is_premium = False
         except (ValueError, TypeError):
             is_premium = False
-    
+
     # Determine tier and quotas
     if is_premium:
         return {
@@ -181,20 +180,20 @@ def get_user_tier_info(user_data: Dict[str, Any]) -> Dict[str, Any]:
         insights_for_next_draw = 1  # Secure default
         is_premium_day = False
         next_draw_day = None
-        
+
         try:
             from src.date_utils import DateManager
             current_et = DateManager.get_current_et_time()
             next_draw_str = DateManager.calculate_next_drawing_date(reference_date=current_et)
             next_draw = datetime.strptime(next_draw_str, "%Y-%m-%d")
             next_draw_day = next_draw.strftime("%A")
-            
+
             # Saturday is Premium Day - 5 insights
             # All other days (Tuesday, Thursday, etc.) - 1 insight
             if next_draw_day == "Saturday":
                 insights_for_next_draw = 5
                 is_premium_day = True
-                logger.debug(f"Next draw is Saturday - Premium Day (5 insights)")
+                logger.debug("Next draw is Saturday - Premium Day (5 insights)")
             elif next_draw_day in ("Tuesday", "Thursday", "Monday", "Wednesday", "Friday", "Sunday"):
                 insights_for_next_draw = 1
                 is_premium_day = False
@@ -204,12 +203,12 @@ def get_user_tier_info(user_data: Dict[str, Any]) -> Dict[str, Any]:
                 logger.warning(f"Unexpected next draw day '{next_draw_day}', defaulting to 1 insight")
                 insights_for_next_draw = 1
                 is_premium_day = False
-                
+
         except Exception as e:
             # SECURITY: Fail closed - give minimum quota on error
             logger.warning(f"Error calculating next draw day for quota: {e}, failing closed to 1 insight")
             insights_for_next_draw = 1
-        
+
         return {
             "plan_tier": "free",
             "insights_remaining": insights_for_next_draw,
@@ -230,7 +229,7 @@ async def get_current_user(
     """Get current authenticated user from token or session."""
     token = None
     auth_source = None
-    
+
     # Try session cookie FIRST (prioritize web session auth)
     if session_token:
         token = session_token
@@ -239,23 +238,23 @@ async def get_current_user(
     elif credentials:
         token = credentials.credentials
         auth_source = "header"
-    
+
     if not token:
         return None
-    
+
     # Verify token
     payload = verify_token(token)
     if not payload:
         return None
-    
+
     # Get fresh user data from database
     user_data = get_user_by_id(payload["user_id"])
     if not user_data:
         return None
-    
+
     # Debug logging to track auth source
     logger.debug(f"User authenticated via {auth_source}: {user_data.get('username', 'unknown')}")
-    
+
     return user_data
 
 async def require_auth(current_user: Optional[Dict[str, Any]] = Depends(get_current_user)) -> Dict[str, Any]:
@@ -281,10 +280,10 @@ async def register_user(user_data: RegisterRequest, response: Response):
         # Validate input
         if len(user_data.username.strip()) < 3:
             raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
-        
+
         if len(user_data.password) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-        
+
         # Hash password securely with bcrypt
         password_hash = hash_password_secure(user_data.password)
         # Create user
@@ -293,18 +292,18 @@ async def register_user(user_data: RegisterRequest, response: Response):
         except Exception as e:
             logger.error(f"Register DB error: {e}")
             raise HTTPException(status_code=500, detail="Database error")
-        
+
         if user_id is None:
             raise HTTPException(status_code=409, detail="Email or username already exists")
-        
+
         # Get user data for response
         user_info = get_user_by_id(user_id)
         if not user_info:
             raise HTTPException(status_code=500, detail="Failed to retrieve user data")
-        
+
         # Create session token
         access_token = create_access_token(user_info)
-        
+
         # Set secure session cookie
         is_production = os.getenv("ENVIRONMENT", "development") == "production"
         response.set_cookie(
@@ -316,13 +315,13 @@ async def register_user(user_data: RegisterRequest, response: Response):
             samesite="strict" if is_production else "lax",
             path="/"  # Ensure consistent path with logout
         )
-        
+
         logger.info(f"User registered successfully: {user_data.username}")
-        
+
         # Get user tier info for response
         user_tier_info = get_user_tier_info(user_info)
         user_response_data = {**user_info, **user_tier_info}
-        
+
         return AuthResponse(
             success=True,
             message="Account created successfully",
@@ -330,7 +329,7 @@ async def register_user(user_data: RegisterRequest, response: Response):
             access_token=None,  # Don't return token for web session auth
             is_premium=user_info["is_premium"]
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -348,15 +347,15 @@ async def register_and_upgrade(user_data: RegisterAndUpgradeRequest, response: R
             status_code=503,
             detail="Billing functionality is currently disabled"
         )
-    
+
     try:
         # Step 1: Validate input (same as register endpoint)
         if len(user_data.username.strip()) < 3:
             raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
-        
+
         if len(user_data.password) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-        
+
         # Step 2: Hash password and create user
         password_hash = hash_password_secure(user_data.password)
         try:
@@ -364,17 +363,17 @@ async def register_and_upgrade(user_data: RegisterAndUpgradeRequest, response: R
         except Exception as e:
             logger.error(f"Register-and-upgrade DB error: {e}")
             raise HTTPException(status_code=500, detail="Database error")
-        
+
         if user_id is None:
             raise HTTPException(status_code=409, detail="Email or username already exists")
-        
+
         # Step 3: Get user data and create session token
         user_info = get_user_by_id(user_id)
         if not user_info:
             raise HTTPException(status_code=500, detail="Failed to retrieve user data")
-        
+
         access_token = create_access_token(user_info)
-        
+
         # Step 4: Set secure session cookie
         is_production = os.getenv("ENVIRONMENT", "development") == "production"
         response.set_cookie(
@@ -386,11 +385,11 @@ async def register_and_upgrade(user_data: RegisterAndUpgradeRequest, response: R
             samesite="strict" if is_production else "lax",
             path="/"
         )
-        
+
         # Step 5: Create Stripe checkout session
         stripe_config = get_stripe_config()
         stripe.api_key = stripe_config["secret_key"]
-        
+
         try:
             session = stripe.checkout.Session.create(
                 payment_method_types=['card'],
@@ -413,13 +412,13 @@ async def register_and_upgrade(user_data: RegisterAndUpgradeRequest, response: R
                     }
                 }
             )
-            
+
             logger.info(f"User {user_data.username} registered and checkout session created: {session.id}")
-            
+
             # Get user tier info for response
             user_tier_info = get_user_tier_info(user_info)
             user_response_data = {**user_info, **user_tier_info}
-            
+
             return {
                 "success": True,
                 "message": "Account created successfully",
@@ -427,7 +426,7 @@ async def register_and_upgrade(user_data: RegisterAndUpgradeRequest, response: R
                 "checkout_url": session.url,
                 "session_id": session.id
             }
-            
+
         except Exception as e:
             logger.error(f"Stripe error after registration: {e}")
             # User is already registered at this point, so return success with error message
@@ -440,7 +439,7 @@ async def register_and_upgrade(user_data: RegisterAndUpgradeRequest, response: R
                 "checkout_url": None,
                 "error": str(e)
             }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -453,19 +452,19 @@ async def login_user(login_data: LoginRequest, response: Response):
     try:
         # Authenticate user
         user_info = authenticate_user(login_data.login, login_data.password)
-        
+
         if not user_info:
             raise HTTPException(status_code=401, detail="Invalid email/username or password")
-        
+
         # Create session token with remember_me support
         access_token = create_access_token(user_info, remember_me=login_data.remember_me)
-        
+
         # Calculate cookie max_age based on remember_me
         if login_data.remember_me:
             max_age = 30 * 24 * 3600  # 30 days
         else:
             max_age = JWT_EXPIRE_HOURS * 3600  # 7 days
-        
+
         # Set secure session cookie
         is_production = os.getenv("ENVIRONMENT", "development") == "production"
         response.set_cookie(
@@ -477,13 +476,13 @@ async def login_user(login_data: LoginRequest, response: Response):
             samesite="strict" if is_production else "lax",
             path="/"  # Ensure consistent path with logout
         )
-        
+
         logger.info(f"User logged in: {user_info['username']} (Premium: {user_info['is_premium']}, Remember: {login_data.remember_me})")
-        
+
         # Get user tier info for response
         user_tier_info = get_user_tier_info(user_info)
         user_response_data = {**user_info, **user_tier_info}
-        
+
         return AuthResponse(
             success=True,
             message="Login successful",
@@ -491,7 +490,7 @@ async def login_user(login_data: LoginRequest, response: Response):
             access_token=None,  # Don't return token for web session auth
             is_premium=user_info["is_premium"]
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -501,15 +500,12 @@ async def login_user(login_data: LoginRequest, response: Response):
 @auth_router.post("/logout")
 async def logout_user(response: Response):
     """Logout user by clearing session."""
-    # Determine if we're in production
-    is_production = os.getenv('ENVIRONMENT', '').lower() == 'production'
-    
     # Clear session cookie - only key and path needed for deletion
     response.delete_cookie(
         key="session_token",
         path="/"
     )
-    
+
     return {"success": True, "message": "Logged out successfully"}
 
 @auth_router.get("/me", response_model=UserResponse)
@@ -574,20 +570,20 @@ async def upgrade_to_premium(current_user: Dict[str, Any] = Depends(require_auth
     try:
         # For demo purposes - grant 1 year premium access
         expiry_date = datetime.now() + timedelta(days=365)
-        
+
         success = upgrade_user_to_premium(current_user["id"], expiry_date)
-        
+
         if not success:
             raise HTTPException(status_code=500, detail="Failed to upgrade to premium")
-        
+
         logger.info(f"User {current_user['username']} upgraded to premium")
-        
+
         return {
             "success": True,
             "message": "Successfully upgraded to premium access for 1 year!",
             "premium_expires_at": expiry_date.isoformat()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

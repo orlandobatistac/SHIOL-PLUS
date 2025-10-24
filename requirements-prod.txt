@@ -1,27 +1,22 @@
-# SHIOL+ Production Requirements - VPS Deployment with ML Pipeline
-# Version 4.0 - Complete dependencies for production deployment
-# Total estimated size: ~850MB (optimized from 2GB+ full requirements.txt)
+# SHIOL+ Production Requirements - VPS Deployment
+# Optimized dependencies for production deployment
+# Estimated size: ~850MB (optimized from 2GB+ dev requirements)
 
 # Core Web Framework
-fastapi==0.104.1
+fastapi>=0.109.1
 uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+python-multipart>=0.0.18
 
 # Essential Utilities
 requests==2.32.4
 loguru==0.7.3
 pytz==2023.3
-jinja2==3.1.2
+jinja2>=3.1.6
+python-dotenv
 
-# Scheduling (for automated pipeline)
+# Scheduling & Database
 apscheduler==3.10.4
-SQLAlchemy==2.0.23
-
-# AI Integration (Core Feature)
-google-generativeai
-
-# Basic Image Processing
-Pillow
+sqlalchemy==2.0.23
 
 # Security & Authentication
 bcrypt==4.1.2
@@ -29,8 +24,9 @@ psutil==5.9.8
 PyJWT==2.8.0
 passlib==1.7.4
 email-validator==2.1.0
+starlette>=0.47.2
 
-# Payment Processing (optional - can be disabled via feature flag)
+# Payment Processing
 stripe==8.5.0
 
 # ML Pipeline Dependencies (REQUIRED for model retraining)
@@ -42,12 +38,17 @@ joblib==1.5.1
 statsmodels
 scipy
 
-# Dependencies REMOVED for production optimization:
-# - matplotlib==3.8.2 (visualization - 150MB)
-# - plotly==5.17.0 (interactive plots - 100MB)  
-# - opencv-python (computer vision - 180MB)
-# - easyocr (OCR with models - 500MB)
-# - scikit-image (image processing - 200MB)
+# AI Integration
+google-generativeai
+
+# Basic Image Processing
+Pillow
+
+# Dependencies EXCLUDED for production optimization:
+# - matplotlib==3.8.2 (visualization - ~150MB)
+# - plotly==5.17.0 (interactive plots - ~100MB)  
+# - easyocr (OCR with models - ~500MB)
 # - google-cloud-vision (replaced by Gemini)
+# - scikit-image (image processing - ~200MB)
 # 
 # Estimated savings: ~1.2GB while maintaining ML pipeline functionality

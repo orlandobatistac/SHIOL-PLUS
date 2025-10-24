@@ -5,8 +5,8 @@ Handles token creation, revocation, and device fingerprinting.
 """
 
 import sqlite3
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
+from datetime import datetime
+from typing import Dict, Any, Optional
 from loguru import logger
 
 from src.database import get_db_connection
@@ -42,18 +42,18 @@ def create_premium_pass(email: str, stripe_subscription_id: str, user_id: Option
     try:
         # Generate Premium Pass token
         token_data = create_premium_pass_token(email, stripe_subscription_id, user_id)
-        
+
         # Store in database (with duplicate check for webhook idempotency)
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Check if Premium Pass already exists for this subscription
             cursor.execute("""
                 SELECT id, pass_token, jti, email, expires_at 
                 FROM premium_passes 
                 WHERE stripe_subscription_id = ? AND revoked_at IS NULL
             """, (stripe_subscription_id,))
-            
+
             existing_pass = cursor.fetchone()
             if existing_pass:
                 logger.info(f"Premium Pass already exists for subscription {stripe_subscription_id}, returning existing pass")
@@ -65,7 +65,7 @@ def create_premium_pass(email: str, stripe_subscription_id: str, user_id: Option
                     "expires_at": existing_pass[4],
                     "stripe_subscription_id": stripe_subscription_id
                 }
-            
+
             # Create new Premium Pass
             cursor.execute("""
                 INSERT INTO premium_passes (
@@ -83,12 +83,12 @@ def create_premium_pass(email: str, stripe_subscription_id: str, user_id: Option
                 datetime.utcnow(),
                 datetime.utcnow()
             ))
-            
+
             pass_id = cursor.lastrowid
             conn.commit()
-            
+
         logger.info(f"Premium Pass created: pass_id={pass_id}, email={email}, subscription={stripe_subscription_id}")
-        
+
         return {
             "pass_id": pass_id,
             "token": token_data["token"],
@@ -97,7 +97,7 @@ def create_premium_pass(email: str, stripe_subscription_id: str, user_id: Option
             "expires_at": token_data["expires_at"],
             "stripe_subscription_id": stripe_subscription_id
         }
-        
+
     except sqlite3.Error as e:
         logger.error(f"Database error creating Premium Pass: {e}")
         raise PremiumPassError(f"Failed to create Premium Pass: {e}")
@@ -126,47 +126,47 @@ def validate_premium_pass_token(token: str, device_info: Optional[Dict] = None, 
         payload = decode_premium_pass_token(token)
         jti = payload["jti"]
         email = payload["email"]
-        
+
         # Check if token is revoked
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 SELECT id, email, revoked_at, revoked_reason, device_count, expires_at
                 FROM premium_passes 
                 WHERE jti = ? AND pass_token = ?
             """, (jti, token))
-            
+
             pass_record = cursor.fetchone()
-            
+
             if not pass_record:
                 logger.warning(f"Premium Pass not found in database: jti={jti}")
                 raise PremiumPassError("Invalid Premium Pass")
-            
+
             pass_id, db_email, revoked_at, revoked_reason, device_count, expires_at = pass_record
-            
+
             # Check if revoked
             if revoked_at:
                 logger.info(f"Premium Pass revoked: jti={jti}, reason={revoked_reason}")
                 raise PremiumPassError(f"Premium Pass revoked: {revoked_reason}")
-            
+
             # Check device limits if device info provided
             if device_info and request:
                 try:
                     validated_data = validate_fingerprint_data(device_info)
                     device_fingerprint = generate_device_fingerprint(request, validated_data)
-                    
+
                     # Check/register device
                     _check_and_register_device(cursor, pass_id, device_fingerprint)
                     conn.commit()
-                    
+
                 except DeviceLimitError:
                     raise
                 except Exception as e:
                     logger.warning(f"Device fingerprinting failed, allowing access: {e}")
-            
+
         logger.info(f"Premium Pass validated successfully: email={email}, jti={jti}")
-        
+
         return {
             "valid": True,
             "pass_id": pass_id,
@@ -176,7 +176,7 @@ def validate_premium_pass_token(token: str, device_info: Optional[Dict] = None, 
             "stripe_subscription_id": payload["stripe_subscription_id"],
             "expires_at": expires_at
         }
-        
+
     except DeviceLimitError:
         raise
     except Exception as e:
@@ -196,15 +196,15 @@ def _check_and_register_device(cursor, pass_id: int, device_fingerprint: str) ->
         DeviceLimitError: If device limit exceeded
     """
     now = datetime.utcnow()
-    
+
     # Check if device already registered
     cursor.execute("""
         SELECT id FROM premium_pass_devices 
         WHERE pass_id = ? AND device_fingerprint = ?
     """, (pass_id, device_fingerprint))
-    
+
     existing_device = cursor.fetchone()
-    
+
     if existing_device:
         # Update last seen time
         cursor.execute("""
@@ -213,32 +213,32 @@ def _check_and_register_device(cursor, pass_id: int, device_fingerprint: str) ->
             WHERE pass_id = ? AND device_fingerprint = ?
         """, (now, pass_id, device_fingerprint))
         return
-    
+
     # Check current device count
     cursor.execute("""
         SELECT COUNT(*) FROM premium_pass_devices 
         WHERE pass_id = ?
     """, (pass_id,))
-    
+
     device_count = cursor.fetchone()[0]
-    
+
     if device_count >= MAX_DEVICES_PER_PASS:
         logger.warning(f"Device limit exceeded for pass_id={pass_id}: {device_count}/{MAX_DEVICES_PER_PASS}")
         raise DeviceLimitError(f"Device limit exceeded. Maximum {MAX_DEVICES_PER_PASS} devices allowed per Premium Pass.")
-    
+
     # Register new device
     cursor.execute("""
         INSERT INTO premium_pass_devices (pass_id, device_fingerprint, first_seen_at, last_seen_at)
         VALUES (?, ?, ?, ?)
     """, (pass_id, device_fingerprint, now, now))
-    
+
     # Update device count in premium_passes
     cursor.execute("""
         UPDATE premium_passes 
         SET device_count = device_count + 1, updated_at = ?
         WHERE id = ?
     """, (now, pass_id))
-    
+
     logger.info(f"New device registered for pass_id={pass_id}: {device_fingerprint[:16]}... ({device_count + 1}/{MAX_DEVICES_PER_PASS})")
 
 def revoke_premium_pass(jti: str, reason: str) -> bool:
@@ -255,23 +255,23 @@ def revoke_premium_pass(jti: str, reason: str) -> bool:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 UPDATE premium_passes 
                 SET revoked_at = ?, revoked_reason = ?, updated_at = ?
                 WHERE jti = ? AND revoked_at IS NULL
             """, (datetime.utcnow(), reason, datetime.utcnow(), jti))
-            
+
             revoked_count = cursor.rowcount
             conn.commit()
-            
+
             if revoked_count > 0:
                 logger.info(f"Premium Pass revoked: jti={jti}, reason={reason}")
                 return True
             else:
                 logger.warning(f"Premium Pass not found or already revoked: jti={jti}")
                 return False
-                
+
     except sqlite3.Error as e:
         logger.error(f"Database error revoking Premium Pass: {e}")
         return False
@@ -290,19 +290,19 @@ def revoke_premium_pass_by_subscription(stripe_subscription_id: str, reason: str
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 UPDATE premium_passes 
                 SET revoked_at = ?, revoked_reason = ?, updated_at = ?
                 WHERE stripe_subscription_id = ? AND revoked_at IS NULL
             """, (datetime.utcnow(), reason, datetime.utcnow(), stripe_subscription_id))
-            
+
             revoked_count = cursor.rowcount
             conn.commit()
-            
+
             logger.info(f"Premium Passes revoked for subscription {stripe_subscription_id}: {revoked_count} passes, reason={reason}")
             return revoked_count
-            
+
     except sqlite3.Error as e:
         logger.error(f"Database error revoking Premium Passes by subscription: {e}")
         return 0
@@ -320,7 +320,7 @@ def get_premium_pass_by_email(email: str) -> Optional[Dict[str, Any]]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
                 SELECT id, pass_token, jti, email, stripe_subscription_id, 
                        user_id, expires_at, device_count, created_at
@@ -328,9 +328,9 @@ def get_premium_pass_by_email(email: str) -> Optional[Dict[str, Any]]:
                 WHERE email = ? AND revoked_at IS NULL 
                 ORDER BY created_at DESC LIMIT 1
             """, (email,))
-            
+
             result = cursor.fetchone()
-            
+
             if result:
                 return {
                     "pass_id": result[0],
@@ -343,9 +343,9 @@ def get_premium_pass_by_email(email: str) -> Optional[Dict[str, Any]]:
                     "device_count": result[7],
                     "created_at": result[8]
                 }
-            
+
             return None
-            
+
     except sqlite3.Error as e:
         logger.error(f"Database error getting Premium Pass by email: {e}")
         return None

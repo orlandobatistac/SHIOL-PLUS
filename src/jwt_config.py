@@ -5,7 +5,6 @@ and verification across all modules. CRITICAL for auth functionality.
 """
 
 import os
-import secrets
 from loguru import logger
 
 # JWT Algorithm - Fixed across all modules
@@ -28,31 +27,31 @@ def get_jwt_secret() -> str:
         RuntimeError: In production if JWT_SECRET_KEY not set
     """
     global _jwt_secret
-    
+
     if _jwt_secret is not None:
         return _jwt_secret
-        
+
     # Try to get from environment first
     _jwt_secret = os.getenv("JWT_SECRET_KEY")
-    
+
     if _jwt_secret:
         logger.info("JWT_SECRET_KEY loaded from environment variable")
         return _jwt_secret
-    
+
     # Development fallback - CONSISTENT across all modules
     environment = os.getenv("ENVIRONMENT", "development")
-    
+
     if environment == "production":
         logger.error("JWT_SECRET_KEY environment variable is required in production!")
         raise RuntimeError("JWT_SECRET_KEY must be set in production environment")
-    
+
     # Fixed development secret (not random per module)
     _jwt_secret = "SHIOL_PLUS_DEV_SECRET_2025_FIXED_FOR_CONSISTENCY"
     logger.warning(
         "Using fixed development JWT secret. "
         "Set JWT_SECRET_KEY environment variable in production!"
     )
-    
+
     return _jwt_secret
 
 def get_jwt_config() -> dict:

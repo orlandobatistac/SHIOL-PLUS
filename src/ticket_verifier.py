@@ -3,7 +3,7 @@ Powerball Ticket Verification Module
 Verifies extracted ticket numbers against official draw results and calculates prizes.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from loguru import logger
 from datetime import datetime, timedelta
 
@@ -19,7 +19,7 @@ class TicketVerifier:
     def __init__(self):
         """Initialize the ticket verifier."""
         pass
-        
+
     def find_matching_draw(self, draw_date: str) -> Optional[Dict]:
         """
         Find the official draw result for a given date.
@@ -33,11 +33,11 @@ class TicketVerifier:
         try:
             # Get all draws from database
             all_draws = db.get_all_draws()
-            
+
             if all_draws is None or all_draws.empty:
                 logger.warning("No draws found in database")
                 return None
-            
+
             # Look for exact date match first
             for _, draw in all_draws.iterrows():
                 # Handle pandas Timestamp objects properly
@@ -49,17 +49,17 @@ class TicketVerifier:
                     draw_date_str = str(draw['draw_date'])
                     if 'T' in draw_date_str:  # If it's a datetime string, extract just the date
                         draw_date_str = draw_date_str.split('T')[0]
-                
+
                 if draw_date_str == draw_date:
                     logger.info(f"Found exact match for draw date: {draw_date}")
                     return draw.to_dict()
-            
+
             # If no exact match, try to find the closest draw date
             # (in case the date parsing was slightly off)
             target_date = datetime.strptime(draw_date, '%Y-%m-%d')
             closest_draw = None
             min_diff = timedelta.max
-            
+
             for _, draw in all_draws.iterrows():
                 try:
                     # Handle both pandas Timestamp and string formats
@@ -72,7 +72,7 @@ class TicketVerifier:
                         if 'T' in draw_date_str:  # If it's a datetime string, extract just the date
                             draw_date_str = draw_date_str.split('T')[0]
                         draw_datetime = datetime.strptime(draw_date_str, '%Y-%m-%d')
-                    
+
                     diff = abs(target_date - draw_datetime)
                     if diff < min_diff and diff <= timedelta(days=3):  # Within 3 days
                         min_diff = diff
@@ -80,19 +80,19 @@ class TicketVerifier:
                 except (ValueError, KeyError, AttributeError) as e:
                     logger.debug(f"Error parsing date {draw['draw_date']}: {e}")
                     continue
-            
+
             if closest_draw:
                 logger.info(f"Found closest draw for {draw_date}: {closest_draw['draw_date']}")
                 return closest_draw
-            
+
             logger.warning(f"No matching draw found for date: {draw_date}")
             return None
-            
+
         except Exception as e:
             logger.error(f"Error finding matching draw: {e}")
             return None
-    
-    def verify_single_play(self, play_numbers: List[int], powerball: int, 
+
+    def verify_single_play(self, play_numbers: List[int], powerball: int,
                           official_numbers: List[int], official_powerball: int) -> Dict:
         """
         Verify a single play against official results.
@@ -109,17 +109,17 @@ class TicketVerifier:
         try:
             # Count main number matches
             main_matches = len(set(play_numbers) & set(official_numbers))
-            
+
             # Check powerball match
             powerball_match = (powerball == official_powerball)
-            
+
             # Determine prize tier and amount
             prize_amount, prize_description = calculate_prize_amount(main_matches, powerball_match)
             prize_info = {
                 'amount': prize_amount,
                 'tier': prize_description
             }
-            
+
             result = {
                 'main_matches': main_matches,
                 'powerball_match': powerball_match,
@@ -132,9 +132,9 @@ class TicketVerifier:
                 'winning_numbers': official_numbers,
                 'winning_powerball': official_powerball
             }
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Error verifying single play: {e}")
             return {
@@ -146,7 +146,7 @@ class TicketVerifier:
                 'is_winner': False,
                 'error': str(e)
             }
-    
+
     def verify_ticket(self, ticket_data: Dict) -> Dict:
         """
         Verify an entire ticket with multiple plays.
@@ -164,24 +164,24 @@ class TicketVerifier:
                     'error': 'Ticket processing failed',
                     'verification_results': []
                 }
-            
+
             plays = ticket_data.get('plays', [])
             draw_date = ticket_data.get('draw_date')
-            
+
             if not plays:
                 return {
                     'success': False,
                     'error': 'No valid plays found on ticket',
                     'verification_results': []
                 }
-            
+
             if not draw_date:
                 return {
                     'success': False,
                     'error': 'Could not determine draw date from ticket',
                     'verification_results': []
                 }
-            
+
             # Find the matching official draw
             official_draw = self.find_matching_draw(draw_date)
             if not official_draw:
@@ -190,7 +190,7 @@ class TicketVerifier:
                     'error': f'No official draw results found for date: {draw_date}',
                     'verification_results': []
                 }
-            
+
             # Extract official winning numbers
             official_numbers = [
                 official_draw.get('n1', 0),
@@ -200,12 +200,12 @@ class TicketVerifier:
                 official_draw.get('n5', 0)
             ]
             official_powerball = official_draw.get('pb', 0)
-            
+
             # Verify each play
             verification_results = []
             total_prize_amount = 0
             total_winning_plays = 0
-            
+
             for play in plays:
                 result = self.verify_single_play(
                     play['main_numbers'],
@@ -213,14 +213,14 @@ class TicketVerifier:
                     official_numbers,
                     official_powerball
                 )
-                
+
                 result['line'] = play.get('line', '?')
                 verification_results.append(result)
-                
+
                 if result.get('is_winner', False):
                     total_winning_plays += 1
                     total_prize_amount += result.get('prize_amount', 0)
-            
+
             # Prepare final result
             final_result = {
                 'success': True,
@@ -235,11 +235,11 @@ class TicketVerifier:
                 'verification_results': verification_results,
                 'processed_at': datetime.now().isoformat()
             }
-            
+
             logger.info(f"Ticket verified: {total_winning_plays}/{len(plays)} winning plays, total prize: ${total_prize_amount}")
-            
+
             return final_result
-            
+
         except Exception as e:
             logger.error(f"Error verifying ticket: {e}")
             return {
@@ -247,7 +247,7 @@ class TicketVerifier:
                 'error': f'Ticket verification failed: {str(e)}',
                 'verification_results': []
             }
-    
+
     def format_verification_summary(self, verification_result: Dict) -> str:
         """
         Format verification result into a human-readable summary.
@@ -261,17 +261,17 @@ class TicketVerifier:
         try:
             if not verification_result.get('success', False):
                 return f"❌ Verification failed: {verification_result.get('error', 'Unknown error')}"
-            
+
             if verification_result.get('is_winning_ticket', False):
                 total_prize = verification_result.get('total_prize_amount', 0)
                 winning_plays = verification_result.get('total_winning_plays', 0)
                 total_plays = verification_result.get('total_plays', 0)
-                
-                summary = f"✅ WINNING TICKET!\n"
+
+                summary = "✅ WINNING TICKET!\n"
                 summary += f"💰 Total Prize: ${total_prize:,.2f}\n"
                 summary += f"🎯 Winning Plays: {winning_plays} out of {total_plays}\n"
                 summary += f"📅 Draw Date: {verification_result.get('draw_date', 'Unknown')}\n\n"
-                
+
                 # Add details for each winning play
                 for result in verification_result.get('verification_results', []):
                     if result.get('is_winner', False):
@@ -280,16 +280,16 @@ class TicketVerifier:
                         pb_match = result.get('powerball_match', False)
                         prize = result.get('prize_amount', 0)
                         tier = result.get('prize_tier', 'Unknown')
-                        
+
                         summary += f"Line {line}: {matches} numbers"
                         if pb_match:
                             summary += " + Powerball"
                         summary += f" = ${prize:,.2f} ({tier})\n"
-                
+
                 return summary
             else:
                 return "❌ No winning numbers found on this ticket."
-                
+
         except Exception as e:
             logger.error(f"Error formatting verification summary: {e}")
             return "❌ Error formatting results."
