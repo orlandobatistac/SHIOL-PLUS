@@ -317,16 +317,13 @@ class AIGuidedStrategy(BaseStrategy):
 
             for _ in range(count):
                 try:
-                    prediction = gen.generate_prediction()
+                    prediction = gen.generate_smart_play()
 
                     tickets.append({
-                        'white_balls': sorted([
-                            prediction['n1'], prediction['n2'], prediction['n3'],
-                            prediction['n4'], prediction['n5']
-                        ]),
-                        'powerball': prediction['pb'],
+                        'white_balls': sorted(prediction['numbers']),
+                        'powerball': prediction['powerball'],
                         'strategy': self.name,
-                        'confidence': 0.80
+                        'confidence': prediction.get('score', 0.80)
                     })
                 except Exception as e:
                     logger.error(f"ML prediction failed: {e}, using fallback")
