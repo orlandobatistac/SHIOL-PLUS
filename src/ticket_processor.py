@@ -633,6 +633,8 @@ class PowerballTicketProcessor:
                 r'(MON|TUE|WED|THU|FRI|SAT|SUN)([A-Z]{3})(\d{1,2})(\d{2})',
                 # Pattern 3: "SAT AUG 02 25" (extra spaces)
                 r'(MON|TUE|WED|THU|FRI|SAT|SUN)\s+([A-Z]{3})\s+(\d{1,2})\s+(\d{2})',
+                # Pattern 3b: "SEP 13 25" (no weekday, 2-digit year)
+                r'\b([A-Z]{3})\s+(\d{1,2})\s+(\d{2})\b',
                 # Pattern 4: Numbers with slashes "08/02/25"
                 r'(\d{1,2})/(\d{1,2})/(\d{2})',
                 # Pattern 5: "AUG 02 2025" (full year)
@@ -664,14 +666,23 @@ class PowerballTicketProcessor:
                                 logger.info(f"Successfully extracted date: {formatted_date} from '{line}'")
                                 return formatted_date
 
-                        elif i == 3:  # MM/DD/YY format
+                        elif i == 3:  # Month DD YY (no weekday, 2-digit year)
+                            month, day, year = match.groups()
+                            month_num = month_map.get(month)
+                            if month_num:
+                                full_year = f"20{year}" if len(year) == 2 else year
+                                formatted_date = f"{full_year}-{month_num}-{day.zfill(2)}"
+                                logger.info(f"Successfully extracted date: {formatted_date} from '{line}'")
+                                return formatted_date
+
+                        elif i == 4:  # MM/DD/YY format
                             month, day, year = match.groups()
                             full_year = f"20{year}" if len(year) == 2 else year
                             formatted_date = f"{full_year}-{month.zfill(2)}-{day.zfill(2)}"
                             logger.info(f"Successfully extracted date: {formatted_date} from '{line}'")
                             return formatted_date
 
-                        elif i == 4:  # Month DD YYYY format
+                        elif i == 5:  # Month DD YYYY format
                             month, day, year = match.groups()
                             month_num = month_map.get(month)
                             if month_num:
@@ -779,10 +790,14 @@ class PowerballTicketProcessor:
                 return gemini_result
 
             plays = gemini_result['plays']
-            draw_date = gemini_result.get('draw_date')
+            draw_date_raw = gemini_result.get('draw_date')
+            # Normalize draw date returned by Gemini (handles formats like 'Sep 13 25', '10/13/25', ISO timestamps)
+            draw_date = self.normalize_date(draw_date_raw) if draw_date_raw else None
             logger.info(f"Gemini AI successfully extracted {len(plays)} plays")
+            if draw_date_raw and not draw_date:
+                logger.warning(f"Gemini returned draw_date='{draw_date_raw}' but normalization failed")
             if draw_date:
-                logger.info(f"Gemini AI extracted draw date: {draw_date}")
+                logger.info(f"Gemini AI extracted draw date (normalized): {draw_date}")
             else:
                 logger.info("No draw date detected in ticket")
 
@@ -824,6 +839,83 @@ class PowerballTicketProcessor:
                 'total_plays': 0,
                 'extraction_method': 'gemini_ai_error'
             }
+
+    def normalize_date(self, raw: Optional[str]) -> Optional[str]:
+        """
+        Normalize various ticket date formats to ISO YYYY-MM-DD.
+
+        Supports:
+        - 'Sep 13 25' / 'SEP 13 25'
+        - 'Oct 13 2025'
+        - '10/13/25' or '10/13/2025'
+        - '2025-10-13' or ISO timestamps like '2025-10-13T00:00:00.000Z'
+        - 'WED AUG 03 25' (weekday prefix)
+
+        Returns ISO date string or None if parsing fails.
+        """
+        try:
+            if not raw:
+                return None
+
+            s = str(raw).strip()
+
+            # If it's a full ISO timestamp, extract date part
+            if 'T' in s and '-' in s:
+                try:
+                    date_part = s.split('T', 1)[0]
+                    # Ensure zero-padded month/day
+                    from datetime import datetime
+                    dt = datetime.strptime(date_part, '%Y-%m-%d')
+                    return dt.strftime('%Y-%m-%d')
+                except Exception:
+                    pass
+
+            # Try straight ISO date (allow single-digit month/day and normalize)
+            if '-' in s and s.count('-') == 2:
+                parts = s.split('-')
+                if len(parts) == 3 and all(parts):
+                    y, m, d = parts[0], parts[1], parts[2]
+                    if len(y) == 4 and y.isdigit() and m.isdigit() and d.isdigit():
+                        return f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+
+            # Normalize slashes: MM/DD/YY or MM/DD/YYYY
+            import re
+            m = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{2,4})$', s)
+            if m:
+                mm, dd, yy = m.groups()
+                year = f"20{yy}" if len(yy) == 2 else yy
+                return f"{year}-{mm.zfill(2)}-{dd.zfill(2)}"
+
+            # Handle Month DD YY or Month DD YYYY (with optional weekday prefix)
+            s_up = s.upper()
+            month_map = {
+                'JAN': '01','FEB': '02','MAR': '03','APR': '04','MAY': '05','JUN': '06',
+                'JUL': '07','AUG': '08','SEP': '09','OCT': '10','NOV': '11','DEC': '12'
+            }
+
+            # Weekday + Month DD YY
+            m = re.search(r'\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\s+([A-Z]{3})\s+(\d{1,2})\s+(\d{2,4})\b', s_up)
+            if m:
+                mon, dd, yy = m.groups()
+                mon_num = month_map.get(mon)
+                if mon_num:
+                    year = f"20{yy}" if len(yy) == 2 else yy
+                    return f"{year}-{mon_num}-{dd.zfill(2)}"
+
+            # Month DD YY or YYYY without weekday
+            m = re.search(r'\b([A-Z]{3})\s+(\d{1,2})\s+(\d{2,4})\b', s_up)
+            if m:
+                mon, dd, yy = m.groups()
+                mon_num = month_map.get(mon)
+                if mon_num:
+                    year = f"20{yy}" if len(yy) == 2 else yy
+                    return f"{year}-{mon_num}-{dd.zfill(2)}"
+
+            # If we reach here, parsing failed
+            return None
+        except Exception as e:
+            logger.warning(f"normalize_date failed for '{raw}': {e}")
+            return None
 
     def _process_with_fallback_ocr(self, image_data: bytes) -> Dict:
         """

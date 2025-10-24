@@ -923,3 +923,43 @@ def generate_smart_play(self):
 ---
 
 *End of Technical Documentation*
+
+---
+
+## Ticket Verification Date Normalization
+
+Context: Some uploaded ticket images produced a 422 Unprocessable Entity with the message "No official draw results found for date: <date>" despite the date existing in the database.
+
+Root cause:
+
+- Draw date values extracted by OCR/LLM could be in multiple human formats (e.g., "Sep 13 25", "10/13/25", or ISO timestamps like "2025-10-13T00:00:00Z").
+- The verification step expects an ISO date (YYYY-MM-DD). If a non-ISO date reaches the matcher, strict parsing can fail and no match is found.
+- Additionally, the fallback OCR flow didn't capture the "MON-less" format (e.g., "SEP 13 25").
+
+Changes implemented (October 24, 2025):
+
+- Added robust normalization in `src/ticket_processor.py`:
+    - New method `normalize_date(raw: str) -> Optional[str]` that standardizes multiple formats to `YYYY-MM-DD`.
+    - It handles: `Sep 13 25`, `Oct 13 2025`, `10/13/25`, `2025-9-3`, and ISO timestamps like `2025-10-13T00:00:00.000Z`.
+    - Integrated into the Gemini path: `_process_with_gemini_ai()` now normalizes `draw_date` returned by Gemini before returning `ticket_data`.
+
+- Extended OCR fallback regex in `extract_draw_date()` to capture month+day+2-digit-year without weekday (e.g., `SEP 13 25`).
+
+- Note: `TicketVerifier.find_matching_draw()` already includes a ±3-day tolerance window when searching for the closest official draw.
+
+Verification and evidence:
+
+- Database check (latest 10 draws contained October 2025 dates including `2025-10-13`).
+- Programmatic test:
+    - Input: `"Oct 13 25"` → `normalize_date` → `"2025-10-13"` → `find_matching_draw("2025-10-13")` → exact match found.
+
+Operational guidance:
+
+- If future tickets show new date styles, update `normalize_date()` and/or `extract_draw_date()` with a minimal additional pattern.
+- Keep `powerball_draws` updated via the existing scheduler in `src/api.py` (jobs: `post_drawing_pipeline` and `maintenance_data_update`) which call `update_database_from_source()`.
+
+Recommended future hardening:
+
+- Add a lightweight unit test for `normalize_date()` covering the most common observed formats.
+- Consider using `dateutil.parser` if introducing an external dependency is acceptable; current implementation avoids new dependencies and uses explicit patterns.
+

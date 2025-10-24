@@ -59,8 +59,8 @@ def update_database_from_source() -> int:
     and inserts only the new draws. Initializes the database if it's empty.
 
     Data Sources (in priority order):
-    1. Powerball.com official API (primary)
-    2. NY State Open Data API (fallback)
+    1. MUSL API (primary)
+    2. NY State Open Data API (fallback, if implemented)
 
     Returns:
         int: Total number of rows in the database after the update.
@@ -68,151 +68,60 @@ def update_database_from_source() -> int:
     logger.info("Starting data update process...")
     initialize_database()
 
-    fetched_data = _fetch_powerball_data()
-
-    if fetched_data is None or len(fetched_data) == 0:
-        logger.error("Update process failed: could not fetch data from any source.")
+    logger.info("Trying MUSL as primary source...")
+    fetched_data = _fetch_from_musl_api()
+    if not fetched_data:
+        logger.warning("MUSL unavailable or failed. NY Open Data fallback not yet implemented.")
+        logger.error("No data could be fetched from any source.")
         return len(get_all_draws())
 
     transformed_df = _transform_api_data(fetched_data)
-
     if transformed_df is None or transformed_df.empty:
-        logger.error("Update process failed: could not transform data.")
+        logger.error("Could not transform fetched data.")
         return len(get_all_draws())
 
     latest_date_in_db = get_latest_draw_date()
-
     if latest_date_in_db:
         transformed_df["draw_date"] = pd.to_datetime(transformed_df["draw_date"])
         latest_date_in_db_dt = pd.to_datetime(latest_date_in_db)
-
-        new_draws_df = transformed_df[
-            transformed_df["draw_date"] > latest_date_in_db_dt
-        ].copy()
-        logger.info(f"Found {len(new_draws_df)} new draws to add.")
+        new_draws_df = transformed_df[transformed_df["draw_date"] > latest_date_in_db_dt].copy()
+        logger.info(f"New draws to add: {len(new_draws_df)}")
     else:
         new_draws_df = transformed_df.copy()
-        logger.info(f"Database is empty. Populating with {len(new_draws_df)} draws.")
+        logger.info(f"Populating empty DB with {len(new_draws_df)} draws.")
 
     if not new_draws_df.empty:
         final_draws_df = new_draws_df.copy()
         final_draws_df["draw_date"] = final_draws_df["draw_date"].dt.strftime("%Y-%m-%d")
         bulk_insert_draws(final_draws_df)
-
-        # Safety net: ensure pb_era metadata is filled for newly inserted rows.
         try:
             conn = get_db_connection()
-            # call helper defined below
-            updated = update_pb_era_metadata(conn)
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE powerball_draws
+                SET 
+                    pb_is_current = CASE WHEN pb BETWEEN 1 AND 26 THEN 1 ELSE 0 END,
+                    pb_era = CASE
+                        WHEN pb BETWEEN 1 AND 26 THEN '2015-now (1-26)'
+                        WHEN pb BETWEEN 27 AND 35 THEN '2012-2015 (1-35)'
+                        WHEN pb BETWEEN 36 AND 39 THEN '2009-2012 (1-39)'
+                        WHEN pb BETWEEN 40 AND 42 THEN '1997-2009 (1-42)'
+                        WHEN pb BETWEEN 43 AND 45 THEN '1992-1997 (1-45)'
+                        ELSE 'other'
+                    END
+                WHERE pb_is_current = 0 AND pb_era = 'unknown'
+            """)
+            updated = cursor.rowcount
+            conn.commit()
             if updated:
-                logger.info(f"Post-insert safety: updated pb_era metadata for {updated} draws")
+                logger.info(f"Post-insert: updated pb_era metadata for {updated} draws")
         finally:
             try:
                 conn.close()
             except Exception:
                 pass
-
     final_df = get_all_draws()
     return len(final_df)
-
-
-def update_pb_era_metadata(conn=None):
-    """
-    Update pb_is_current and pb_era for any draws with default values.
-    Safety net in case DB trigger doesn't fire or rows were inserted externally.
-    Returns number of rows updated.
-    """
-    from loguru import logger as _logger
-
-    should_close = False
-    if conn is None:
-        conn = get_db_connection()
-        should_close = True
-
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            UPDATE powerball_draws
-            SET 
-                pb_is_current = CASE WHEN pb BETWEEN 1 AND 26 THEN 1 ELSE 0 END,
-                pb_era = CASE
-                    WHEN pb BETWEEN 1 AND 26 THEN '2015-now (1-26)'
-                    WHEN pb BETWEEN 27 AND 35 THEN '2012-2015 (1-35)'
-                    WHEN pb BETWEEN 36 AND 39 THEN '2009-2012 (1-39)'
-                    WHEN pb BETWEEN 40 AND 42 THEN '1997-2009 (1-42)'
-                    WHEN pb BETWEEN 43 AND 45 THEN '1992-1997 (1-45)'
-                    ELSE 'other'
-                END
-            WHERE pb_is_current = 0 AND pb_era = 'unknown'
-        """)
-
-        updated = cursor.rowcount
-        conn.commit()
-        if updated:
-            _logger.info(f"update_pb_era_metadata: updated {updated} rows")
-        return updated
-    except Exception as e:
-        _logger.error(f"Failed to update pb_era metadata: {e}")
-        conn.rollback()
-        raise
-    finally:
-        if should_close:
-            conn.close()
-
-
-def _fetch_powerball_data() -> Optional[List[Dict]]:
-    """
-    Fetches Powerball data from available API sources with automatic fallback.
-    
-    Priority order:
-    1. MUSL API (official Multi-State Lottery Association) - Primary
-    2. NY State Open Data - Fallback
-    
-    Returns:
-        List[Dict]: List of drawing results, or None if all sources fail.
-    """
-    data = _fetch_from_musl_api()
-
-    if data:
-        logger.info(f"Successfully fetched {len(data)} draws from MUSL API")
-        return data
-
-    logger.warning("MUSL API failed, trying NY State fallback...")
-    data = _fetch_from_nystate_api()
-
-    if data:
-        logger.info(f"Successfully fetched {len(data)} draws from NY State Open Data")
-        return data
-
-    logger.error("All data sources failed")
-    return None
-
-
-def _fetch_from_nystate_api() -> Optional[List[Dict]]:
-    """
-    Fetches Powerball results from NY State Open Data API (fallback source).
-    
-    Returns:
-        List[Dict]: List of all historical drawings, or None if request fails.
-    """
-    try:
-        url = "https://data.ny.gov/resource/d6yy-54nr.json?$limit=5000&$order=draw_date DESC"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-
-        data = response.json()
-        return data
-
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"NY State API request failed: {e}")
-        return None
-    except Exception as e:
-        logger.warning(f"Unexpected error fetching from NY State: {e}")
-        return None
 
 
 def _transform_api_data(api_data: List[Dict]) -> Optional[pd.DataFrame]:

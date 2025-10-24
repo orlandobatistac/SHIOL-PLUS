@@ -119,10 +119,10 @@ class DateManager:
         logger.info(f"Calculating next drawing date from: {reference_date.isoformat()}")
         logger.debug(f"Reference weekday: {current_weekday} ({'Monday' if current_weekday == 0 else 'Wednesday' if current_weekday == 2 else 'Saturday' if current_weekday == 5 else 'Other'})")
 
-        # CORRECCIÓN: Los días de sorteo son Miércoles (2) y Sábado (5)
-        # NO incluir Lunes (0) como estaba en el código anterior
+        # CORRECTION: Drawing days are Wednesday (2) and Saturday (5)
+        # DO NOT include Monday (0) as in previous code
 
-        # Si es día de sorteo y es antes de las 10:59 PM ET, el sorteo es ese día
+        # If it's a drawing day and before 10:59 PM ET, the drawing is that day
         cutoff_reached = (
             reference_date.hour > cls.DRAWING_HOUR or
             (reference_date.hour == cls.DRAWING_HOUR and reference_date.minute >= cls.DRAWING_MINUTE)
@@ -143,19 +143,19 @@ class DateManager:
                 weekday_name = "Wednesday" if next_weekday == 2 else "Saturday"
                 logger.info(f"Next drawing date found: {next_draw_date} ({weekday_name}) in {i} days")
 
-                # VALIDACIÓN: Verificar que la fecha sea correcta
-                # Si calculamos 12 agosto pero debería ser 11, hay un problema de drift
+                # VALIDATION: Check that the date is correct
+                # If we calculate Aug 12 but it should be Aug 11, there's a drift issue
                 if next_draw_date == "2025-08-12" and reference_date.strftime('%Y-%m-%d') < "2025-08-11":
                     logger.warning(f"Date calculation seems incorrect. Expected: 2025-08-11, Got: {next_draw_date}")
-                    # Forzar corrección si necesario
-                    if next_weekday == 5:  # Si es sábado
-                        corrected_date = "2025-08-11"  # Sábado 11 agosto es correcto
+                    # Force correction if necessary
+                    if next_weekday == 5:  # If Saturday
+                        corrected_date = "2025-08-11"  # Saturday Aug 11 is correct
                         logger.info(f"Applying date correction: {next_draw_date} -> {corrected_date}")
                         return corrected_date
 
                 return next_draw_date
 
-        # Fallback (no debería ocurrir)
+        # Fallback (shouldn't happen)
         fallback_date = (reference_date + timedelta(days=1)).strftime('%Y-%m-%d')
         logger.warning(f"Fallback to next day: {fallback_date}")
         return fallback_date
@@ -268,7 +268,6 @@ class DateManager:
         info = {
             'drawing_days': cls.DRAWING_DAYS,
             'drawing_days_names': ['Wednesday', 'Saturday'],
-            'drawing_days_spanish': ['Miércoles', 'Sábado'],
             'drawing_hour_et': cls.DRAWING_HOUR,
             'timezone': str(cls.POWERBALL_TIMEZONE),
             'next_drawing_date': cls.calculate_next_drawing_date()
@@ -280,7 +279,7 @@ class DateManager:
     @classmethod
     def days_until_next_drawing(cls, reference_date: Optional[datetime] = None) -> int:
         """
-        Calcula cuántos días faltan para el próximo sorteo.
+        Calculate how many days until the next drawing.
         
         Args:
             reference_date: Fecha de referencia (opcional)
@@ -297,11 +296,11 @@ class DateManager:
         next_drawing = datetime.strptime(next_drawing_str, '%Y-%m-%d')
         next_drawing = cls.POWERBALL_TIMEZONE.localize(next_drawing.replace(hour=cls.DRAWING_HOUR))
 
-        # Calcular diferencia en días
+        # Calculate difference in days
         time_diff = next_drawing - reference_date
         days_until = time_diff.days
 
-        # Si es el mismo día pero antes de la hora del sorteo, son 0 días
+        # If same day but before drawing time, it's 0 days
         if days_until == 0 and reference_date.hour < cls.DRAWING_HOUR:
             days_until = 0
         elif time_diff.total_seconds() < 0:
@@ -438,31 +437,31 @@ class DateManager:
 
 
 def get_current_et_time() -> datetime:
-    """Función de conveniencia para obtener la hora actual en ET."""
+    """Convenience function to get current time in ET."""
     return DateManager.get_current_et_time()
 
 
 def calculate_next_drawing_date(reference_date: Optional[datetime] = None) -> str:
-    """Función de conveniencia para calcular la próxima fecha de sorteo."""
+    """Convenience function to calculate next drawing date."""
     return DateManager.calculate_next_drawing_date(reference_date)
 
 
 def is_valid_drawing_date(date_str: str) -> bool:
-    """Función de conveniencia para validar fecha de sorteo."""
+    """Convenience function to validate drawing date."""
     return DateManager.is_valid_drawing_date(date_str)
 
 
 def validate_date_format(date_str: str) -> bool:
-    """Función de conveniencia para validar formato de fecha."""
+    """Convenience function to validate date format."""
     return DateManager.validate_date_format(date_str)
 
 
 def convert_to_et(dt: Union[datetime, str]) -> datetime:
-    """Función de conveniencia para convertir a ET."""
+    """Convenience function to convert to ET."""
     return DateManager.convert_to_et(dt)
 
 
-# Logging de inicialización del módulo
+# Module initialization logging
 logger.info("Date utilities module loaded - centralized date management initialized")
 logger.debug(f"Standard timezone: {DateManager.POWERBALL_TIMEZONE}")
 logger.debug(f"Drawing days: {DateManager.DRAWING_DAYS} (Monday, Wednesday, Saturday)")

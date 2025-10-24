@@ -10,7 +10,7 @@ class TicketVerification {
         this.initializeEventListeners();
     }
 
-    // Función para detectar si es dispositivo móvil
+    // Function to detect if device is mobile
     isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                window.innerWidth <= 768 ||
@@ -69,7 +69,7 @@ class TicketVerification {
         const isMobile = this.isMobileDevice();
         const compressionThreshold = 2 * 1024 * 1024; // 2MB threshold
 
-        // Aplicar compresión inteligente basada en dispositivo
+        // Apply intelligent compression based on device
         if (isMobile && file.size > compressionThreshold) {
             this.showLoading(window.AppTexts.loading.optimizingImage);
             try {
@@ -83,12 +83,12 @@ class TicketVerification {
                 return;
             }
         } else if (!isMobile) {
-            // En escritorio, usar imagen original sin modificar
+            // On desktop, use original image without modification
             console.log('🖥️ Desktop detected: Using original image without compression');
             this.currentImageFile = file;
             this.displayImagePreview(file);
         } else {
-            // Mobile con archivo pequeño, usar original
+            // Mobile with small file, use original
             console.log('📱 Mobile with small file: Using original image');
             this.currentImageFile = file;
             this.displayImagePreview(file);
@@ -129,18 +129,18 @@ class TicketVerification {
                 
                 console.log(`🖼️ Original resolution: ${originalWidth}x${originalHeight}`);
                 
-                // Calcular nuevas dimensiones manteniendo mínimo de 1280px de ancho
+                // Calculate new dimensions maintaining minimum 1280px width
                 let newWidth = originalWidth;
                 let newHeight = originalHeight;
                 const minWidth = 1280;
                 
-                // Si el ancho es menor a 1280px, mantener original para no perder calidad
+                // If width is less than 1280px, keep original to avoid quality loss
                 if (originalWidth > minWidth) {
-                    // Solo redimensionar si es necesario para mantener calidad
+                    // Only resize if necessary to maintain quality
                     const aspectRatio = originalHeight / originalWidth;
                     
-                    // Si es mucho más grande, reducir manteniendo proporción pero no menos de 1280px
-                    if (originalWidth > 2560) { // Solo comprimir si es muy grande
+                    // If much larger, reduce while maintaining aspect ratio but not below 1280px
+                    if (originalWidth > 2560) { // Only compress if very large
                         newWidth = Math.max(minWidth, Math.floor(originalWidth * 0.7));
                         newHeight = Math.floor(newWidth * aspectRatio);
                     }
@@ -150,18 +150,18 @@ class TicketVerification {
                 
                 console.log(`🔄 Target resolution: ${newWidth}x${newHeight}`);
                 
-                // Configurar canvas con nuevas dimensiones
+                // Configure canvas with new dimensions
                 canvas.width = newWidth;
                 canvas.height = newHeight;
                 
-                // Configurar contexto para mejor calidad
+                // Configure context for better quality
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
                 
-                // Dibujar imagen redimensionada
+                // Draw resized image
                 ctx.drawImage(img, 0, 0, newWidth, newHeight);
                 
-                // Determinar calidad JPEG basada en el tamaño original
+                // Determine JPEG quality based on original size
                 let quality;
                 if (file.size > 8 * 1024 * 1024) { // > 8MB
                     quality = 0.8; // 80%
@@ -199,7 +199,7 @@ class TicketVerification {
         });
     }
 
-    // Mantener función original para compatibilidad
+    // Keep original function for compatibility
     async compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.8) {
         return new Promise((resolve, reject) => {
             const canvas = document.createElement('canvas');
@@ -451,10 +451,10 @@ class TicketVerification {
             console.error('❌ Verification error:', error);
             this.hideLoading();
             
-            // Check if this is a date detection error
-            if (error.message && error.message.includes('No official draw results found for date')) {
-                console.log('📅 Date detection error - showing manual date input');
-                this.showManualDateSection();
+            // Check if this is a missing official draw data error (422)
+            if (error.message && error.message.includes('No official draw results found')) {
+                console.log('📅 No official draw data available for detected date - informing user');
+                this.showError('⚠️ No official draw data found for this date. The database may be updating. Please try again later.');
                 console.groupEnd();
             } 
             // Check if this is a validation error with no valid numbers
