@@ -14,23 +14,23 @@ from src.loader import DataLoader # Assuming DataLoader is available for retrain
 from src.intelligent_generator import FeatureEngineer, DeterministicGenerator
 from src.database import save_prediction_log
 
-# Assuming EnsemblePredictor and EnsembleMethod are defined elsewhere, e.g., in src.ensemble_predictor
-# Placeholder import for EnsemblePredictor and EnsembleMethod
+# EnsemblePredictor intentionally not implemented in v6.0+
+# The system uses strategy-based diversity (6 strategies) instead of model ensemble
 try:
     from src.ensemble_predictor import EnsemblePredictor, EnsembleMethod
 except ImportError:
-    logger.warning("Could not import EnsemblePredictor or EnsembleMethod. Ensemble functionality will be disabled.")
+    logger.debug("EnsemblePredictor module not available (intentionally disabled in v6.0+). Using strategy-based system.")
     # Define dummy classes if not found to prevent errors
     class EnsemblePredictor:
         def __init__(self, historical_data, models_dir: str = "models/"):
-            logger.warning("Dummy EnsemblePredictor initialized.")
+            logger.debug("Dummy EnsemblePredictor initialized (strategy-based system active).")
             self.historical_data = historical_data
             self.models_dir = models_dir
             self.ensemble_method = "average" # Default method
             self.models = [] # Placeholder for other models
 
         def predict_ensemble(self) -> Dict[str, Any]:
-            logger.warning("Dummy predict_ensemble called.")
+            logger.debug("Dummy predict_ensemble called (using strategy-based fallback).")
             # Simulate a prediction
             return {
                 'white_ball_probabilities': np.ones(69) / 69,
@@ -40,14 +40,14 @@ except ImportError:
             }
 
         def get_ensemble_summary(self) -> Dict[str, Any]:
-            logger.warning("Dummy get_ensemble_summary called.")
+            logger.debug("Dummy get_ensemble_summary called.")
             return {
                 'ensemble_enabled': False,
                 'reason': 'Dummy system'
             }
 
         def update_model_weights(self, performance_feedback: Dict[str, float]) -> None:
-            logger.warning("Dummy update_model_weights called.")
+            logger.debug("Dummy update_model_weights called.")
             pass
 
     class EnsembleMethod:
