@@ -138,7 +138,7 @@ async def evaluate_predictions_for_draw(draw_date: str):
 
         # Find predictions for this draw that haven't been evaluated
         cursor.execute(
-            "SELECT id, n1, n2, n3, n4, n5, powerball FROM generated_tickets WHERE COALESCE(target_draw_date, DATE(created_at)) = ? AND evaluated = 0",
+            "SELECT id, n1, n2, n3, n4, n5, powerball FROM generated_tickets WHERE draw_date = ? AND evaluated = 0",
             (draw_date,)
         )
 

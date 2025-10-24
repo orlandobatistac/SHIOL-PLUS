@@ -688,18 +688,22 @@ class Predictor:
         logger.info("Deterministic prediction generated successfully")
         return prediction
 
-    def predict_diverse_plays(self, num_plays: int = 5, save_to_log: bool = False, target_draw_date: str = None) -> List[Dict[str, Any]]:
+    def predict_diverse_plays(self, num_plays: int = 5, save_to_log: bool = False, draw_date: str = None, target_draw_date: str = None) -> List[Dict[str, Any]]:
         """
         Generates multiple diverse, high-quality predictions for the next draw.
 
         Args:
             num_plays: Number of diverse plays to generate (default: 5).
             save_to_log: If True, saves the predictions to the database log.
-            target_draw_date: The target draw date for the prediction (optional).
+            draw_date: The target draw date for the prediction (optional).
+            target_draw_date: Legacy parameter for backward compatibility (optional).
 
         Returns:
             List of Dicts, each representing a diverse prediction with its details.
         """
+        # Handle backward compatibility
+        actual_draw_date = draw_date or target_draw_date
+        
         logger.info(f"Generating {num_plays} diverse high-quality plays for next drawing...")
 
         # Get probability predictions
@@ -725,13 +729,13 @@ class Predictor:
             for prediction in diverse_predictions:
                 # Prepare data for logging
                 prediction_data = {
-                    'timestamp': prediction.get('timestamp', datetime.now().isoformat()),
+                    'created_at': prediction.get('created_at', datetime.now().isoformat()),
                     'numbers': prediction.get('numbers'),
                     'powerball': prediction.get('powerball'),
-                    'score_total': prediction.get('score_total'),
-                    'model_version': prediction.get('model_version', 'v6.0'),
+                    'confidence_score': prediction.get('confidence_score'),
+                    'strategy_used': prediction.get('strategy_used', 'diverse_v6.0'),
                     'dataset_hash': prediction.get('dataset_hash'),
-                    'target_draw_date': target_draw_date # Include target date if provided
+                    'draw_date': actual_draw_date # Include draw date if provided
                 }
                 prediction_id = save_prediction_log(prediction_data)
                 if prediction_id:

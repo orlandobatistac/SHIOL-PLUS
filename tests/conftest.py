@@ -32,29 +32,25 @@ def create_schema(conn: sqlite3.Connection):
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS generated_tickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            draw_date TEXT NOT NULL,
-            strategy_used TEXT NOT NULL,
-            n1 INTEGER NOT NULL,
-            n2 INTEGER NOT NULL,
-            n3 INTEGER NOT NULL,
-            n4 INTEGER NOT NULL,
-            n5 INTEGER NOT NULL,
-            powerball INTEGER NOT NULL,
-            confidence_score REAL DEFAULT 0.5,
-            was_played BOOLEAN DEFAULT 0,
-            prize_won REAL DEFAULT 0.0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            target_draw_date TEXT,
-            score_total REAL,
-            model_version TEXT,
-            json_details_path TEXT,
-            evaluated INTEGER DEFAULT 0,
-            matches_wb INTEGER DEFAULT 0,
-            matches_pb INTEGER DEFAULT 0,
-            prize_description TEXT
-        )
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id TEXT UNIQUE,
+                n1 INTEGER,
+                n2 INTEGER,
+                n3 INTEGER,
+                n4 INTEGER,
+                n5 INTEGER,
+                pb INTEGER,
+                strategy_used TEXT,
+                confidence_score REAL,
+                dataset_hash TEXT,
+                json_details_path TEXT,
+                draw_date TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                evaluated INTEGER DEFAULT 0,
+                matches_regular INTEGER DEFAULT 0,
+                matches_powerball INTEGER DEFAULT 0,
+                prize_won REAL DEFAULT 0
+            )
         """
     )
 
@@ -186,17 +182,17 @@ def seed_basic_data(conn: sqlite3.Connection):
 
     # Seed predictions for both dates
     tickets = [
-        ("2025-09-01", "strategy_a", 1, 2, 3, 10, 20, 6, 0.9, 0.0, "2025-09-01", 0.9, "v1", None),
-        ("2025-09-01", "strategy_b", 11, 12, 13, 14, 15, 7, 0.7, 0.0, "2025-09-01", 0.7, "v1", None),
-        ("2025-09-03", "strategy_c", 10, 20, 30, 40, 50, 7, 0.8, 0.0, "2025-09-03", 0.8, "v2", None),
-        ("2025-09-03", "strategy_d", 9, 19, 29, 39, 49, 1, 0.6, 0.0, "2025-09-03", 0.6, "v2", None),
+        ("2025-09-01", "strategy_a", 1, 2, 3, 10, 20, 6, 0.9, 0.0, "2025-09-01", None),
+        ("2025-09-01", "strategy_b", 11, 12, 13, 14, 15, 7, 0.7, 0.0, "2025-09-01", None),
+        ("2025-09-03", "strategy_c", 10, 20, 30, 40, 50, 7, 0.8, 0.0, "2025-09-03", None),
+        ("2025-09-03", "strategy_d", 9, 19, 29, 39, 49, 1, 0.6, 0.0, "2025-09-03", None),
     ]
     cur.executemany(
         """
         INSERT INTO generated_tickets(
-            draw_date, strategy_used, n1, n2, n3, n4, n5, powerball,
-            confidence_score, prize_won, target_draw_date, score_total, model_version, json_details_path
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            draw_date, strategy_used, n1, n2, n3, n4, n5, pb,
+            confidence_score, prize_won, created_at, json_details_path
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         tickets,
     )

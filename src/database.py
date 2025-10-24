@@ -1071,8 +1071,9 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulation: bool 
         # Ensure numbers are strictly increasing to satisfy CHECK constraint
         numbers = sorted(int(n) for n in numbers)
 
-        # Decide draw_date
-        draw_date = sanitized.get('target_draw_date') or prediction_data.get('target_draw_date')
+        # Decide draw_date - accept both draw_date and target_draw_date for backward compatibility
+        draw_date = (sanitized.get('draw_date') or sanitized.get('target_draw_date') or 
+                    prediction_data.get('draw_date') or prediction_data.get('target_draw_date'))
         if not draw_date:
             try:
                 draw_date = calculate_next_drawing_date()
@@ -1701,8 +1702,8 @@ def get_evaluated_predictions_count(execution_id: str) -> int:
                 SELECT COUNT(*) 
                 FROM generated_tickets 
                 WHERE evaluated = 1 
-                AND target_draw_date IS NOT NULL
-                AND prize_amount IS NOT NULL
+                AND draw_date IS NOT NULL
+                AND prize_won IS NOT NULL
                 AND created_at >= (
                     SELECT start_time FROM pipeline_executions 
                     WHERE execution_id = ?
@@ -1730,10 +1731,10 @@ def get_evaluated_predictions_for_execution(execution_id: str) -> Optional[Dict[
             # Get predictions that were evaluated for this execution
             cursor.execute("""
                 SELECT 
-                    numbers, powerball, prize_amount, matches, target_draw_date, rank
+                    n1, n2, n3, n4, n5, pb, prize_won, matches_regular, matches_powerball, draw_date
                 FROM generated_tickets 
                 WHERE evaluated = 1 
-                AND target_draw_date IS NOT NULL
+                AND draw_date IS NOT NULL
                 AND created_at >= (
                     SELECT start_time FROM pipeline_executions 
                     WHERE execution_id = ?
@@ -1742,7 +1743,7 @@ def get_evaluated_predictions_for_execution(execution_id: str) -> Optional[Dict[
                     SELECT end_time FROM pipeline_executions 
                     WHERE execution_id = ?
                 ), datetime('now'))
-                ORDER BY rank ASC, prize_amount DESC
+                ORDER BY prize_won DESC
                 LIMIT 100
             """, (execution_id, execution_id))
 
@@ -1751,20 +1752,19 @@ def get_evaluated_predictions_for_execution(execution_id: str) -> Optional[Dict[
             if not predictions_data:
                 return None
 
-            # Get target draw date (should be same for all)
-            target_draw_date = predictions_data[0][4] if predictions_data else None
+            # Get draw date (should be same for all)
+            draw_date = predictions_data[0][9] if predictions_data else None
 
             # Format predictions
             predictions = []
             for row in predictions_data:
                 try:
-                    numbers = json.loads(row[0]) if isinstance(row[0], str) else row[0]
                     predictions.append({
-                        'numbers': numbers,
-                        'powerball': row[1],
-                        'prize_amount': row[2] or 0,
-                        'matches': row[3] or 0,
-                        'rank': row[5] or 0
+                        'numbers': [row[0], row[1], row[2], row[3], row[4]],
+                        'powerball': row[5],
+                        'prize_won': row[6] or 0,
+                        'matches_regular': row[7] or 0,
+                        'matches_powerball': row[8] or 0
                     })
                 except Exception as e:
                     logger.warning(f"Error parsing prediction data: {e}")
@@ -1772,7 +1772,7 @@ def get_evaluated_predictions_for_execution(execution_id: str) -> Optional[Dict[
 
             return {
                 'predictions': predictions,
-                'target_draw_date': target_draw_date,
+                'draw_date': draw_date,
                 'execution_id': execution_id
             }
 
@@ -1816,18 +1816,18 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 SELECT DISTINCT
                     pd.draw_date as target_date,
                     COUNT(pl.id) as total_predictions,
-                    COUNT(CASE WHEN pl.evaluated = 1 AND pl.prize_amount > 0 THEN 1 END) as winning_predictions,
+                    COUNT(CASE WHEN pl.evaluated = 1 AND pl.prize_won > 0 THEN 1 END) as winning_predictions,
                     COUNT(CASE WHEN pl.evaluated = 1 THEN 1 END) as evaluated_predictions,
-                    SUM(CASE WHEN pl.evaluated = 1 THEN pl.prize_amount ELSE 0 END) as total_prizes
+                    SUM(CASE WHEN pl.evaluated = 1 THEN pl.prize_won ELSE 0 END) as total_prizes
                 FROM powerball_draws pd
-                INNER JOIN generated_tickets pl ON COALESCE(pl.target_draw_date, DATE(pl.created_at)) = pd.draw_date
+                INNER JOIN generated_tickets pl ON pl.draw_date = pd.draw_date
                 WHERE pl.created_at IS NOT NULL 
-                    AND pl.model_version NOT IN ('fallback', 'test', 'simulated', '1.0.0-test', 'default')
+                    AND pl.strategy_used NOT IN ('fallback', 'test', 'simulated', 'default')
                     AND pl.dataset_hash NOT IN ('simulated', 'test', 'fallback', 'default')
-                    AND pl.score_total > 0
+                    AND pl.confidence_score > 0
                     AND LENGTH(pl.dataset_hash) >= 16
                     AND pl.json_details_path IS NOT NULL
-                    AND pl.target_draw_date IS NOT NULL
+                    AND pl.draw_date IS NOT NULL
                 GROUP BY pd.draw_date
                 HAVING COUNT(pl.id) > 0
                 ORDER BY pd.draw_date DESC
@@ -1850,14 +1850,14 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 cursor.execute(
                     """
                     SELECT
-                        pl.id, pl.timestamp, pl.n1, pl.n2, pl.n3, pl.n4, pl.n5, pl.powerball,
+                        pl.id, pl.created_at, pl.n1, pl.n2, pl.n3, pl.n4, pl.n5, pl.pb,
                         pt.matches_main, pt.matches_pb, pt.prize_tier,
-                        COALESCE(pl.target_draw_date, DATE(pl.created_at)) as target_draw_date,
+                        pl.draw_date,
                         pl.created_at
                     FROM generated_tickets pl
                     LEFT JOIN performance_tracking pt ON pl.id = pt.prediction_id
-                    WHERE COALESCE(pl.target_draw_date, DATE(pl.created_at)) = ?
-                    ORDER BY pl.score_total DESC
+                    WHERE pl.draw_date = ?
+                    ORDER BY pl.confidence_score DESC
                 """, (target_date,))
 
                 predictions_data = cursor.fetchall()
@@ -1871,12 +1871,12 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                 for pred_row in predictions_data:
                     prediction_numbers = [pred_row[2], pred_row[3], pred_row[4], pred_row[5], pred_row[6]]
                     prediction_pb = pred_row[7]
-                    prediction_target_date = pred_row[11] or target_date
+                    prediction_draw_date = pred_row[11] or target_date
                     prediction_created_at = pred_row[12]
 
                     cursor.execute(
                         "SELECT n1, n2, n3, n4, n5, pb FROM powerball_draws WHERE draw_date = ?",
-                        (prediction_target_date,))
+                        (prediction_draw_date,))
                     official_result = cursor.fetchone()
 
                     matches_main = 0
@@ -1907,14 +1907,10 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
 
                     prediction_detail = {
                         "prediction_id": pred_row[0],
-                        "timestamp": pred_row[1],
+                        "created_at": pred_row[1],
                         "numbers": prediction_numbers,
                         "powerball": prediction_pb,
-                        "score": float(pred_row[8]),
-                        "model_version": pred_row[9],
-                        "dataset_hash": pred_row[10],
-                        "target_draw_date": prediction_target_date,
-                        "created_at": prediction_created_at,
+                        "draw_date": prediction_draw_date,
                         "matches_main": matches_main,
                         "powerball_match": powerball_match,
                         "prize_amount": prize_amount,
@@ -1954,7 +1950,6 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                     "total_prize_amount": total_prize,
                     "total_prize_display": total_prize_display,
                     "predictions": predictions,
-                    "is_target_draw_date": True,
                     "context": f"Predictions generated for drawing on {formatted_date}"
                 }
                 grouped_results.append(grouped_result)
@@ -2183,7 +2178,7 @@ def migrate_config_from_file() -> bool:
 
             cursor.executemany("""
                 INSERT OR IGNORE INTO predictions_log 
-                (timestamp, n1, n2, n3, n4, n5, powerball, score_total, model_version, dataset_hash, json_details_path, target_draw_date)
+                (created_at, n1, n2, n3, n4, n5, pb, confidence_score, strategy_used, dataset_hash, json_details_path, draw_date)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, sample_predictions)
 

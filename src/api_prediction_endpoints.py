@@ -126,16 +126,16 @@ async def get_predictions_by_draw(
         # Get predictions for this draw date with enhanced date matching
         prediction_query = """
             SELECT 
-                id, timestamp, n1, n2, n3, n4, n5, powerball, 
-                score_total, model_version, method, confidence_score,
-                target_draw_date, created_at
+                id, created_at, n1, n2, n3, n4, n5, powerball, 
+                confidence_score, strategy_used, strategy_used, confidence_score,
+                draw_date, created_at
             FROM generated_tickets 
-            WHERE (target_draw_date = ? OR DATE(timestamp) = ? OR DATE(created_at) = ?)
-            ORDER BY score_total DESC, confidence_score DESC
+            WHERE draw_date = ?
+            ORDER BY confidence_score DESC
             LIMIT ?
         """
 
-        cursor.execute(prediction_query, (cleaned_draw_date, cleaned_draw_date, cleaned_draw_date, limit * 2))
+        cursor.execute(prediction_query, (cleaned_draw_date, limit * 2))
         predictions = cursor.fetchall()
 
         logger.info(f"Found {len(predictions)} total predictions for {cleaned_draw_date}")
@@ -158,7 +158,7 @@ async def get_predictions_by_draw(
                 prize_amount = 0 # Placeholder for prize calculation logic
 
                 formatted_predictions.append({
-                    "draw_date": pred[12] if pred[12] else pred[13][:10], # Use target_draw_date or created_at date part
+                    "draw_date": pred[12],  # Use draw_date
                     "numbers_predicted": pred_numbers,
                     "powerball_predicted": pred_powerball,
                     "matches": matches_main,
@@ -366,7 +366,7 @@ async def get_detailed_predictions_by_draw(
             # Check if we have predictions for this date even without official draw results
             cursor.execute("""
                 SELECT COUNT(*) FROM generated_tickets 
-                WHERE target_draw_date = ?
+                WHERE draw_date = ?
             """, (draw_date,))
 
             pred_count = cursor.fetchone()[0]
@@ -387,11 +387,11 @@ async def get_detailed_predictions_by_draw(
 
         # Get all predictions for this date
         cursor.execute("""
-            SELECT id, timestamp, n1, n2, n3, n4, n5, powerball, score_total, model_version
+            SELECT id, created_at, n1, n2, n3, n4, n5, powerball, confidence_score, strategy_used
             FROM generated_tickets 
-            WHERE target_draw_date = ? OR DATE(timestamp) = ?
-            ORDER BY score_total DESC
-        """, (draw_date, draw_date))
+            WHERE draw_date = ?
+            ORDER BY confidence_score DESC
+        """, (draw_date,))
 
         all_predictions = cursor.fetchall()
         conn.close()
@@ -516,17 +516,17 @@ async def get_predictions_by_draw_date(
         cursor.execute("""
             SELECT 
                 id,
-                timestamp,
+                created_at,
                 n1, n2, n3, n4, n5, powerball,
-                score_total,
-                model_version,
-                target_draw_date,
+                confidence_score,
+                strategy_used,
+                draw_date,
                 created_at
             FROM generated_tickets 
-            WHERE target_draw_date = ? OR DATE(created_at) = ?
-            ORDER BY score_total DESC
+            WHERE draw_date = ?
+            ORDER BY confidence_score DESC
             LIMIT ?
-        """, (target_date_str, target_date_str, limit * 2))  # Get more to filter later
+        """, (target_date_str, limit * 2))  # Get more to filter later
 
         predictions_raw = cursor.fetchall()
         conn.close()
@@ -664,17 +664,17 @@ async def get_predictions_only_by_date(
         cursor.execute("""
             SELECT 
                 id,
-                timestamp,
+                created_at,
                 n1, n2, n3, n4, n5, powerball,
-                score_total,
-                model_version,
-                target_draw_date,
+                confidence_score,
+                strategy_used,
+                draw_date,
                 created_at
             FROM generated_tickets 
-            WHERE target_draw_date = ? OR DATE(created_at) = ?
-            ORDER BY score_total DESC
+            WHERE draw_date = ?
+            ORDER BY confidence_score DESC
             LIMIT ?
-        """, (target_date_str, target_date_str, limit))
+        """, (target_date_str, limit))
 
         predictions_raw = cursor.fetchall()
         conn.close()
@@ -698,11 +698,11 @@ async def get_predictions_only_by_date(
                 "id": pred[0],
                 "numbers": pred_numbers,
                 "powerball": pred_powerball,
-                "score": pred[8] or 0,  # score_total
-                "method": pred[9] or "unknown",  # model_version
-                "created_at": pred[11] or pred[1],  # created_at or timestamp
+                "score": pred[8] or 0,  # confidence_score
+                "method": pred[9] or "unknown",  # strategy_used
+                "created_at": pred[11] or pred[1],  # created_at or created_at
                 "rank": i + 1,
-                "target_draw_date": pred[10]  # target_draw_date
+                "target_draw_date": pred[10]  # draw_date (aliased for API compatibility)
             }
             formatted_predictions.append(formatted_pred)
 
