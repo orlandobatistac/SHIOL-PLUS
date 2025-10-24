@@ -605,6 +605,23 @@ def _create_core_tables(cursor):
         )
     """)
 
+    # Migration for pb_is_current and pb_era columns
+    try:
+        cursor.execute("PRAGMA table_info(powerball_draws)")
+        columns = [column[1] for column in cursor.fetchall()]
+
+        if 'pb_is_current' not in columns:
+            logger.info("Adding pb_is_current column to powerball_draws table...")
+            cursor.execute("ALTER TABLE powerball_draws ADD COLUMN pb_is_current INTEGER DEFAULT 0")
+            logger.info("pb_is_current column added successfully")
+
+        if 'pb_era' not in columns:
+            logger.info("Adding pb_era column to powerball_draws table...")
+            cursor.execute("ALTER TABLE powerball_draws ADD COLUMN pb_era TEXT DEFAULT 'unknown'")
+            logger.info("pb_era column added successfully")
+    except sqlite3.Error as e:
+        logger.error(f"Error during powerball_draws migration: {e}")
+
     # Users table for authentication and premium access
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
