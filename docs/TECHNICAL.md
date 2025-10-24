@@ -188,6 +188,184 @@ Trigger logic uses PB numeric ranges to map to era labels like '2015-now (1-26)'
 
 ---
 
+## 2.6 Data Source Fallback System (v6.3)
+
+**Version**: 6.3 (October 2025)  
+**Implementation**: `src/loader.py`
+
+### 2.6.1 Overview
+
+SHIOL+ uses a **smart dual-source data loading system** to ensure reliable Powerball draw data availability. The system automatically selects the optimal data source based on database state and provides automatic failover between sources.
+
+**Data Sources**:
+- **MUSL API** (Multi-State Lottery Association) - Official primary source
+  - URL: `https://api.musl.com/v3/numbers?GameCode=powerball`
+  - Auth: `MUSL_API_KEY` environment variable
+  - Returns: Single latest draw (incremental updates)
+  - Best for: Regular maintenance, current data checks
+  
+- **NY State Open Data API** - Public fallback/bulk source
+  - URL: `https://data.ny.gov/resource/d6yy-54nr.json`
+  - Auth: Optional `NY_OPEN_DATA_APP_TOKEN` for higher rate limits
+  - Returns: Up to 5000 historical draws
+  - Best for: Initial population, recovery, bulk refresh
+
+### 2.6.2 Intelligent Source Selection
+
+The system implements a **state-based orchestration strategy** in `update_database_from_source()`:
+
+```python
+# Phase 1: Analyze database state
+latest_date = get_latest_draw_date()
+is_stale = _is_database_stale(latest_date, threshold_days=1)
+
+# Determine state
+if latest_date is None:
+    state = "EMPTY"
+elif is_stale:
+    state = "STALE"  # Latest draw >1 day old
+else:
+    state = "CURRENT"  # Fresh data
+```
+
+**Decision Matrix**:
+
+| Database State | Primary Source | Reason | Fallback |
+|---------------|----------------|--------|----------|
+| **EMPTY** | NY State API | Need full historical data (~5000 draws) | MUSL API (get at least 1 draw) |
+| **STALE** (>1 day) | NY State API | Full refresh recommended for recovery | MUSL API (incremental) |
+| **CURRENT** | MUSL API | Efficient incremental check (1 draw) | NY State API (full dataset) |
+
+### 2.6.3 Implementation Details
+
+**Key Functions**:
+
+1. **`_is_database_stale(latest_date_str, staleness_threshold_days=1)`**
+   - Compares latest draw date with current ET time
+   - Returns `True` if DB is empty or latest draw is older than threshold
+   - Uses `DateManager` for timezone-aware calculations
+
+2. **`_fetch_from_musl_api()`**
+   - Fetches latest draw from MUSL
+   - Requires `MUSL_API_KEY` env variable
+   - Returns single draw in list format
+   - 15-second timeout with graceful failure
+
+3. **`_fetch_from_nystate_api()`**
+   - Fetches up to 5000 historical draws
+   - Optional `NY_OPEN_DATA_APP_TOKEN` for authenticated requests
+   - Orders by `draw_date DESC` for latest-first
+   - 30-second timeout with graceful failure
+
+4. **`update_database_from_source()`** (orchestrator)
+   - Phase 1: Analyze DB state (EMPTY/STALE/CURRENT)
+   - Phase 2: Smart source selection with automatic fallback
+   - Phase 3: Transform API data to standardized format
+   - Phase 4: Filter new draws (avoid duplicates)
+   - Phase 5: Bulk insert with pb_era metadata update
+   - Phase 6: Return total draw count
+
+### 2.6.4 Fallback Behavior
+
+**Scenario 1: EMPTY/STALE DB - NY State failure**
+```
+1. Try NY State API → FAIL
+2. Log warning: "NY State API failed, falling back to MUSL..."
+3. Try MUSL API → SUCCESS (get 1 draw)
+4. Result: DB populated with at least latest draw
+```
+
+**Scenario 2: CURRENT DB - MUSL failure**
+```
+1. Try MUSL API → FAIL (no API key or network issue)
+2. Log warning: "MUSL API failed, falling back to NY State..."
+3. Try NY State API → SUCCESS (get all draws)
+4. Result: DB updated with complete dataset
+```
+
+**Scenario 3: Both APIs fail**
+```
+1. Primary source → FAIL
+2. Fallback source → FAIL
+3. Log error: "Both APIs failed - no data available"
+4. Return current draw count (no crash, graceful degradation)
+```
+
+### 2.6.5 Logging & Observability
+
+The system provides comprehensive logging at each decision point:
+
+```
+============================================================
+Starting intelligent data update process...
+============================================================
+📊 Database State: EMPTY
+   Latest draw date: None
+🔄 Strategy: NY State API (bulk historical data)
+   Reason: Database is empty or stale - need full refresh
+✅ NY State API success: 1853 draws fetched
+📊 Transformed 1853 valid draws
+🆕 Populating empty DB with 1853 draws
+🔧 Updated pb_era metadata for 1853 draws
+============================================================
+✅ Data update complete: 1853 total draws in database
+============================================================
+```
+
+### 2.6.6 Integration Points
+
+The `update_database_from_source()` function is called from:
+
+1. **scripts/update_draws.py** - Manual DB initialization
+2. **scripts/run_pipeline.py** - Full pipeline execution (Step 1)
+3. **src/api.py scheduler** - Two automated jobs:
+   - `post_drawing_pipeline` (Tue/Thu/Sun 1:00 AM ET) - Full pipeline
+   - `maintenance_data_update` (Tue/Thu/Fri/Sun 6:00 AM ET) - Data refresh only
+
+All integration points benefit from the smart source selection automatically.
+
+### 2.6.7 Performance & Rate Limits
+
+**MUSL API**:
+- Rate limit: Dependent on API key tier
+- Response time: ~200-500ms
+- Data size: ~2KB per draw
+
+**NY State Open Data API**:
+- Rate limit: 1000 requests/day (no token), 10,000/day (with token)
+- Response time: ~300-800ms for 5000 draws
+- Data size: ~500KB for full dataset
+- No authentication required (public API)
+
+**Recommendation**: Set `NY_OPEN_DATA_APP_TOKEN` for production to ensure higher rate limits for recovery scenarios.
+
+### 2.6.8 Testing
+
+The system was validated across three scenarios:
+
+1. ✅ **Empty Database Test**
+   ```bash
+   rm data/shiolplus.db
+   python scripts/update_draws.py
+   # Result: NY State API → 1853 draws inserted
+   ```
+
+2. ✅ **Stale Database Test**
+   ```python
+   # Set latest draw to 3 days ago
+   update_database_from_source()
+   # Result: STALE detected → NY State API → new draws added
+   ```
+
+3. ✅ **Current Database Test**
+   ```bash
+   # No MUSL_API_KEY set
+   update_database_from_source()
+   # Result: MUSL failed → NY State fallback → success
+   ```
+
+---
+
 ## 3. Enhanced Pipeline (5-Step Process)
 
 The orchestrator lives primarily in `src/api.py` (`trigger_full_pipeline_automatically()`), which performs the five steps:
