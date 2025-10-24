@@ -117,6 +117,7 @@ async def create_checkout_session(
     Requires Idempotency-Key header for safe retries.
     """
     if not get_feature_flag_billing_enabled():
+        logger.warning("Checkout session creation attempted but billing is disabled")
         raise HTTPException(
             status_code=503,
             detail="Billing functionality is currently disabled"
@@ -125,38 +126,69 @@ async def create_checkout_session(
     endpoint = "create-checkout-session"
     request_payload = json.dumps(checkout_request.dict())
 
+    logger.info(f"Checkout session creation requested with idempotency key: {idempotency_key}")
+
     # Check idempotency
     existing_result = check_idempotency_key(idempotency_key, endpoint, request_payload)
     if existing_result:
+        logger.info(f"Returning cached checkout session for idempotency key: {idempotency_key}")
         return existing_result["response"]
 
     try:
         # Get current user if authenticated
         current_user = get_user_from_request(request)
         customer_email = current_user.get("email") if current_user else None
+        user_id = current_user.get("id") if current_user else None
+
+        if user_id:
+            logger.info(f"Creating checkout session for authenticated user: user_id={user_id}, email={customer_email}")
+        else:
+            logger.info("Creating checkout session for guest user")
 
         # Create Stripe Checkout session
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
-                'price': stripe_config["price_id_annual"],
-                'quantity': 1,
-            }],
-            mode='subscription',
-            success_url=checkout_request.success_url + "?session_id={CHECKOUT_SESSION_ID}",
-            cancel_url=checkout_request.cancel_url,
-            customer_email=customer_email,
-            metadata={
-                'user_id': str(current_user["id"]) if current_user else None,
-                'source': 'shiol_plus_upgrade'
-            },
-            subscription_data={
-                'metadata': {
-                    'user_id': str(current_user["id"]) if current_user else None,
+        try:
+            session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=[{
+                    'price': stripe_config["price_id_annual"],
+                    'quantity': 1,
+                }],
+                mode='subscription',
+                success_url=checkout_request.success_url + "?session_id={CHECKOUT_SESSION_ID}",
+                cancel_url=checkout_request.cancel_url,
+                customer_email=customer_email,
+                metadata={
+                    'user_id': str(user_id) if user_id else None,
                     'source': 'shiol_plus_upgrade'
+                },
+                subscription_data={
+                    'metadata': {
+                        'user_id': str(user_id) if user_id else None,
+                        'source': 'shiol_plus_upgrade'
+                    }
                 }
-            }
-        )
+            )
+            logger.info(f"Stripe checkout session created successfully: session_id={session.id}, user_id={user_id}")
+        except stripe.error.InvalidRequestError as e:
+            logger.error(f"Invalid Stripe request parameters: {e}")
+            error_response = {"error": f"Invalid payment configuration: {str(e)}"}
+            store_idempotency_result(idempotency_key, endpoint, request_payload, error_response, 400)
+            raise HTTPException(status_code=400, detail=error_response["error"])
+        except stripe.error.AuthenticationError as e:
+            logger.error(f"Stripe authentication error: {e}")
+            error_response = {"error": "Payment system authentication error"}
+            store_idempotency_result(idempotency_key, endpoint, request_payload, error_response, 500)
+            raise HTTPException(status_code=500, detail=error_response["error"])
+        except stripe.error.APIConnectionError as e:
+            logger.error(f"Stripe API connection error: {e}")
+            error_response = {"error": "Unable to connect to payment system"}
+            store_idempotency_result(idempotency_key, endpoint, request_payload, error_response, 503)
+            raise HTTPException(status_code=503, detail=error_response["error"])
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error creating checkout session: {e}")
+            error_response = {"error": f"Payment processing error: {str(e)}"}
+            store_idempotency_result(idempotency_key, endpoint, request_payload, error_response, 400)
+            raise HTTPException(status_code=400, detail=error_response["error"])
 
         response_data = {
             "checkout_url": session.url,
@@ -166,18 +198,14 @@ async def create_checkout_session(
         # Store idempotency result
         store_idempotency_result(idempotency_key, endpoint, request_payload, response_data, 200)
 
-        logger.info(f"Checkout session created: {session.id} for user {current_user.get('id') if current_user else 'guest'}")
+        logger.info(f"Checkout session creation completed: session_id={session.id}, url={session.url}")
 
         return response_data
 
-    except Exception as e:  # Stripe errors are just exceptions
-        logger.error(f"Stripe error creating checkout session: {e}")
-        error_response = {"error": f"Payment processing error: {str(e)}"}
-        store_idempotency_result(idempotency_key, endpoint, request_payload, error_response, 400)
-        raise HTTPException(status_code=400, detail=error_response["error"])
-
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Unexpected error creating checkout session: {e}")
+        logger.error(f"Unexpected error creating checkout session: {type(e).__name__}: {e}")
         error_response = {"error": "Internal server error"}
         store_idempotency_result(idempotency_key, endpoint, request_payload, error_response, 500)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -189,9 +217,10 @@ async def stripe_webhook(request: Request):
     Validates webhook signature and processes events safely.
     
     NOTE: Response object cannot set cookies reliably in webhook context.
-    Premium Pass cookies are set via session verification in /status endpoint.
+    Premium Pass cookies are set via session verification in /activate-premium endpoint.
     """
     if not get_feature_flag_billing_enabled():
+        logger.warning("Webhook received but billing is disabled")
         raise HTTPException(status_code=503, detail="Billing functionality disabled")
 
     try:
@@ -199,7 +228,7 @@ async def stripe_webhook(request: Request):
         sig_header = request.headers.get('stripe-signature')
 
         if not sig_header:
-            logger.error("Missing stripe-signature header")
+            logger.error("Webhook: Missing stripe-signature header")
             raise HTTPException(status_code=400, detail="Missing signature header")
 
         # Verify webhook signature
@@ -207,16 +236,22 @@ async def stripe_webhook(request: Request):
             event = stripe.Webhook.construct_event(
                 payload, sig_header, stripe_config["webhook_secret"]
             )
+            logger.info(f"Webhook: Signature verified for event {event.get('id', 'unknown')}")
         except ValueError as e:
-            logger.error(f"Invalid payload: {e}")
+            logger.error(f"Webhook: Invalid payload - {e}")
             raise HTTPException(status_code=400, detail="Invalid payload")
-        except Exception as e:  # Signature verification errors
-            logger.error(f"Invalid signature: {e}")
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"Webhook: Signature verification failed - {e}")
             raise HTTPException(status_code=400, detail="Invalid signature")
+        except Exception as e:
+            logger.error(f"Webhook: Unexpected signature verification error - {type(e).__name__}: {e}")
+            raise HTTPException(status_code=400, detail="Signature verification error")
 
         # Check if event already processed (idempotency)
         event_id = event['id']
         event_type = event['type']
+        
+        logger.info(f"Webhook: Received event {event_id} of type {event_type}")
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -232,10 +267,10 @@ async def stripe_webhook(request: Request):
             if existing_event:
                 processed, processing_error = existing_event
                 if processed:
-                    logger.info(f"Webhook event already processed: {event_id}")
+                    logger.info(f"Webhook: Event {event_id} already processed successfully, returning success")
                     return {"status": "already_processed"}
                 elif processing_error:
-                    logger.warning(f"Retrying failed webhook event: {event_id}")
+                    logger.warning(f"Webhook: Retrying previously failed event {event_id}, previous error: {processing_error}")
 
             # Store/update webhook event
             cursor.execute("""
@@ -245,6 +280,7 @@ async def stripe_webhook(request: Request):
             """, (event_id, event_type, json.dumps(event), datetime.utcnow()))
 
             conn.commit()
+            logger.info(f"Webhook: Event {event_id} stored in database")
 
         # Process webhook event
         try:
@@ -260,20 +296,21 @@ async def stripe_webhook(request: Request):
                 """, (datetime.utcnow(), event_id))
                 conn.commit()
 
-            logger.info(f"Webhook event processed successfully: {event_id} ({event_type})")
+            logger.info(f"Webhook: Event {event_id} ({event_type}) processed SUCCESSFULLY")
 
         except Exception as e:
             # Mark processing error
+            error_message = f"{type(e).__name__}: {str(e)}"
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE webhook_events 
                     SET processing_error = ?, retry_count = retry_count + 1
                     WHERE stripe_event_id = ?
-                """, (str(e), event_id))
+                """, (error_message, event_id))
                 conn.commit()
 
-            logger.error(f"Error processing webhook event {event_id}: {e}")
+            logger.error(f"Webhook: FAILED to process event {event_id} ({event_type}): {error_message}")
             raise HTTPException(status_code=500, detail="Webhook processing failed")
 
         return {"status": "success"}
@@ -281,7 +318,7 @@ async def stripe_webhook(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected webhook error: {e}")
+        logger.error(f"Webhook: Unexpected error - {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 async def process_webhook_event(event: Dict[str, Any]) -> None:
@@ -304,80 +341,126 @@ async def process_webhook_event(event: Dict[str, Any]) -> None:
 
 async def handle_checkout_completed(session: Dict[str, Any]) -> None:
     """Handle successful checkout completion - activate Premium Pass."""
+    session_id = session.get('id', 'unknown')
+    logger.info(f"Webhook: Processing checkout.session.completed for session {session_id}")
+    
     try:
         customer_email = session.get('customer_email') or session.get('customer_details', {}).get('email')
         subscription_id = session.get('subscription')
 
         if not customer_email or not subscription_id:
-            logger.error(f"Missing required data in checkout session: {session['id']}")
+            logger.error(f"Webhook: Missing required data in checkout session {session_id}: email={customer_email}, subscription={subscription_id}")
             return
+
+        logger.info(f"Webhook: Checkout completed - email={customer_email}, subscription={subscription_id}")
 
         # Check if user is registered
         user_id = None
         if 'metadata' in session and session['metadata'].get('user_id'):
             user_id = int(session['metadata']['user_id'])
+            logger.info(f"Webhook: Registered user detected: user_id={user_id}")
 
-        # Create Premium Pass
-        pass_data = create_premium_pass(customer_email, subscription_id, user_id)
+        # Create Premium Pass (idempotent - will return existing if already created)
+        from src.premium_pass_service import get_premium_pass_by_email
+        existing_pass = get_premium_pass_by_email(customer_email)
+        
+        if existing_pass:
+            logger.info(f"Webhook: Premium Pass already exists for {customer_email}, pass_id={existing_pass['pass_id']} (likely created by backend validation)")
+            pass_data = existing_pass
+        else:
+            logger.info(f"Webhook: Creating new Premium Pass for {customer_email}")
+            pass_data = create_premium_pass(customer_email, subscription_id, user_id)
+            logger.info(f"Webhook: Premium Pass CREATED - pass_id={pass_data['pass_id']}, email={customer_email}, subscription={subscription_id}")
 
         # Update user premium status if registered
         if user_id:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE users 
-                    SET is_premium = TRUE, premium_expires_at = ?
-                    WHERE id = ?
-                """, (pass_data["expires_at"], user_id))
-                conn.commit()
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE users 
+                        SET is_premium = TRUE, premium_expires_at = ?
+                        WHERE id = ?
+                    """, (pass_data["expires_at"], user_id))
+                    updated_rows = cursor.rowcount
+                    conn.commit()
+                
+                if updated_rows > 0:
+                    logger.info(f"Webhook: Updated registered user premium status: user_id={user_id}")
+                else:
+                    logger.warning(f"Webhook: User {user_id} not found in database")
+            except Exception as db_error:
+                logger.error(f"Webhook: Failed to update user premium status: {db_error}")
+                # Continue - Premium Pass is created
 
-        logger.info(f"Premium activated for {customer_email}: subscription={subscription_id}, pass_id={pass_data['pass_id']}")
+        logger.info(f"Webhook: Premium activation COMPLETED for {customer_email}: subscription={subscription_id}, pass_id={pass_data['pass_id']}")
 
     except Exception as e:
-        logger.error(f"Error handling checkout completion: {e}")
+        logger.error(f"Webhook: Error handling checkout completion for session {session_id}: {type(e).__name__}: {e}")
         raise
 
 async def handle_subscription_deleted(subscription: Dict[str, Any]) -> None:
     """Handle subscription cancellation - revoke Premium Pass."""
+    subscription_id = subscription.get('id', 'unknown')
+    logger.info(f"Webhook: Processing customer.subscription.deleted for subscription {subscription_id}")
+    
     try:
-        subscription_id = subscription['id']
-
         # Revoke Premium Pass
         revoked_count = revoke_premium_pass_by_subscription(
             subscription_id,
             "subscription_canceled"
         )
 
-        # Update user premium status if applicable
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE users 
-                SET is_premium = FALSE, premium_expires_at = NULL
-                WHERE id IN (
-                    SELECT user_id FROM premium_passes 
-                    WHERE stripe_subscription_id = ? AND user_id IS NOT NULL
-                )
-            """, (subscription_id,))
-            conn.commit()
+        if revoked_count > 0:
+            logger.info(f"Webhook: Revoked {revoked_count} Premium Pass(es) for canceled subscription {subscription_id}")
+        else:
+            logger.warning(f"Webhook: No Premium Passes found to revoke for subscription {subscription_id}")
 
-        logger.info(f"Premium revoked for subscription {subscription_id}: {revoked_count} passes revoked")
+        # Update user premium status if applicable
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users 
+                    SET is_premium = FALSE, premium_expires_at = NULL
+                    WHERE id IN (
+                        SELECT user_id FROM premium_passes 
+                        WHERE stripe_subscription_id = ? AND user_id IS NOT NULL
+                    )
+                """, (subscription_id,))
+                updated_rows = cursor.rowcount
+                conn.commit()
+            
+            if updated_rows > 0:
+                logger.info(f"Webhook: Updated {updated_rows} user(s) premium status to inactive")
+        except Exception as db_error:
+            logger.error(f"Webhook: Failed to update user premium status: {db_error}")
+
+        logger.info(f"Webhook: Subscription cancellation COMPLETED for {subscription_id}")
 
     except Exception as e:
-        logger.error(f"Error handling subscription deletion: {e}")
+        logger.error(f"Webhook: Error handling subscription deletion for {subscription_id}: {type(e).__name__}: {e}")
         raise
 
 async def handle_payment_dispute_or_refund(charge: Dict[str, Any]) -> None:
     """Handle payment disputes and refunds - revoke Premium Pass."""
+    charge_id = charge.get('id', 'unknown')
+    logger.info(f"Webhook: Processing payment dispute/refund for charge {charge_id}")
+    
     try:
         # Get subscription from charge
         invoice_id = charge.get('invoice')
         if not invoice_id:
+            logger.warning(f"Webhook: No invoice associated with charge {charge_id}, cannot revoke Premium Pass")
             return
 
         # Retrieve invoice to get subscription
-        invoice = stripe.Invoice.retrieve(invoice_id)
-        subscription_id = invoice.get('subscription')
+        try:
+            invoice = stripe.Invoice.retrieve(invoice_id)
+            subscription_id = invoice.get('subscription')
+        except stripe.error.StripeError as e:
+            logger.error(f"Webhook: Failed to retrieve invoice {invoice_id}: {e}")
+            return
 
         if subscription_id:
             # Revoke Premium Pass
@@ -386,24 +469,25 @@ async def handle_payment_dispute_or_refund(charge: Dict[str, Any]) -> None:
                 "payment_dispute_or_refund"
             )
 
-            logger.info(f"Premium revoked due to dispute/refund for subscription {subscription_id}: {revoked_count} passes revoked")
+            logger.info(f"Webhook: Premium revoked due to dispute/refund - subscription={subscription_id}, charge={charge_id}, passes_revoked={revoked_count}")
+        else:
+            logger.warning(f"Webhook: No subscription found in invoice {invoice_id} for charge {charge_id}")
 
     except Exception as e:
-        logger.error(f"Error handling payment dispute/refund: {e}")
+        logger.error(f"Webhook: Error handling payment dispute/refund for charge {charge_id}: {type(e).__name__}: {e}")
         raise
 
 async def handle_invoice_paid(invoice: Dict[str, Any]) -> None:
     """Handle successful invoice payment - sync subscription status."""
-    # This could be used for renewal notifications or status sync
-    subscription_id = invoice.get('subscription')
-    if subscription_id:
-        logger.info(f"Invoice paid for subscription {subscription_id}")
+    subscription_id = invoice.get('subscription', 'unknown')
+    invoice_id = invoice.get('id', 'unknown')
+    logger.info(f"Webhook: Invoice paid - subscription={subscription_id}, invoice={invoice_id}")
 
 async def handle_subscription_updated(subscription: Dict[str, Any]) -> None:
     """Handle subscription updates - sync status changes."""
-    subscription_id = subscription['id']
-    status = subscription['status']
-    logger.info(f"Subscription {subscription_id} updated to status: {status}")
+    subscription_id = subscription.get('id', 'unknown')
+    status = subscription.get('status', 'unknown')
+    logger.info(f"Webhook: Subscription updated - subscription={subscription_id}, new_status={status}")
 
 @billing_router.get("/status", response_model=BillingStatusResponse)
 async def get_billing_status(request: Request, session_id: str = None):
@@ -420,6 +504,7 @@ async def get_billing_status(request: Request, session_id: str = None):
 
     if not billing_enabled:
         response_data.message = "Billing functionality is currently disabled"
+        logger.info("Billing status check: billing disabled")
         return response_data
 
     # Check user authentication and premium status
@@ -428,6 +513,7 @@ async def get_billing_status(request: Request, session_id: str = None):
     if current_user and current_user.get("is_premium"):
         response_data.is_premium = True
         response_data.source = "stripe_subscription"
+        logger.info(f"User {current_user.get('id')} has premium via registered account")
     else:
         # Check Premium Pass cookie
         premium_pass_token = request.cookies.get("premium_pass")
@@ -438,20 +524,47 @@ async def get_billing_status(request: Request, session_id: str = None):
                 if pass_info["valid"]:
                     response_data.is_premium = True
                     response_data.source = "premium_pass"
+                    logger.info(f"Premium Pass validated from cookie: {pass_info['email']}")
             except Exception as e:
-                logger.warning(f"Invalid Premium Pass token: {e}")
+                logger.warning(f"Invalid Premium Pass token in cookie: {e}")
 
-    # CRITICAL FIX: Check Stripe session directly if provided (for test mode and webhook delays)
+    # CRITICAL FIX: Check Stripe session directly if provided (for immediate validation)
+    # This ensures payment verification happens on the backend, not just browser redirect
     if session_id and not response_data.is_premium:
+        logger.info(f"Validating payment via Stripe session: {session_id}")
         try:
-            session = stripe.checkout.Session.retrieve(session_id)
+            # Retrieve session from Stripe API with error handling
+            try:
+                session = stripe.checkout.Session.retrieve(session_id)
+                logger.info(f"Stripe session retrieved: {session_id}, payment_status={session.payment_status}, status={session.status}")
+            except stripe.error.InvalidRequestError as e:
+                logger.error(f"Invalid Stripe session ID {session_id}: {e}")
+                response_data.message = "Invalid payment session"
+                return response_data
+            except stripe.error.AuthenticationError as e:
+                logger.error(f"Stripe authentication error: {e}")
+                response_data.message = "Payment system authentication error"
+                return response_data
+            except stripe.error.APIConnectionError as e:
+                logger.error(f"Stripe API connection error: {e}")
+                response_data.message = "Unable to verify payment, please try again"
+                return response_data
+            except stripe.error.StripeError as e:
+                logger.error(f"Stripe API error retrieving session {session_id}: {e}")
+                response_data.message = "Payment verification error"
+                return response_data
             
-            # Check if payment was completed
+            # Validate payment completion
             if session.payment_status == 'paid' and session.status == 'complete':
                 subscription_id = session.subscription
                 customer_email = session.customer_details.email if session.customer_details else session.customer_email
                 
-                logger.info(f"Session {session_id} is paid, checking for Premium Pass creation")
+                logger.info(f"Payment VERIFIED for session {session_id}: email={customer_email}, subscription={subscription_id}")
+                
+                if not customer_email or not subscription_id:
+                    logger.error(f"Missing critical data in paid session {session_id}: email={customer_email}, subscription={subscription_id}")
+                    response_data.message = "Payment completed but missing customer information"
+                    return response_data
                 
                 # Check if Premium Pass already exists
                 from src.premium_pass_service import get_premium_pass_by_email
@@ -460,28 +573,55 @@ async def get_billing_status(request: Request, session_id: str = None):
                 if existing_pass:
                     response_data.is_premium = True
                     response_data.source = "premium_pass_verified"
-                    logger.info(f"Found existing Premium Pass for {customer_email}")
+                    logger.info(f"Existing Premium Pass found for {customer_email}: pass_id={existing_pass['pass_id']}")
                 else:
-                    # Create Premium Pass immediately (fallback for webhook delays/failures)
-                    logger.warning(f"Session paid but no Premium Pass found, creating now (webhook may have failed)")
+                    # Create Premium Pass immediately (ensures activation even if webhook hasn't fired)
+                    logger.warning(f"Payment verified but no Premium Pass exists - creating now (webhook may be delayed or failed)")
                     
                     user_id = None
                     if current_user:
                         user_id = current_user.get("id")
+                        logger.info(f"Authenticated user detected: user_id={user_id}")
                     elif session.metadata and session.metadata.get('user_id'):
                         user_id = int(session.metadata['user_id'])
+                        logger.info(f"User ID from session metadata: user_id={user_id}")
                     
-                    pass_data = create_premium_pass(customer_email, subscription_id, user_id)
-                    
-                    response_data.is_premium = True
-                    response_data.source = "premium_pass_created"
-                    response_data.message = "Premium Pass created successfully"
-                    
-                    logger.info(f"Premium Pass created from session check: {pass_data['pass_id']}")
+                    try:
+                        pass_data = create_premium_pass(customer_email, subscription_id, user_id)
+                        
+                        response_data.is_premium = True
+                        response_data.source = "premium_pass_created"
+                        response_data.message = "Premium activated successfully"
+                        
+                        logger.info(f"Premium Pass CREATED from backend validation: pass_id={pass_data['pass_id']}, email={customer_email}, subscription={subscription_id}")
+                        
+                        # Update registered user status if applicable
+                        if user_id:
+                            try:
+                                with get_db_connection() as conn:
+                                    cursor = conn.cursor()
+                                    cursor.execute("""
+                                        UPDATE users 
+                                        SET is_premium = TRUE, premium_expires_at = ?
+                                        WHERE id = ?
+                                    """, (pass_data["expires_at"], user_id))
+                                    conn.commit()
+                                logger.info(f"Updated registered user premium status: user_id={user_id}")
+                            except Exception as db_error:
+                                logger.error(f"Failed to update user premium status: {db_error}")
+                                # Continue anyway - Premium Pass is created
+                    except Exception as create_error:
+                        logger.error(f"CRITICAL: Failed to create Premium Pass for paid session {session_id}: {create_error}")
+                        response_data.message = "Payment verified but activation failed - please contact support"
+                        return response_data
+            else:
+                logger.warning(f"Session {session_id} not yet paid: payment_status={session.payment_status}, status={session.status}")
+                response_data.message = f"Payment status: {session.payment_status}"
                     
         except Exception as e:
-            logger.error(f"Error checking Stripe session {session_id}: {e}")
-            # Don't fail the entire request, just log and continue
+            logger.error(f"Unexpected error validating Stripe session {session_id}: {type(e).__name__}: {e}")
+            response_data.message = "Payment verification error"
+            # Don't fail the entire request - return current status
 
     return response_data
 
@@ -489,77 +629,149 @@ async def get_billing_status(request: Request, session_id: str = None):
 async def activate_premium(request: Request, response: Response, session_id: str = None):
     """
     Activate premium pass and set cookie after successful payment.
-    This endpoint is called by the frontend after payment confirmation to set the HttpOnly cookie.
+    This endpoint verifies payment with Stripe before activating Premium access.
     
     Args:
-        session_id: Stripe checkout session ID
+        session_id: Stripe checkout session ID (required)
+        
+    Returns:
+        Success response with premium pass details
+        
+    Raises:
+        HTTPException: If payment not verified or activation fails
     """
     if not get_feature_flag_billing_enabled():
+        logger.warning("Premium activation attempted but billing is disabled")
         raise HTTPException(
             status_code=503,
             detail="Billing functionality is currently disabled"
         )
     
     if not session_id:
+        logger.error("Premium activation attempted without session_id")
         raise HTTPException(status_code=400, detail="session_id is required")
     
+    logger.info(f"Premium activation requested for session: {session_id}")
+    
     try:
-        # Retrieve and verify the Stripe session
-        session = stripe.checkout.Session.retrieve(session_id)
+        # CRITICAL: Retrieve and verify the Stripe session (backend validation)
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            logger.info(f"Stripe session retrieved for activation: {session_id}, payment_status={session.payment_status}, status={session.status}")
+        except stripe.error.InvalidRequestError as e:
+            logger.error(f"Invalid Stripe session ID for activation {session_id}: {e}")
+            raise HTTPException(status_code=400, detail="Invalid payment session ID")
+        except stripe.error.AuthenticationError as e:
+            logger.error(f"Stripe authentication error during activation: {e}")
+            raise HTTPException(status_code=500, detail="Payment system authentication error")
+        except stripe.error.APIConnectionError as e:
+            logger.error(f"Stripe API connection error during activation: {e}")
+            raise HTTPException(status_code=503, detail="Unable to verify payment - please try again later")
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe API error during activation for session {session_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Payment verification failed: {str(e)}")
         
+        # Validate payment is actually completed
         if session.payment_status != 'paid' or session.status != 'complete':
+            logger.warning(f"Activation attempted for unpaid session {session_id}: payment_status={session.payment_status}, status={session.status}")
             raise HTTPException(
                 status_code=400, 
-                detail=f"Payment not completed. Status: {session.payment_status}"
+                detail=f"Payment not completed. Payment status: {session.payment_status}, session status: {session.status}"
             )
         
         subscription_id = session.subscription
         customer_email = session.customer_details.email if session.customer_details else session.customer_email
         
         if not customer_email or not subscription_id:
+            logger.error(f"Missing required data in paid session {session_id}: email={customer_email}, subscription={subscription_id}")
             raise HTTPException(
                 status_code=400,
-                detail="Missing customer email or subscription ID"
+                detail="Payment completed but missing customer email or subscription ID"
             )
         
-        # Get or create Premium Pass
-        from src.premium_pass_service import get_premium_pass_by_email
+        logger.info(f"Payment CONFIRMED for activation: session={session_id}, email={customer_email}, subscription={subscription_id}")
+        
+        # Get or create Premium Pass with comprehensive error handling
+        from src.premium_pass_service import get_premium_pass_by_email, PremiumPassError
+        
         pass_data = get_premium_pass_by_email(customer_email)
         
         if not pass_data:
-            # Create Premium Pass if it doesn't exist
+            # Create Premium Pass - payment is verified by Stripe
+            logger.info(f"Creating new Premium Pass for {customer_email}")
+            
             current_user = get_user_from_request(request)
             user_id = None
+            
             if current_user:
                 user_id = current_user.get("id")
+                logger.info(f"Premium activation for authenticated user: user_id={user_id}")
             elif session.metadata and session.metadata.get('user_id'):
                 user_id = int(session.metadata['user_id'])
+                logger.info(f"Premium activation for user from session metadata: user_id={user_id}")
+            else:
+                logger.info(f"Premium activation for guest user: {customer_email}")
             
-            pass_data = create_premium_pass(customer_email, subscription_id, user_id)
-            logger.info(f"Created Premium Pass for activation: {pass_data['pass_id']}")
+            try:
+                pass_data = create_premium_pass(customer_email, subscription_id, user_id)
+                logger.info(f"Premium Pass CREATED for activation: pass_id={pass_data['pass_id']}, email={customer_email}, subscription={subscription_id}")
+                
+                # Update registered user status if applicable
+                if user_id:
+                    try:
+                        with get_db_connection() as conn:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                UPDATE users 
+                                SET is_premium = TRUE, premium_expires_at = ?
+                                WHERE id = ?
+                            """, (pass_data["expires_at"], user_id))
+                            conn.commit()
+                        logger.info(f"Updated registered user premium status: user_id={user_id}")
+                    except Exception as db_error:
+                        logger.error(f"Failed to update user premium status: {db_error}")
+                        # Continue - Premium Pass is created
+                        
+            except PremiumPassError as e:
+                logger.error(f"CRITICAL: Premium Pass creation failed for verified payment {session_id}: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Payment verified but Premium activation failed: {str(e)}"
+                )
+            except Exception as e:
+                logger.error(f"CRITICAL: Unexpected error creating Premium Pass for session {session_id}: {type(e).__name__}: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Premium activation failed - please contact support with your payment confirmation"
+                )
+        else:
+            logger.info(f"Existing Premium Pass found for activation: pass_id={pass_data['pass_id']}, email={customer_email}")
         
-        # Set Premium Pass cookie
+        # Set Premium Pass cookie (HttpOnly, Secure, SameSite=Lax)
         response.set_cookie(
             key="premium_pass",
             value=pass_data["token"],
             httponly=True,
-            secure=True,
+            secure=True,  # Requires HTTPS in production
             samesite="lax",
             max_age=365 * 24 * 60 * 60  # 1 year
         )
         
-        logger.info(f"Premium Pass cookie set for {customer_email}")
+        logger.info(f"Premium Pass cookie SET successfully for {customer_email}, pass_id={pass_data['pass_id']}")
         
         return {
             "success": True,
             "message": "Premium activated successfully",
-            "premium_pass_id": pass_data["pass_id"]
+            "premium_pass_id": pass_data["pass_id"],
+            "email": customer_email,
+            "subscription_id": subscription_id,
+            "expires_at": pass_data["expires_at"]
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error activating premium: {e}")
+        logger.error(f"CRITICAL: Unexpected error in premium activation for session {session_id}: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to activate premium: {str(e)}"
