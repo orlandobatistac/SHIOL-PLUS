@@ -9,6 +9,7 @@ import stripe
 from datetime import datetime
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Request, Response, Header
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from loguru import logger
 
@@ -793,4 +794,121 @@ async def activate_premium(request: Request, response: Response, session_id: str
             status_code=500,
             detail=f"Failed to activate premium: {str(e)}"
         )
+
+
+@billing_router.get("/activate-via-redirect")
+async def activate_premium_via_redirect(request: Request, session_id: str = None, next: str = "/payment-success.html?activated=1"):
+    """
+    Robust activation endpoint for use as Stripe success_url.
+    Verifies the payment session, creates Premium Pass if needed, sets cookie, and redirects to a success page.
+
+    Query params:
+        session_id: Stripe Checkout session ID appended by Stripe to success_url
+        next: Optional relative URL to redirect after setting the cookie (default: /payment-success.html?activated=1)
+    """
+    if not get_feature_flag_billing_enabled():
+        logger.warning("Premium activation (redirect) attempted but billing is disabled")
+        raise HTTPException(status_code=503, detail="Billing functionality is currently disabled")
+
+    if not session_id:
+        logger.error("Redirect activation attempted without session_id")
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    logger.info(f"Premium activation via redirect requested for session: {session_id}")
+
+    # We'll reuse the core of the POST activation logic here
+    try:
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            logger.info(f"Stripe session retrieved for redirect activation: {session_id}, payment_status={session.payment_status}, status={session.status}")
+        except stripe.error.InvalidRequestError as e:
+            logger.error(f"Invalid Stripe session ID for redirect activation {session_id}: {e}")
+            raise HTTPException(status_code=400, detail="Invalid payment session ID")
+        except stripe.error.AuthenticationError as e:
+            logger.error(f"Stripe authentication error during redirect activation: {e}")
+            raise HTTPException(status_code=500, detail="Payment system authentication error")
+        except stripe.error.APIConnectionError as e:
+            logger.error(f"Stripe API connection error during redirect activation: {e}")
+            raise HTTPException(status_code=503, detail="Unable to verify payment - please try again later")
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe API error during redirect activation for session {session_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Payment verification failed: {str(e)}")
+
+        if session.payment_status != 'paid' or session.status != 'complete':
+            logger.warning(f"Redirect activation attempted for unpaid session {session_id}: payment_status={session.payment_status}, status={session.status}")
+            raise HTTPException(status_code=400, detail=f"Payment not completed. Payment status: {session.payment_status}, session status: {session.status}")
+
+        subscription_id = session.subscription
+        customer_email = session.customer_details.email if session.customer_details else session.customer_email
+
+        if not customer_email or not subscription_id:
+            logger.error(f"Missing required data in paid session {session_id}: email={customer_email}, subscription={subscription_id}")
+            raise HTTPException(status_code=400, detail="Payment completed but missing customer email or subscription ID")
+
+        logger.info(f"Payment CONFIRMED for redirect activation: session={session_id}, email={customer_email}, subscription={subscription_id}")
+
+        # Get or create Premium Pass
+        from src.premium_pass_service import get_premium_pass_by_email, PremiumPassError
+
+        pass_data = get_premium_pass_by_email(customer_email)
+        if not pass_data:
+            current_user = get_user_from_request(request)
+            user_id = None
+            if current_user:
+                user_id = current_user.get("id")
+                logger.info(f"Redirect activation for authenticated user: user_id={user_id}")
+            elif session.metadata and session.metadata.get('user_id'):
+                user_id = int(session.metadata['user_id'])
+                logger.info(f"Redirect activation for user from session metadata: user_id={user_id}")
+
+            try:
+                pass_data = create_premium_pass(customer_email, subscription_id, user_id)
+                logger.info(f"Premium Pass CREATED (redirect): pass_id={pass_data['pass_id']}, email={customer_email}, subscription={subscription_id}")
+
+                if user_id:
+                    try:
+                        with get_db_connection() as conn:
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                """
+                                UPDATE users 
+                                SET is_premium = TRUE, premium_expires_at = ?
+                                WHERE id = ?
+                                """,
+                                (pass_data["expires_at"], user_id)
+                            )
+                            conn.commit()
+                        logger.info(f"Updated registered user premium status (redirect): user_id={user_id}")
+                    except Exception as db_error:
+                        logger.error(f"Failed to update user premium status (redirect): {db_error}")
+            except PremiumPassError as e:
+                logger.error(f"Premium Pass creation failed (redirect) for verified payment {session_id}: {e}")
+                raise HTTPException(status_code=500, detail=f"Payment verified but Premium activation failed: {str(e)}")
+
+        # Prepare redirect response and set cookie
+        try:
+            import os
+            is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+        except Exception:
+            is_production = False
+
+        redirect_response = RedirectResponse(url=next, status_code=303)
+        redirect_response.set_cookie(
+            key="premium_pass",
+            value=pass_data["token"],
+            httponly=True,
+            secure=is_production,
+            samesite="lax",
+            path="/",
+            max_age=365 * 24 * 60 * 60
+        )
+
+        logger.info(f"Premium Pass cookie SET (redirect) for {customer_email}, pass_id={pass_data['pass_id']}")
+        return redirect_response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CRITICAL: Unexpected error in redirect premium activation for session {session_id}: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to complete premium activation via redirect")
 
