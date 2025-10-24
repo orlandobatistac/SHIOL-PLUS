@@ -647,6 +647,16 @@ async def activate_premium(request: Request, response: Response, session_id: str
             detail="Billing functionality is currently disabled"
         )
     
+    # Accept session_id from either query parameter or JSON body for robustness
+    if not session_id:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                session_id = body.get("session_id")
+        except Exception:
+            # Ignore JSON parsing errors and fall through to validation
+            pass
+
     if not session_id:
         logger.error("Premium activation attempted without session_id")
         raise HTTPException(status_code=400, detail="session_id is required")
@@ -747,13 +757,20 @@ async def activate_premium(request: Request, response: Response, session_id: str
         else:
             logger.info(f"Existing Premium Pass found for activation: pass_id={pass_data['pass_id']}, email={customer_email}")
         
-        # Set Premium Pass cookie (HttpOnly, Secure, SameSite=Lax)
+        # Set Premium Pass cookie (HttpOnly, SameSite=Lax) with environment-aware security and global path
+        try:
+            import os
+            is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+        except Exception:
+            is_production = False
+
         response.set_cookie(
             key="premium_pass",
             value=pass_data["token"],
             httponly=True,
-            secure=True,  # Requires HTTPS in production
+            secure=is_production,  # Only secure in production/HTTPS
             samesite="lax",
+            path="/",              # Make cookie available to entire site
             max_age=365 * 24 * 60 * 60  # 1 year
         )
         
