@@ -155,6 +155,25 @@ curl https://shiolplus.com/api/v1/public/jackpot
 **Provider:** Contabo/Similar  
 **Monthly Cost:** **$2.00 USD**
 
+---
+## ⏰ Pipeline Automation: Internal Scheduler vs. Cron
+
+**Automated pipeline execution is handled by the built-in APScheduler (AsyncIOScheduler) inside the FastAPI app.**
+
+- When the API server is running (via Uvicorn/Gunicorn), APScheduler automatically triggers:
+    - Full pipeline runs (01:00 AM ET, Tue/Thu/Sun)
+    - Maintenance data updates (06:00 AM ET, Tue/Thu/Fri/Sun)
+- No external cron job is required for the main pipeline. The scheduler is persistent and production-safe as long as the app is running (use systemd to keep the service alive).
+- External cron is only recommended for backups or as a failsafe (e.g., copying the database file).
+
+**To manually trigger the pipeline:**
+```bash
+python scripts/run_pipeline.py
+```
+
+**Summary:**
+> All core automation is internal. Just keep the FastAPI app running—no extra cron setup needed for the main pipeline.
+
 **Hardware Specs:**
 ```
 CPU:     1 vCore (shared, x86_64)
