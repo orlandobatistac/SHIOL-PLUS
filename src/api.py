@@ -74,11 +74,6 @@ async def update_data_automatically():
     except Exception as e:
         logger.error(f"Error during automatic data update: {e}")
 
-async def trigger_full_pipeline_automatically():
-    """Task to trigger the full pipeline automatically with enhanced metadata."""
-    logger.info("Running automatic full pipeline trigger.")
-
-
 async def adaptive_learning_update():
     """Update strategy weights based on recent performance using a simple empirical Bayes-like update.
 

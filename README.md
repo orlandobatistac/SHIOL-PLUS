@@ -810,6 +810,16 @@ Interested in discussing this project, exploring opportunities, or just want to 
   - Database schema details
   - API reference documentation
 
+- ▶️ Manual pipeline trigger
+
+    To run the full end-to-end pipeline on demand (fetch latest data, update analytics, evaluate past predictions, update strategy weights, and generate new tickets), use the wrapper script:
+
+    ```bash
+    python scripts/run_pipeline.py
+    ```
+
+    This script is idempotent and will auto-initialize the database if needed. It logs progress and exits with a non-zero code on failure.
+
 - 🚀 **[Deployment Guide](docs/DEPLOYMENT.md)**
   - VPS setup walkthrough
   - Nginx configuration
