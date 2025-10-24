@@ -41,8 +41,7 @@ class DateManager:
     @classmethod
     def get_current_et_time(cls) -> datetime:
         """
-        Obtiene la fecha y hora actual en Eastern Time con corrección automática.
-        Detecta y corrige drift de zona horaria del deployment.
+        Obtiene la fecha y hora actual en Eastern Time.
         
         Returns:
             datetime: Fecha y hora actual en ET con timezone
@@ -52,38 +51,6 @@ class DateManager:
 
         # Convert to Eastern Time
         current_time = system_utc.astimezone(cls.POWERBALL_TIMEZONE)
-
-        # DEPLOYMENT FIX: Detectar y corregir drift de zona horaria
-        # Actualizar el rango de fechas esperadas a septiembre 2025 (fecha actual)
-        expected_date_range = ["2025-09-17", "2025-09-18", "2025-09-19"]  # Rango esperado actual (septiembre 2025)
-        actual_date = current_time.strftime('%Y-%m-%d')
-
-        # Temporal: Deshabilitar corrección automática para evitar confusión
-        # El sistema funciona correctamente con las fechas actuales
-        logger.debug(f"Current system date: {actual_date} - Clock drift correction disabled")
-
-        # Solo aplicar corrección si hay una diferencia extrema (más de 30 días)
-        if actual_date not in expected_date_range:
-            logger.info(f"System date outside expected range: {actual_date} not in {expected_date_range}")
-
-            # Verificar si es una diferencia extrema que requiere corrección
-            from datetime import date
-            try:
-                actual_date_obj = datetime.strptime(actual_date, '%Y-%m-%d').date()
-                expected_date = date(2025, 9, 17)  # Fecha base de referencia
-
-                drift_days = abs((actual_date_obj - expected_date).days)
-
-                if drift_days > 30:  # Solo corregir si hay más de 30 días de diferencia
-                    logger.warning(f"Extreme clock drift detected: {drift_days} days difference")
-                    # En este caso, usar la fecha actual del sistema sin corrección
-                    logger.info("Using system date without correction due to extreme drift")
-                else:
-                    logger.debug(f"Minor date difference ({drift_days} days) - no correction needed")
-            except ValueError:
-                logger.warning(f"Could not parse date for drift calculation: {actual_date}")
-
-        # Retornar tiempo actual sin corrección para funcionamiento normal
 
         logger.debug(f"System UTC: {system_utc.isoformat()}")
         logger.debug(f"ET time: {current_time.isoformat()}")

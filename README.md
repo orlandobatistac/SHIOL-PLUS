@@ -623,6 +623,12 @@ This is intentional—demonstrates capability without requiring actual billing i
 - **Monitoring** - systemd journald, error tracking
 - **Cron Scheduling** - Automated task execution
 
+### Logging and Diagnostics
+- **Time Synchronization** - System UTC synchronized via host OS (containers) or systemd-timesyncd (production VPS)
+- **Timezone Handling** - Backend uses `pytz` for UTC → Eastern Time conversion; no client-side normalization
+- **Date Management** - Centralized in `src/date_utils.py` with debug logging for all timezone operations
+- **Log Cleanliness** - Obsolete drift detection removed (v6.1); system relies purely on OS-managed time
+
 ### Frontend Development
 - **Modern JavaScript** - ES6+, async/await, fetch API
 - **Responsive Design** - Mobile-first, touch-friendly
