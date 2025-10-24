@@ -775,6 +775,39 @@ async def get_system_overview():
             })
         except Exception as git_err:
             logger.warning(f"Git info retrieval failed: {git_err}")
+            # Fallback to environment variables (useful in production deploys without .git)
+            env_commit = os.getenv("GIT_COMMIT") or os.getenv("COMMIT_HASH")
+            env_branch = os.getenv("GIT_BRANCH") or os.getenv("BRANCH")
+            env_message = os.getenv("GIT_COMMIT_MESSAGE")
+            env_date = os.getenv("GIT_COMMIT_DATE")
+
+            if env_commit or env_branch or env_message:
+                short_hash = (env_commit[:7] if env_commit else None)
+                git_info.update({
+                    'commit_hash': short_hash,
+                    'branch': env_branch,
+                    'last_message': env_message,
+                    'commit_date': env_date,
+                    'commit_url': f"https://github.com/orlandobatistac/SHIOL-PLUS/commit/{env_commit}" if env_commit else None
+                })
+            else:
+                # Optional: read from build info file if present
+                try:
+                    build_info_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'build_info.json')
+                    if os.path.exists(build_info_path):
+                        import json
+                        with open(build_info_path, 'r', encoding='utf-8') as f:
+                            build = json.load(f)
+                        env_commit = build.get('commit')
+                        git_info.update({
+                            'commit_hash': (env_commit[:7] if env_commit else None),
+                            'branch': build.get('branch'),
+                            'last_message': build.get('message'),
+                            'commit_date': build.get('date'),
+                            'commit_url': f"https://github.com/orlandobatistac/SHIOL-PLUS/commit/{env_commit}" if env_commit else None
+                        })
+                except Exception as build_err:
+                    logger.debug(f"No build_info.json present or failed to parse: {build_err}")
 
         # System metrics using psutil
         try:
