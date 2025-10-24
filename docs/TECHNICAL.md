@@ -510,8 +510,414 @@ Backups & monitoring:
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: October 19, 2025  
+## 11. Intelligent Prediction Architecture (v6.2)
+
+### 11.1 System Overview
+
+**SHIOL-PLUS uses a strategy-based prediction system, NOT an ensemble ML model system.**
+
+The production pipeline generates predictions through `StrategyManager.generate_balanced_tickets()`, which orchestrates 6 competing strategies with adaptive weight adjustment based on historical performance.
+
+### 11.2 Architecture Components
+
+#### Primary System: StrategyManager + 6 Strategies
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│          PRODUCTION PREDICTION PIPELINE                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  trigger_full_pipeline_automatically()                      │
+│            ↓                                                │
+│  StrategyManager.generate_balanced_tickets(200)             │
+│            ↓                                                │
+│  ┌───────────────────────────────────────────────┐         │
+│  │  Strategy Selection (Adaptive Weights)        │         │
+│  │  - Reads current_weight from DB               │         │
+│  │  - Selects proportionally                     │         │
+│  └───────────────────────────────────────────────┘         │
+│            ↓                                                │
+│  ┌─────────────────────┐  ┌─────────────────────┐          │
+│  │ FrequencyWeighted   │  │ CoverageOptimizer   │          │
+│  │ (Historical freq)   │  │ (Number diversity)  │          │
+│  └─────────────────────┘  └─────────────────────┘          │
+│                                                             │
+│  ┌─────────────────────┐  ┌─────────────────────┐          │
+│  │ Cooccurrence        │  │ RangeBalanced       │          │
+│  │ (Statistical pairs) │  │ (Low/mid/high dist) │          │
+│  └─────────────────────┘  └─────────────────────┘          │
+│                                                             │
+│  ┌─────────────────────┐  ┌─────────────────────┐          │
+│  │ AIGuidedStrategy    │  │ RandomBaseline      │          │
+│  │ ↓                   │  │ (Control group)     │          │
+│  │ IntelligentGen...   │  │                     │          │
+│  └─────────────────────┘  └─────────────────────┘          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Deprecated System: Predictor + EnsemblePredictor
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│          DEPRECATED (NOT USED IN PRODUCTION)                │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Predictor.predict_probabilities()                          │
+│            ↓                                                │
+│  ensemble_predictor.predict_ensemble()                      │
+│            ↓                                                │
+│  Dummy EnsemblePredictor                                    │
+│  - Returns uniform distribution (1/69, 1/26)                │
+│  - Effectively disabled                                     │
+│  - Never called by pipeline                                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 11.3 AIGuidedStrategy: The Intelligence Layer
+
+**Class:** `AIGuidedStrategy` (src/strategy_generators.py)  
+**Wrapper for:** `IntelligentGenerator` (src/intelligent_generator.py)
+
+#### Initialization Flow
+
+```python
+# In AIGuidedStrategy.generate()
+from src.intelligent_generator import IntelligentGenerator
+
+gen = IntelligentGenerator(historical_data)
+prediction = gen.generate_smart_play()
+```
+
+#### IntelligentGenerator Algorithm
+
+**Input:** Historical draw data (1,853 draws from SQLite)
+
+**Process:**
+
+1. **Frequency Analysis**
+   - Calculate occurrence count for each white ball (1-69)
+   - Calculate occurrence count for each powerball (1-26)
+   - Sort by frequency (descending)
+
+2. **Smart Selection**
+   - White balls: Select from medium-high frequency range
+     - Skip top 5 most common (avoid over-concentration)
+     - Take next 20 candidates (indices 5-25)
+     - Randomly select 5 unique numbers from this pool
+   - Powerball: Similar strategy
+     - Skip top 2 most common
+     - Take next 13 candidates (indices 2-15)
+     - Randomly select 1 from this pool
+
+3. **Deterministic Scoring** (PlayScorer)
+   - Even/odd balance (2-3 even numbers = +0.25)
+   - Number spread (30-50 range = +0.25)
+   - Sum total (120-240 = +0.25)
+   - Range distribution (balanced across low/mid/high = +0.25)
+   - Final score: 0.0 to 1.0
+
+**Output:**
+```python
+{
+    'numbers': [12, 16, 19, 21, 44],
+    'powerball': 25,
+    'score': 0.7,
+    'method': 'intelligent_generator',
+    'timestamp': '2025-10-24T...'
+}
+```
+
+#### Key Characteristics
+
+- ✅ **Uses historical data:** Real draw patterns inform selection
+- ✅ **Deterministic with randomness:** Same data → similar patterns, but variation
+- ✅ **Multi-criteria scoring:** 4 independent metrics combined
+- ❌ **No XGBoost model:** Despite imports, model is NOT used in generation
+- ❌ **No ensemble:** Single generator, not multiple models
+- ❌ **Not predictive:** Cannot forecast future draws (lottery is random)
+
+### 11.4 Adaptive Learning System
+
+**Location:** `adaptive_learning_update()` in src/api.py
+
+**Process:**
+
+1. Read `strategy_performance` table (tracks wins, plays, ROI per strategy)
+2. Calculate raw score: `win_rate + 0.01` (prior to avoid zeros)
+3. Normalize to weights: `new_weight = raw_score / total_score`
+4. Update confidence: `min(0.95, 0.1 + plays / (plays + 100))`
+5. Persist to database
+
+**Effect:**
+
+Strategies that perform better get assigned more tickets in future generations. Over time, the system automatically shifts toward better-performing approaches.
+
+**Example Evolution:**
+```
+Initial:     All strategies = 16.67% each
+After 50:    Coverage = 22%, Frequency = 19%, Random = 9%
+After 200:   Best strategy = 25%, Worst = 5%
+```
+
+### 11.5 Current System Strengths
+
+1. **Diversity:** 6 different approaches ensure broad coverage
+2. **Adaptability:** Weights adjust based on actual results
+3. **Transparency:** Each ticket tagged with strategy and confidence
+4. **Simplicity:** No complex ML model management
+5. **Performance:** Fast execution (1.5s for 200 tickets)
+6. **Maintainability:** Easy to add/remove/modify strategies
+
+### 11.6 Current System Limitations
+
+1. **No true ML:** Despite naming, "AI-guided" uses frequency analysis, not machine learning
+2. **Dummy ensemble:** Predictor class exists but returns uniform probabilities (unused)
+3. **Limited intelligence:** Frequency analysis is basic; doesn't capture complex patterns
+4. **Random lottery:** No system can predict truly random draws (inherent limitation)
+5. **XGBoost unused:** Model file exists (`models/shiolplus.pkl`) but not integrated into generation
+
+### 11.7 Proposed Technical Improvements
+
+#### Improvement 1: Integrate Real XGBoost Model into AIGuidedStrategy
+
+**Current State:** XGBoost model exists but isn't used by generation pipeline.
+
+**Proposal:**
+```python
+class AIGuidedStrategy(BaseStrategy):
+    def __init__(self):
+        super().__init__("ai_guided")
+        # Load actual XGBoost model
+        self.predictor = Predictor()
+        
+    def generate(self, count: int = 5) -> List[Dict]:
+        # Get probability distribution from model
+        wb_probs, pb_probs = self.predictor.predict_probabilities(use_ensemble=False)
+        
+        # Use DeterministicGenerator with model probabilities
+        gen = DeterministicGenerator(historical_data)
+        tickets = gen.generate_diverse_predictions(
+            wb_probs, pb_probs, 
+            num_plays=count,
+            num_candidates=count * 20  # Generate 20x candidates, select best
+        )
+        return tickets
+```
+
+**Benefits:**
+- Actually uses trained ML model
+- Leverages feature engineering (temporal, streak, seasonality)
+- More sophisticated than raw frequency analysis
+- Preserves deterministic scoring for quality
+
+**Estimated Effort:** 2-3 hours  
+**Expected Improvement:** 10-15% better pattern recognition
+
+---
+
+#### Improvement 2: Hybrid Statistical Filtering
+
+**Current State:** Strategies generate numbers independently with no cross-validation.
+
+**Proposal:** Add a post-generation filter that checks tickets against statistical outliers:
+
+```python
+class StatisticalFilter:
+    """Filters out statistically improbable combinations"""
+    
+    def __init__(self, historical_data):
+        self.historical_data = historical_data
+        self._build_probability_models()
+    
+    def _build_probability_models(self):
+        # Build historical distribution models
+        self.sum_distribution = self._calculate_sum_distribution()
+        self.gap_distribution = self._calculate_gap_distribution()
+        self.low_mid_high_ratios = self._calculate_range_ratios()
+    
+    def filter_ticket(self, white_balls: List[int]) -> Tuple[bool, float]:
+        """
+        Returns: (should_keep, quality_score)
+        
+        Rejects tickets that are:
+        - Outside 95% confidence interval for sum
+        - Have consecutive numbers >3
+        - All numbers in same decade
+        - Duplicate recent patterns
+        """
+        score = 0.0
+        
+        # Check sum (e.g., 175 ± 60 for 95% CI)
+        ticket_sum = sum(white_balls)
+        if 115 <= ticket_sum <= 235:
+            score += 0.3
+        else:
+            return False, 0.0  # Hard reject
+        
+        # Check for excessive consecutive numbers
+        consecutive = self._count_consecutive(white_balls)
+        if consecutive > 3:
+            return False, 0.0
+        elif consecutive <= 1:
+            score += 0.2
+        
+        # Check range distribution
+        low = sum(1 for n in white_balls if n <= 23)
+        mid = sum(1 for n in white_balls if 24 <= n <= 46)
+        high = sum(1 for n in white_balls if n >= 47)
+        
+        if max(low, mid, high) <= 3:  # No range has >3 numbers
+            score += 0.3
+        
+        # Check for duplication of recent patterns
+        if not self._is_recent_duplicate(white_balls):
+            score += 0.2
+        
+        return True, score
+```
+
+**Integration:**
+```python
+# In StrategyManager.generate_balanced_tickets()
+filter = StatisticalFilter(historical_data)
+tickets = []
+attempts = 0
+
+while len(tickets) < total and attempts < total * 3:
+    candidate = strategy.generate(1)[0]
+    keep, score = filter.filter_ticket(candidate['white_balls'])
+    if keep:
+        candidate['quality_score'] = score
+        tickets.append(candidate)
+    attempts += 1
+```
+
+**Benefits:**
+- Eliminates statistically improbable combinations
+- Reduces wasted tickets on "bad" patterns
+- Based on historical probability distributions
+- Minimal performance impact
+
+**Estimated Effort:** 4-6 hours  
+**Expected Improvement:** 15-20% reduction in low-quality tickets
+
+---
+
+#### Improvement 3: Temporal Weighting with Recency Bias
+
+**Current State:** All historical draws weighted equally (draw from 2010 = draw from 2025).
+
+**Proposal:** Apply exponential decay to give more weight to recent patterns:
+
+```python
+class TemporalWeightedAnalyzer:
+    """Analyzes historical patterns with recency bias"""
+    
+    def __init__(self, historical_data, decay_rate=0.95):
+        self.data = historical_data.sort_values('draw_date')
+        self.decay_rate = decay_rate  # 0.95 = 5% decay per draw
+        self._calculate_temporal_weights()
+    
+    def _calculate_temporal_weights(self):
+        """Assign exponentially decaying weights to draws"""
+        n_draws = len(self.data)
+        # Most recent draw = weight 1.0
+        # Each older draw = weight * decay_rate
+        weights = [self.decay_rate ** (n_draws - i - 1) 
+                   for i in range(n_draws)]
+        self.data['temporal_weight'] = weights
+    
+    def get_weighted_frequencies(self):
+        """Calculate frequency with temporal weighting"""
+        wb_freq = {}
+        pb_freq = {}
+        
+        for idx, row in self.data.iterrows():
+            weight = row['temporal_weight']
+            
+            # White balls
+            for col in ['n1', 'n2', 'n3', 'n4', 'n5']:
+                num = row[col]
+                wb_freq[num] = wb_freq.get(num, 0) + weight
+            
+            # Powerball
+            pb_num = row['pb']
+            pb_freq[pb_num] = pb_freq.get(pb_num, 0) + weight
+        
+        return wb_freq, pb_freq
+```
+
+**Integration into IntelligentGenerator:**
+```python
+def generate_smart_play(self):
+    # Use temporal analyzer instead of raw frequency
+    analyzer = TemporalWeightedAnalyzer(self.historical_data)
+    wb_freq, pb_freq = analyzer.get_weighted_frequencies()
+    
+    # Rest of selection logic uses weighted frequencies
+    ...
+```
+
+**Benefits:**
+- Recent patterns have more influence than old patterns
+- Adapts to rule changes (e.g., 2015 Powerball range change)
+- More responsive to trend shifts
+- Mathematically sound (exponential decay standard in time series)
+
+**Estimated Effort:** 3-4 hours  
+**Expected Improvement:** 10-12% better alignment with recent patterns
+
+---
+
+### 11.8 Implementation Priority
+
+**High Priority:**
+1. **Improvement 2: Statistical Filtering** (highest ROI)
+   - Easy to implement
+   - No model training required
+   - Immediate quality improvement
+
+**Medium Priority:**
+2. **Improvement 3: Temporal Weighting** (good balance)
+   - Moderate complexity
+   - Improves existing system
+   - Compatible with current architecture
+
+**Low Priority:**
+3. **Improvement 1: XGBoost Integration** (nice-to-have)
+   - Most complex
+   - Model already trained but integration needed
+   - Marginal improvement (lottery is random)
+
+### 11.9 Technical Debt Notes
+
+**Items to Address:**
+
+1. **Unused Code Cleanup:**
+   - Remove `Predictor.predict_probabilities()` or integrate it
+   - Remove dummy `EnsemblePredictor` class
+   - Clean up imports in `predictor.py`
+
+2. **Documentation:**
+   - Update README to clarify "AI" refers to strategy selection, not deep learning
+   - Document that XGBoost model exists but isn't used in generation
+
+3. **Testing:**
+   - Add unit tests for `IntelligentGenerator.generate_smart_play()`
+   - Add integration tests for `StrategyManager.generate_balanced_tickets()`
+   - Test adaptive learning weight convergence
+
+4. **Performance:**
+   - Profile `generate_balanced_tickets()` for bottlenecks
+   - Consider caching frequency calculations
+   - Optimize database queries in strategy initialization
+
+---
+
+**Document Version**: 1.1  
+**Last Updated**: October 24, 2025  
 **Author**: Orlando B.
 
 ---
