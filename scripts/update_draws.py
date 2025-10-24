@@ -5,10 +5,19 @@ One-shot script to initialize the SQLite schema and populate/refresh Powerball d
 Usage (from repo root):
     python scripts/update_draws.py
 
-Notes:
-- If MUSL_API_KEY is set in the environment, MUSL API will be used as the primary source.
-- If MUSL API fails or MUSL_API_KEY is not set, the script falls back to the NY Open Data API.
-- Prints the database path, number of draws before/after, and the last few draw dates.
+Data Source Strategy (v6.3 - Intelligent Selection):
+- EMPTY DB: NY State Open Data API (bulk ~5000 draws) → fallback MUSL
+- STALE DB (>1 day old): NY State API (full refresh) → fallback MUSL  
+- CURRENT DB: MUSL API (incremental check) → fallback NY State
+
+Environment Variables:
+- MUSL_API_KEY: Required for MUSL API access (official source)
+- NY_OPEN_DATA_APP_TOKEN: Optional, for higher NY Open Data rate limits
+
+Output:
+- Database path
+- Draw count before/after update
+- Latest 10 draw dates
 """
 from loguru import logger
 
