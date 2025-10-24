@@ -222,7 +222,17 @@
         
         async function checkPaymentStatus() {
             try {
-                const response = await fetch('/api/v1/billing/status', {
+                // Get session_id from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const sessionId = urlParams.get('session_id');
+                
+                // Build URL with session_id parameter for direct Stripe verification
+                let statusUrl = '/api/v1/billing/status';
+                if (sessionId) {
+                    statusUrl += `?session_id=${encodeURIComponent(sessionId)}`;
+                }
+                
+                const response = await fetch(statusUrl, {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -231,7 +241,29 @@
                     const data = await response.json();
                     
                     if (data.enabled && data.is_premium) {
-                        // Payment confirmed!
+                        // Payment confirmed! Now activate premium to set cookie
+                        console.log('Payment confirmed, activating premium pass...');
+                        
+                        try {
+                            const activateResponse = await fetch('/api/v1/billing/activate-premium', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                credentials: 'include',
+                                body: JSON.stringify({ session_id: sessionId })
+                            });
+                            
+                            if (activateResponse.ok) {
+                                console.log('Premium pass activated and cookie set');
+                            } else {
+                                console.warn('Premium verified but cookie activation failed, will retry on next visit');
+                            }
+                        } catch (activateError) {
+                            console.error('Error activating premium pass:', activateError);
+                            // Continue anyway - the important part is that premium is verified
+                        }
+                        
                         showSuccessState();
                         return true;
                     }
