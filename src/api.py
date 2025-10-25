@@ -877,6 +877,19 @@ app.include_router(draw_router, prefix="/api/v1/draws")
 app.include_router(ticket_router)  # Ticket verification endpoints
 app.include_router(public_frontend_router)
 
+# Serve default /favicon.ico from static assets to avoid 404 when not present at root
+from fastapi.responses import FileResponse
+
+@app.get("/favicon.ico")
+async def favicon_route():
+    try:
+        icon_path = os.path.join(FRONTEND_DIR, "static", "favicon.ico")
+        if os.path.exists(icon_path):
+            return FileResponse(icon_path, media_type="image/x-icon")
+    except Exception:
+        pass
+    raise HTTPException(status_code=404, detail="favicon not found")
+
 @app.get("/api/v1/prediction-history-grouped")
 async def get_prediction_history_grouped(limit_dates: int = Query(25, ge=1, le=100)):
     """Get grouped prediction history by date"""
