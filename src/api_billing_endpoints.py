@@ -148,6 +148,23 @@ def _upsert_stripe_subscription(
     except Exception as e:
         logger.warning(f"Failed to upsert stripe_subscription {stripe_subscription_id}: {e}")
 
+
+def _validate_user_id(user_id: Optional[int]) -> Optional[int]:
+    """Return user_id if it exists in DB; otherwise return None and log."""
+    if not user_id:
+        return None
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM users WHERE id = ? LIMIT 1", (user_id,))
+            exists = cursor.fetchone()
+            if exists:
+                return user_id
+    except Exception as e:
+        logger.warning(f"User validation failed for user_id={user_id}: {e}")
+    logger.warning(f"User id {user_id} not found; proceeding without linking to user")
+    return None
+
 def check_idempotency_key(idempotency_key: str, endpoint: str, request_payload: str) -> Optional[Dict[str, Any]]:
     """
     Check if request was already processed using idempotency key.
@@ -489,7 +506,7 @@ async def handle_checkout_completed(session: Dict[str, Any]) -> None:
         # Check if user is registered
         user_id = None
         if 'metadata' in session and session['metadata'].get('user_id'):
-            user_id = int(session['metadata']['user_id'])
+            user_id = _validate_user_id(int(session['metadata']['user_id']))
             logger.info(f"Webhook: Registered user detected: user_id={user_id}")
 
         # Create Premium Pass (idempotent - will return existing if already created)
@@ -878,10 +895,10 @@ async def activate_premium(request: Request, response: Response, session_id: str
             user_id = None
             
             if current_user:
-                user_id = current_user.get("id")
+                user_id = _validate_user_id(current_user.get("id"))
                 logger.info(f"Premium activation for authenticated user: user_id={user_id}")
             elif session.metadata and session.metadata.get('user_id'):
-                user_id = int(session.metadata['user_id'])
+                user_id = _validate_user_id(int(session.metadata['user_id']))
                 logger.info(f"Premium activation for user from session metadata: user_id={user_id}")
             else:
                 logger.info(f"Premium activation for guest user: {customer_email}")
@@ -1048,10 +1065,10 @@ async def activate_premium_via_redirect(request: Request, session_id: str = None
             current_user = get_user_from_request(request)
             user_id = None
             if current_user:
-                user_id = current_user.get("id")
+                user_id = _validate_user_id(current_user.get("id"))
                 logger.info(f"Redirect activation for authenticated user: user_id={user_id}")
             elif session.metadata and session.metadata.get('user_id'):
-                user_id = int(session.metadata['user_id'])
+                user_id = _validate_user_id(int(session.metadata['user_id']))
                 logger.info(f"Redirect activation for user from session metadata: user_id={user_id}")
 
             try:
