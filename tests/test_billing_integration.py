@@ -138,7 +138,19 @@ def test_webhook_idempotency(client, test_db):
     # Patch where the function is used (imported into the module under test)
     with patch('src.api_billing_endpoints.get_feature_flag_billing_enabled', return_value=True), \
         patch('stripe.Webhook.construct_event', return_value=webhook_payload), \
-        patch('src.api_billing_endpoints.create_premium_pass') as mock_create_pass:
+        patch('src.api_billing_endpoints.create_premium_pass') as mock_create_pass, \
+        patch('stripe.Subscription.retrieve') as mock_sub_retrieve:
+
+        mock_sub_retrieve.return_value = {
+            'status': 'active',
+            'current_period_start': 1700000000,
+            'current_period_end': 1730000000,
+            'canceled_at': None,
+            'ended_at': None,
+            'trial_start': None,
+            'trial_end': None,
+            'customer': 'cus_test_123'
+        }
 
         mock_create_pass.return_value = {
             "pass_id": 1,

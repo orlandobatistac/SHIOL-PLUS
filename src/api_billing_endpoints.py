@@ -59,6 +59,95 @@ def _append_session_placeholder(success_url: str) -> str:
         # Fallback to original behavior (avoid raising during checkout)
         return success_url + "?session_id={CHECKOUT_SESSION_ID}"
 
+
+def _epoch_to_dt(value) -> Optional[datetime]:
+    """Convert epoch seconds to aware UTC datetime if possible."""
+    try:
+        if value is None:
+            return None
+        # Stripe may provide int seconds or string
+        seconds = int(value)
+        return datetime.fromtimestamp(seconds, UTC)
+    except Exception:
+        return None
+
+
+def _upsert_stripe_customer(stripe_customer_id: Optional[str], email: Optional[str], user_id: Optional[int]) -> None:
+    """Ensure a stripe_customer record exists and is up-to-date."""
+    if not stripe_customer_id:
+        return
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO stripe_customers (stripe_customer_id, email, user_id, created_at, updated_at)
+                VALUES (?, COALESCE(?, ''), ?, ?, ?)
+                ON CONFLICT(stripe_customer_id) DO UPDATE SET
+                    email=excluded.email,
+                    user_id=COALESCE(excluded.user_id, stripe_customers.user_id),
+                    updated_at=excluded.updated_at
+                """,
+                (stripe_customer_id, email, user_id, datetime.now(UTC), datetime.now(UTC)),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Failed to upsert stripe_customer {stripe_customer_id}: {e}")
+
+
+def _upsert_stripe_subscription(
+    stripe_subscription_id: Optional[str],
+    stripe_customer_id: Optional[str],
+    *,
+    status: Optional[str] = None,
+    current_period_start: Optional[datetime] = None,
+    current_period_end: Optional[datetime] = None,
+    canceled_at: Optional[datetime] = None,
+    ended_at: Optional[datetime] = None,
+    trial_start: Optional[datetime] = None,
+    trial_end: Optional[datetime] = None,
+) -> None:
+    """Ensure a stripe_subscription record exists referencing the customer."""
+    if not stripe_subscription_id or not stripe_customer_id:
+        return
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO stripe_subscriptions (
+                    stripe_subscription_id, stripe_customer_id, status,
+                    current_period_start, current_period_end, canceled_at, ended_at,
+                    trial_start, trial_end, created_at, updated_at
+                ) VALUES (?, ?, COALESCE(?, 'active'), ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(stripe_subscription_id) DO UPDATE SET
+                    status=excluded.status,
+                    current_period_start=excluded.current_period_start,
+                    current_period_end=excluded.current_period_end,
+                    canceled_at=excluded.canceled_at,
+                    ended_at=excluded.ended_at,
+                    trial_start=excluded.trial_start,
+                    trial_end=excluded.trial_end,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    stripe_subscription_id,
+                    stripe_customer_id,
+                    status,
+                    current_period_start,
+                    current_period_end,
+                    canceled_at,
+                    ended_at,
+                    trial_start,
+                    trial_end,
+                    datetime.now(UTC),
+                    datetime.now(UTC),
+                ),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Failed to upsert stripe_subscription {stripe_subscription_id}: {e}")
+
 def check_idempotency_key(idempotency_key: str, endpoint: str, request_payload: str) -> Optional[Dict[str, Any]]:
     """
     Check if request was already processed using idempotency key.
@@ -360,12 +449,42 @@ async def handle_checkout_completed(session: Dict[str, Any]) -> None:
     try:
         customer_email = session.get('customer_email') or session.get('customer_details', {}).get('email')
         subscription_id = session.get('subscription')
+        stripe_customer_id = session.get('customer')
 
         if not customer_email or not subscription_id:
             logger.error(f"Webhook: Missing required data in checkout session {session_id}: email={customer_email}, subscription={subscription_id}")
             return
 
         logger.info(f"Webhook: Checkout completed - email={customer_email}, subscription={subscription_id}")
+
+        # Ensure Stripe customer/subscription are persisted for FK integrity
+        sub_obj = None
+        try:
+            if subscription_id:
+                sub_obj = stripe.Subscription.retrieve(subscription_id)
+                if not stripe_customer_id:
+                    stripe_customer_id = sub_obj.get('customer') if isinstance(sub_obj, dict) else getattr(sub_obj, 'customer', None)
+        except Exception as e:
+            logger.warning(f"Webhook: Failed to retrieve subscription {subscription_id} details: {e}")
+
+        try:
+            _upsert_stripe_customer(stripe_customer_id, customer_email, user_id)
+        except Exception:
+            pass
+        try:
+            _upsert_stripe_subscription(
+                subscription_id,
+                stripe_customer_id,
+                status=(sub_obj.get('status') if isinstance(sub_obj, dict) else getattr(sub_obj, 'status', None)) if sub_obj else 'active',
+                current_period_start=_epoch_to_dt((sub_obj.get('current_period_start') if isinstance(sub_obj, dict) else getattr(sub_obj, 'current_period_start', None)) if sub_obj else None),
+                current_period_end=_epoch_to_dt((sub_obj.get('current_period_end') if isinstance(sub_obj, dict) else getattr(sub_obj, 'current_period_end', None)) if sub_obj else None),
+                canceled_at=_epoch_to_dt((sub_obj.get('canceled_at') if isinstance(sub_obj, dict) else getattr(sub_obj, 'canceled_at', None)) if sub_obj else None),
+                ended_at=_epoch_to_dt((sub_obj.get('ended_at') if isinstance(sub_obj, dict) else getattr(sub_obj, 'ended_at', None)) if sub_obj else None),
+                trial_start=_epoch_to_dt((sub_obj.get('trial_start') if isinstance(sub_obj, dict) else getattr(sub_obj, 'trial_start', None)) if sub_obj else None),
+                trial_end=_epoch_to_dt((sub_obj.get('trial_end') if isinstance(sub_obj, dict) else getattr(sub_obj, 'trial_end', None)) if sub_obj else None),
+            )
+        except Exception:
+            pass
 
         # Check if user is registered
         user_id = None
@@ -382,7 +501,7 @@ async def handle_checkout_completed(session: Dict[str, Any]) -> None:
             pass_data = existing_pass
         else:
             logger.info(f"Webhook: Creating new Premium Pass for {customer_email}")
-            pass_data = create_premium_pass(customer_email, subscription_id, user_id)
+            pass_data = create_premium_pass(customer_email, subscription_id, user_id, stripe_customer_id)
             logger.info(f"Webhook: Premium Pass CREATED - pass_id={pass_data['pass_id']}, email={customer_email}, subscription={subscription_id}")
 
         # Update user premium status if registered
@@ -704,6 +823,7 @@ async def activate_premium(request: Request, response: Response, session_id: str
         
         subscription_id = session.subscription
         customer_email = session.customer_details.email if session.customer_details else session.customer_email
+        stripe_customer_id = getattr(session, 'customer', None)
         
         if not customer_email or not subscription_id:
             logger.error(f"Missing required data in paid session {session_id}: email={customer_email}, subscription={subscription_id}")
@@ -714,6 +834,37 @@ async def activate_premium(request: Request, response: Response, session_id: str
         
         logger.info(f"Payment CONFIRMED for activation: session={session_id}, email={customer_email}, subscription={subscription_id}")
         
+        # Sync Stripe customer/subscription rows to satisfy FK constraints
+        # Try to enrich with subscription details when possible
+        sub_obj = None
+        try:
+            if subscription_id:
+                sub_obj = stripe.Subscription.retrieve(subscription_id)
+                if not stripe_customer_id:
+                    stripe_customer_id = getattr(sub_obj, 'customer', None)
+        except Exception as e:
+            logger.warning(f"Failed to retrieve subscription {subscription_id} details: {e}")
+
+        try:
+            _upsert_stripe_customer(stripe_customer_id, customer_email, None)
+        except Exception:
+            pass
+
+        try:
+            _upsert_stripe_subscription(
+                subscription_id,
+                stripe_customer_id,
+                status=(getattr(sub_obj, 'status', None) if sub_obj else 'active'),
+                current_period_start=_epoch_to_dt(getattr(sub_obj, 'current_period_start', None) if sub_obj else None),
+                current_period_end=_epoch_to_dt(getattr(sub_obj, 'current_period_end', None) if sub_obj else None),
+                canceled_at=_epoch_to_dt(getattr(sub_obj, 'canceled_at', None) if sub_obj else None),
+                ended_at=_epoch_to_dt(getattr(sub_obj, 'ended_at', None) if sub_obj else None),
+                trial_start=_epoch_to_dt(getattr(sub_obj, 'trial_start', None) if sub_obj else None),
+                trial_end=_epoch_to_dt(getattr(sub_obj, 'trial_end', None) if sub_obj else None),
+            )
+        except Exception:
+            pass
+
         # Get or create Premium Pass with comprehensive error handling
         from src.premium_pass_service import get_premium_pass_by_email, PremiumPassError
         
@@ -736,7 +887,7 @@ async def activate_premium(request: Request, response: Response, session_id: str
                 logger.info(f"Premium activation for guest user: {customer_email}")
             
             try:
-                pass_data = create_premium_pass(customer_email, subscription_id, user_id)
+                pass_data = create_premium_pass(customer_email, subscription_id, user_id, stripe_customer_id)
                 logger.info(f"Premium Pass CREATED for activation: pass_id={pass_data['pass_id']}, email={customer_email}, subscription={subscription_id}")
                 
                 # Update registered user status if applicable
@@ -852,12 +1003,42 @@ async def activate_premium_via_redirect(request: Request, session_id: str = None
 
         subscription_id = session.subscription
         customer_email = session.customer_details.email if session.customer_details else session.customer_email
+        stripe_customer_id = getattr(session, 'customer', None)
 
         if not customer_email or not subscription_id:
             logger.error(f"Missing required data in paid session {session_id}: email={customer_email}, subscription={subscription_id}")
             raise HTTPException(status_code=400, detail="Payment completed but missing customer email or subscription ID")
 
         logger.info(f"Payment CONFIRMED for redirect activation: session={session_id}, email={customer_email}, subscription={subscription_id}")
+
+        # Ensure Stripe customer/subscription exist in DB for FK integrity
+        sub_obj = None
+        try:
+            if subscription_id:
+                sub_obj = stripe.Subscription.retrieve(subscription_id)
+                if not stripe_customer_id:
+                    stripe_customer_id = getattr(sub_obj, 'customer', None)
+        except Exception as e:
+            logger.warning(f"Failed to retrieve subscription {subscription_id} details (redirect): {e}")
+
+        try:
+            _upsert_stripe_customer(stripe_customer_id, customer_email, None)
+        except Exception:
+            pass
+        try:
+            _upsert_stripe_subscription(
+                subscription_id,
+                stripe_customer_id,
+                status=(getattr(sub_obj, 'status', None) if sub_obj else 'active'),
+                current_period_start=_epoch_to_dt(getattr(sub_obj, 'current_period_start', None) if sub_obj else None),
+                current_period_end=_epoch_to_dt(getattr(sub_obj, 'current_period_end', None) if sub_obj else None),
+                canceled_at=_epoch_to_dt(getattr(sub_obj, 'canceled_at', None) if sub_obj else None),
+                ended_at=_epoch_to_dt(getattr(sub_obj, 'ended_at', None) if sub_obj else None),
+                trial_start=_epoch_to_dt(getattr(sub_obj, 'trial_start', None) if sub_obj else None),
+                trial_end=_epoch_to_dt(getattr(sub_obj, 'trial_end', None) if sub_obj else None),
+            )
+        except Exception:
+            pass
 
         # Get or create Premium Pass
         from src.premium_pass_service import get_premium_pass_by_email, PremiumPassError
@@ -874,7 +1055,7 @@ async def activate_premium_via_redirect(request: Request, session_id: str = None
                 logger.info(f"Redirect activation for user from session metadata: user_id={user_id}")
 
             try:
-                pass_data = create_premium_pass(customer_email, subscription_id, user_id)
+                pass_data = create_premium_pass(customer_email, subscription_id, user_id, stripe_customer_id)
                 logger.info(f"Premium Pass CREATED (redirect): pass_id={pass_data['pass_id']}, email={customer_email}, subscription={subscription_id}")
 
                 if user_id:

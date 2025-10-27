@@ -24,7 +24,12 @@ class DeviceLimitError(PremiumPassError):
     """Exception for device limit violations."""
     pass
 
-def create_premium_pass(email: str, stripe_subscription_id: str, user_id: Optional[int] = None) -> Dict[str, Any]:
+def create_premium_pass(
+    email: str,
+    stripe_subscription_id: str,
+    user_id: Optional[int] = None,
+    stripe_customer_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Create new Premium Pass with token and database record.
     
@@ -67,22 +72,25 @@ def create_premium_pass(email: str, stripe_subscription_id: str, user_id: Option
                 }
 
             # Create new Premium Pass
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO premium_passes (
-                    pass_token, jti, email, stripe_subscription_id, 
+                    pass_token, jti, email, stripe_subscription_id,
                     stripe_customer_id, user_id, expires_at, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                token_data["token"],
-                token_data["jti"],
-                email,
-                stripe_subscription_id,
-                None,  # Will be updated when we have customer_id
-                user_id,
-                token_data["expires_at"],
-                datetime.utcnow(),
-                datetime.utcnow()
-            ))
+                """,
+                (
+                    token_data["token"],
+                    token_data["jti"],
+                    email,
+                    stripe_subscription_id,
+                    stripe_customer_id,  # Optional; FK allows NULL
+                    user_id,
+                    token_data["expires_at"],
+                    datetime.utcnow(),
+                    datetime.utcnow(),
+                ),
+            )
 
             pass_id = cursor.lastrowid
             conn.commit()
