@@ -2885,6 +2885,24 @@
                                     placeholder="Create a password (min 6 characters)"
                                 />
                             </div>
+                            
+                            <!-- Terms and Privacy Checkbox -->
+                            <div class="mt-4">
+                                <label class="flex items-start text-sm text-white/80 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        id="register-terms-checkbox"
+                                        required
+                                        class="mt-1 mr-2 w-4 h-4 text-canvas-accent bg-canvas-surface border-canvas-line rounded focus:ring-2 focus:ring-canvas-accent cursor-pointer"
+                                    />
+                                    <span>
+                                        I agree to the 
+                                        <a href="/terms" target="_blank" rel="noopener noreferrer" class="text-canvas-accent hover:underline font-medium">Terms of Service</a> 
+                                        and 
+                                        <a href="/privacy" target="_blank" rel="noopener noreferrer" class="text-canvas-accent hover:underline font-medium">Privacy Policy</a>
+                                    </span>
+                                </label>
+                            </div>
                         </form>
                     </div>
 
@@ -2956,11 +2974,6 @@
                     <a href="/cookies" class="text-white/60 hover:text-canvas-accent transition-colors">
                         Cookie Policy
                     </a>
-                    <span class="text-white/20 hidden sm:inline">|</span>
-                    <a href="#" id="system-status-link" class="inline-flex items-center gap-2 text-white/60 hover:text-canvas-accent transition-colors">
-                        <i class="fas fa-chart-line"></i>
-                        <span>System Status</span>
-                    </a>
                 </div>
                 
                 <!-- Bottom row: Copyright & badges -->
@@ -2975,6 +2988,11 @@
                            class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-full text-[10px] text-white/50 border border-white/10 hover:border-canvas-accent hover:text-canvas-accent transition-colors">
                             <i class="fab fa-github"></i>
                             Open Source
+                        </a>
+                        <a href="#" id="system-status-link" 
+                           class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-full text-[10px] text-white/50 border border-white/10 hover:border-canvas-accent hover:text-canvas-accent transition-colors">
+                            <i class="fas fa-chart-line text-green-400"></i>
+                            <span>System Status</span>
                         </a>
                     </div>
                 </div>

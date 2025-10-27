@@ -764,10 +764,20 @@ class AuthManager {
             return;
         }
         
+        // Validate terms checkbox
+        const termsCheckbox = document.getElementById('register-terms-checkbox');
+        const errorDiv = document.getElementById('register-error');
+        if (!termsCheckbox || !termsCheckbox.checked) {
+            if (errorDiv) {
+                errorDiv.textContent = 'You must accept the Terms of Service and Privacy Policy to continue.';
+                errorDiv.classList.remove('hidden');
+            }
+            return;
+        }
+        
         const submitBtn = document.getElementById('register-premium-btn');
         const submitText = document.getElementById('register-premium-text');
         const spinner = document.getElementById('register-premium-spinner');
-        const errorDiv = document.getElementById('register-error');
         
         // Show loading state
         if (submitBtn) submitBtn.disabled = true;
@@ -849,10 +859,20 @@ class AuthManager {
             return;
         }
         
+        // Validate terms checkbox
+        const termsCheckbox = document.getElementById('register-terms-checkbox');
+        const errorDiv = document.getElementById('register-error');
+        if (!termsCheckbox || !termsCheckbox.checked) {
+            if (errorDiv) {
+                errorDiv.textContent = 'You must accept the Terms of Service and Privacy Policy to continue.';
+                errorDiv.classList.remove('hidden');
+            }
+            return;
+        }
+        
         const submitBtn = document.getElementById('register-free-btn');
         const submitText = document.getElementById('register-free-text');
         const spinner = document.getElementById('register-free-spinner');
-        const errorDiv = document.getElementById('register-error');
         
         // Show loading state
         if (submitBtn) submitBtn.disabled = true;
