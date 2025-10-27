@@ -417,7 +417,8 @@ async def register_and_upgrade(user_data: RegisterAndUpgradeRequest, response: R
                     'quantity': 1,
                 }],
                 mode='subscription',
-                success_url=user_data.success_url + "?session_id={CHECKOUT_SESSION_ID}",
+                # Append placeholder safely (supports existing query params)
+                success_url=(user_data.success_url + ("&" if "?" in user_data.success_url else "?") + "session_id={CHECKOUT_SESSION_ID}"),
                 cancel_url=user_data.cancel_url,
                 customer_email=user_info["email"],
                 metadata={

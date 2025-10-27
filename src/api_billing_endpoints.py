@@ -47,6 +47,18 @@ class BillingStatusResponse(BaseModel):
     source: Optional[str] = None
     message: Optional[str] = None
 
+def _append_session_placeholder(success_url: str) -> str:
+    """Append Stripe placeholder session_id to a URL safely.
+
+    If the URL already contains query parameters, use '&'; otherwise use '?'.
+    """
+    try:
+        delimiter = '&' if '?' in success_url else '?'
+        return f"{success_url}{delimiter}session_id={{CHECKOUT_SESSION_ID}}"
+    except Exception:
+        # Fallback to original behavior (avoid raising during checkout)
+        return success_url + "?session_id={CHECKOUT_SESSION_ID}"
+
 def check_idempotency_key(idempotency_key: str, endpoint: str, request_payload: str) -> Optional[Dict[str, Any]]:
     """
     Check if request was already processed using idempotency key.
@@ -155,7 +167,7 @@ async def create_checkout_session(
                     'quantity': 1,
                 }],
                 mode='subscription',
-                success_url=checkout_request.success_url + "?session_id={CHECKOUT_SESSION_ID}",
+                success_url=_append_session_placeholder(checkout_request.success_url),
                 cancel_url=checkout_request.cancel_url,
                 customer_email=customer_email,
                 metadata={
