@@ -88,7 +88,7 @@ Built in **15 days** from scratch to production — demonstrating rapid developm
 ## 👨‍💻 About the Developer
 
 **Orlando B.** — Full-Stack & AI Developer  
-[Portfolio](https://orlandobatista.dev) · [LinkedIn](https://linkedin.com/in/orlando-batista) · [GitHub](https://github.com/orlandobatistac)
+[Portfolio](https://orlandobatista.dev) · [LinkedIn](https://www.linkedin.com/in/orlandobatista-ai/) · [GitHub](https://github.com/orlandobatistac)
 
 Open to:
 - Backend / ML / Automation roles  
@@ -100,7 +100,7 @@ Open to:
 ## 🚀 Ready to Explore?
 
 👉 **[Try the Live Demo](https://shiolplus.com)** — See the AI and admin tools in action  
-📧 **Want to discuss this project?** [Connect on LinkedIn](https://linkedin.com/in/orlando-batista)  
+📧 **Want to discuss this project?** [Connect on LinkedIn](https://www.linkedin.com/in/orlandobatista-ai/)  
 ⭐ **Found this helpful?** Star the repo to support educational open source!
 
 ---
