@@ -239,6 +239,7 @@
                 
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Status endpoint response:', data);
                     
                     if (data.enabled && data.is_premium) {
                         // Payment confirmed! Now activate premium to set cookie
@@ -273,6 +274,35 @@
                 
             } catch (error) {
                 console.error('Error checking payment status:', error);
+                return false;
+            }
+        }
+
+        // Proactively attempt activation immediately when landing on the page.
+        // This verifies the Stripe session on the server and sets the cookie without
+        // waiting for the status polling to infer premium.
+        async function tryActivatePremium(sessionId) {
+            if (!sessionId) return false;
+            try {
+                console.log('Attempting immediate premium activation...');
+                const resp = await fetch('/api/v1/billing/activate-premium', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    console.log('Immediate activation successful:', data);
+                    showSuccessState();
+                    return true;
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    console.log('Immediate activation not yet complete:', err?.detail || resp.statusText);
+                    return false;
+                }
+            } catch (e) {
+                console.log('Immediate activation attempt failed (will fall back to polling):', e.message);
                 return false;
             }
         }
@@ -348,6 +378,14 @@
             
             if (sessionId) {
                 console.log('Stripe session ID:', sessionId);
+                // First, try to activate immediately (idempotent on server)
+                tryActivatePremium(sessionId).then((activated) => {
+                    if (!activated) {
+                        // Start polling after a short delay if immediate activation didn't finish
+                        setTimeout(pollPaymentStatus, 1000);
+                    }
+                });
+                return; // prevent double scheduling below
             }
             
             // Start polling after a short delay

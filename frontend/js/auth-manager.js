@@ -800,7 +800,9 @@ class AuthManager {
                     email,
                     username,
                     password,
-                    success_url: `${window.location.origin}/payment-success`,
+                    // Use redirect activation endpoint so the server verifies payment,
+                    // creates the Premium Pass, sets cookie, then redirects to success page
+                    success_url: `${window.location.origin}/api/v1/billing/activate-via-redirect?next=/payment-success`,
                     cancel_url: window.location.origin
                 }),
             });
@@ -1145,7 +1147,8 @@ class AuthManager {
                 },
                 credentials: 'include',
                 body: JSON.stringify({
-                    success_url: `${window.location.origin}/payment-success`,
+                    // Route success through backend activation to guarantee cookie + pass creation
+                    success_url: `${window.location.origin}/api/v1/billing/activate-via-redirect?next=/payment-success`,
                     cancel_url: window.location.origin
                 })
             });
