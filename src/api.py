@@ -258,53 +258,132 @@ async def trigger_full_pipeline_automatically():
     logger.info("🚀 ========== ENHANCED PIPELINE STARTING ==========")
     execution_id = str(uuid.uuid4())[:8]
     start_time = datetime.now()
+    start_time_iso = start_time.isoformat()
+    
+    # Insert initial log entry
+    db.insert_pipeline_execution_log(
+        execution_id=execution_id,
+        start_time=start_time_iso,
+        metadata={"trigger": "automated", "version": "v2.0"}
+    )
 
     try:
         # STEP 1: DATA - Download latest draw
         logger.info(f"[{execution_id}] STEP 1/5: Downloading latest Powerball data...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step="STEP 1/5: Data download",
+            steps_completed=0
+        )
+        
         try:
             new_draws_count = update_database_from_source()
             logger.info(f"[{execution_id}] ✅ Database updated ({new_draws_count} total draws)")
+            db.update_pipeline_execution_log(
+                execution_id=execution_id,
+                steps_completed=1
+            )
         except Exception as e:
             logger.error(f"[{execution_id}] ❌ Data download failed: {e}")
+            db.update_pipeline_execution_log(
+                execution_id=execution_id,
+                error=f"Step 1 error: {str(e)}"
+            )
             # Continue with existing data
 
         # STEP 2: ANALYTICS - Update statistical tables
         logger.info(f"[{execution_id}] STEP 2/5: Updating analytics (co-occurrence, patterns)...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step="STEP 2/5: Analytics update",
+            steps_completed=1
+        )
+        
         try:
             from src.analytics_engine import update_analytics
             analytics_success = update_analytics()
             if analytics_success:
                 logger.info(f"[{execution_id}] ✅ Analytics updated successfully")
+                db.update_pipeline_execution_log(
+                    execution_id=execution_id,
+                    steps_completed=2
+                )
             else:
                 logger.warning(f"[{execution_id}] ⚠️ Analytics update had warnings")
+                db.update_pipeline_execution_log(
+                    execution_id=execution_id,
+                    error=f"Step 2 warning: Analytics update had warnings",
+                    steps_completed=2
+                )
         except Exception as e:
             logger.error(f"[{execution_id}] ❌ Analytics update failed: {e}")
             logger.info(f"[{execution_id}] Continuing pipeline without updated analytics")
+            db.update_pipeline_execution_log(
+                execution_id=execution_id,
+                error=f"Step 2 error: {str(e)}"
+            )
 
         # STEP 3: EVALUATE - Check previous predictions
         logger.info(f"[{execution_id}] STEP 3/5: Evaluating previous predictions...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step="STEP 3/5: Prediction evaluation",
+            steps_completed=2
+        )
+        
         try:
             latest_draw = db.get_latest_draw_date()
             if latest_draw:
                 await evaluate_predictions_for_draw(latest_draw)
                 logger.info(f"[{execution_id}] ✅ Evaluated predictions for {latest_draw}")
+                db.update_pipeline_execution_log(
+                    execution_id=execution_id,
+                    steps_completed=3
+                )
             else:
                 logger.warning(f"[{execution_id}] No draw to evaluate against")
+                db.update_pipeline_execution_log(
+                    execution_id=execution_id,
+                    steps_completed=3
+                )
         except Exception as e:
             logger.error(f"[{execution_id}] ❌ Evaluation failed: {e}")
+            db.update_pipeline_execution_log(
+                execution_id=execution_id,
+                error=f"Step 3 error: {str(e)}"
+            )
 
         # STEP 4: ADAPTIVE LEARNING - Update strategy weights
         logger.info(f"[{execution_id}] STEP 4/5: Adaptive learning - updating strategy weights...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step="STEP 4/5: Adaptive learning",
+            steps_completed=3
+        )
+        
         try:
             await adaptive_learning_update()
             logger.info(f"[{execution_id}] ✅ Strategy weights updated via Bayesian learning")
+            db.update_pipeline_execution_log(
+                execution_id=execution_id,
+                steps_completed=4
+            )
         except Exception as e:
             logger.error(f"[{execution_id}] ❌ Adaptive learning failed: {e}")
             logger.info(f"[{execution_id}] Continuing with existing weights")
+            db.update_pipeline_execution_log(
+                execution_id=execution_id,
+                error=f"Step 4 error: {str(e)}"
+            )
 
         # STEP 5: PREDICT - Generate new tickets with strategies
         logger.info(f"[{execution_id}] STEP 5/5: Generating predictions with multi-strategy system...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step="STEP 5/5: Prediction generation",
+            steps_completed=4
+        )
+        
         try:
             from src.strategy_generators import StrategyManager
             from src.date_utils import DateManager
@@ -332,10 +411,32 @@ async def trigger_full_pipeline_automatically():
                 strategy_dist[strategy] = strategy_dist.get(strategy, 0) + 1
 
             logger.info(f"[{execution_id}] Strategy distribution: {strategy_dist}")
+            
+            # Final update: success
+            elapsed = (datetime.now() - start_time).total_seconds()
+            db.update_pipeline_execution_log(
+                execution_id=execution_id,
+                status="completed",
+                current_step="COMPLETED",
+                steps_completed=5,
+                end_time=datetime.now().isoformat(),
+                total_tickets_generated=saved,
+                target_draw_date=next_draw,
+                elapsed_seconds=elapsed
+            )
 
         except Exception as e:
             logger.error(f"[{execution_id}] ❌ Prediction generation failed: {e}")
             logger.exception("Full traceback:")
+            
+            elapsed = (datetime.now() - start_time).total_seconds()
+            db.update_pipeline_execution_log(
+                execution_id=execution_id,
+                status="failed",
+                end_time=datetime.now().isoformat(),
+                error=f"Step 5 error: {str(e)}",
+                elapsed_seconds=elapsed
+            )
 
         # Pipeline completion
         elapsed = (datetime.now() - start_time).total_seconds()
@@ -352,6 +453,15 @@ async def trigger_full_pipeline_automatically():
         elapsed = (datetime.now() - start_time).total_seconds()
         logger.error(f"[{execution_id}] ❌ ========== PIPELINE FAILED after {elapsed:.2f}s ==========")
         logger.exception("Full pipeline error:")
+        
+        # Final update: failed
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            status="failed",
+            end_time=datetime.now().isoformat(),
+            error=str(e),
+            elapsed_seconds=elapsed
+        )
 
         return {
             'success': False,

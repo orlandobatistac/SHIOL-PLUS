@@ -192,6 +192,57 @@
                 </div>
             </section>
 
+            <!-- Pipeline Execution Logs (Admin Only) -->
+            <section class="mb-8" id="pipeline-logs-section" style="display:none;">
+                <h2 class="section-title"><i class="fas fa-list-check mr-2"></i>Pipeline Execution History</h2>
+                
+                <!-- Statistics Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Total Runs</div>
+                        <div class="stat-value text-2xl" id="pipeline-total-runs">0</div>
+                        <div class="text-sm text-gray-400">All time</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Success Rate</div>
+                        <div class="stat-value text-2xl" id="pipeline-success-rate">0%</div>
+                        <div class="text-sm text-gray-400">Completed / Total</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Avg Duration</div>
+                        <div class="stat-value text-2xl" id="pipeline-avg-duration">-</div>
+                        <div class="text-sm text-gray-400">Seconds</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="text-gray-400 mb-2">Last Execution</div>
+                        <div class="text-lg font-semibold" id="pipeline-last-exec-time">-</div>
+                        <div class="text-sm" id="pipeline-last-exec-status">-</div>
+                    </div>
+                </div>
+
+                <!-- Execution Logs Timeline -->
+                <div class="status-card">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-semibold text-gray-400">Recent Executions (Last 20)</h3>
+                        <div class="flex gap-2">
+                            <select id="pipeline-status-filter" class="bg-white/5 border border-white/10 rounded px-3 py-1 text-sm text-gray-200">
+                                <option value="">All Status</option>
+                                <option value="completed">Completed</option>
+                                <option value="failed">Failed</option>
+                                <option value="running">Running</option>
+                                <option value="timeout">Timeout</option>
+                            </select>
+                            <button onclick="loadPipelineLogs()" class="bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 px-3 py-1 rounded text-sm">
+                                <i class="fas fa-sync mr-1"></i>Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div id="pipeline-logs-list" class="space-y-2 max-h-[600px] overflow-y-auto">
+                        <!-- Logs will be rendered here -->
+                    </div>
+                </div>
+            </section>
+
             <!-- System Health -->
             <section class="mb-8">
                 <h2 class="section-title"><i class="fas fa-heart-pulse mr-2"></i>System Health</h2>
@@ -543,6 +594,164 @@
             return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
         }
 
+        async function loadPipelineLogs() {
+            try {
+                // Check if user is admin
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    console.log('No token available, skipping pipeline logs');
+                    return;
+                }
+
+                // Get status filter
+                const statusFilter = document.getElementById('pipeline-status-filter')?.value || '';
+                const params = new URLSearchParams({ limit: '20' });
+                if (statusFilter) params.append('status', statusFilter);
+
+                const response = await fetch(`/api/v1/admin/pipeline/execution-logs?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        console.log('User is not admin, hiding pipeline logs section');
+                        return;
+                    }
+                    throw new Error(`Failed to load pipeline logs: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Show the pipeline logs section (admin only)
+                document.getElementById('pipeline-logs-section').style.display = 'block';
+
+                // Update statistics
+                const stats = data.statistics || {};
+                document.getElementById('pipeline-total-runs').textContent = stats.total_runs || 0;
+                
+                const successRate = stats.success_rate?.toFixed(1) || '0.0';
+                document.getElementById('pipeline-success-rate').textContent = `${successRate}%`;
+                
+                const avgDuration = stats.avg_duration_seconds?.toFixed(2) || '-';
+                document.getElementById('pipeline-avg-duration').textContent = avgDuration !== '-' ? avgDuration : '-';
+
+                // Last execution
+                if (stats.last_execution) {
+                    const lastTime = new Date(stats.last_execution.start_time);
+                    document.getElementById('pipeline-last-exec-time').textContent = lastTime.toLocaleString();
+                    
+                    const statusEl = document.getElementById('pipeline-last-exec-status');
+                    const status = stats.last_execution.status;
+                    const statusClass = status === 'completed' ? 'text-green-400' : 
+                                       status === 'failed' ? 'text-red-400' : 
+                                       status === 'running' ? 'text-yellow-400' : 'text-gray-400';
+                    statusEl.className = `text-sm ${statusClass}`;
+                    statusEl.textContent = status.toUpperCase();
+                } else {
+                    document.getElementById('pipeline-last-exec-time').textContent = 'Never';
+                    document.getElementById('pipeline-last-exec-status').textContent = '-';
+                }
+
+                // Render logs timeline
+                const logsList = document.getElementById('pipeline-logs-list');
+                const logs = data.logs || [];
+                
+                if (logs.length === 0) {
+                    logsList.innerHTML = '<div class="text-gray-400 text-sm p-4 text-center">No pipeline executions found</div>';
+                    return;
+                }
+
+                logsList.innerHTML = logs.map(log => {
+                    const startTime = new Date(log.start_time);
+                    const endTime = log.end_time ? new Date(log.end_time) : null;
+                    const duration = log.elapsed_seconds?.toFixed(2) || '-';
+                    
+                    // Status badge styling
+                    let statusBadge = '';
+                    if (log.status === 'completed') {
+                        statusBadge = '<span class="status-badge status-running">✓ Completed</span>';
+                    } else if (log.status === 'failed') {
+                        statusBadge = '<span class="status-badge status-error">✗ Failed</span>';
+                    } else if (log.status === 'running') {
+                        statusBadge = '<span class="status-badge status-warning">⟳ Running</span>';
+                    } else if (log.status === 'timeout') {
+                        statusBadge = '<span class="status-badge status-warning">⏱ Timeout</span>';
+                    }
+
+                    // Progress indicator
+                    const progress = log.total_steps > 0 ? (log.steps_completed / log.total_steps * 100) : 0;
+                    const progressBar = `
+                        <div class="w-full bg-white/10 rounded-full h-1.5 mt-2">
+                            <div class="bg-gradient-to-r from-cyan-400 to-pink-400 h-1.5 rounded-full" style="width: ${progress}%"></div>
+                        </div>
+                    `;
+
+                    // Expandable details
+                    const detailsId = `details-${log.execution_id}`;
+                    const errorHtml = log.error ? `
+                        <div class="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-300">
+                            <strong>Error:</strong> ${log.error}
+                        </div>
+                    ` : '';
+
+                    const metadataHtml = log.metadata ? `
+                        <div class="mt-2 p-2 bg-white/5 rounded text-xs text-gray-400">
+                            <strong>Metadata:</strong> ${JSON.stringify(log.metadata, null, 2)}
+                        </div>
+                    ` : '';
+
+                    return `
+                        <div class="bg-white/5 hover:bg-white/10 rounded-lg p-3 transition-all cursor-pointer"
+                             onclick="toggleDetails('${detailsId}')">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-mono text-xs text-gray-400">${log.execution_id}</span>
+                                        ${statusBadge}
+                                        <span class="text-xs text-gray-400">${startTime.toLocaleString()}</span>
+                                    </div>
+                                    <div class="text-sm text-gray-300">
+                                        ${log.current_step || 'No step info'} 
+                                        <span class="text-gray-400">(${log.steps_completed}/${log.total_steps} steps)</span>
+                                    </div>
+                                    ${progressBar}
+                                </div>
+                                <div class="text-right ml-4">
+                                    <div class="text-sm font-semibold text-cyan-400">${duration}s</div>
+                                    ${log.total_tickets_generated ? 
+                                        `<div class="text-xs text-gray-400">${log.total_tickets_generated} tickets</div>` : ''}
+                                    ${log.target_draw_date ? 
+                                        `<div class="text-xs text-gray-400">→ ${log.target_draw_date}</div>` : ''}
+                                </div>
+                            </div>
+                            
+                            <!-- Expandable details -->
+                            <div id="${detailsId}" class="hidden mt-3 pt-3 border-t border-white/10">
+                                ${errorHtml}
+                                ${metadataHtml}
+                                <div class="grid grid-cols-2 gap-2 mt-2 text-xs">
+                                    <div><strong>Start:</strong> ${startTime.toLocaleString()}</div>
+                                    <div><strong>End:</strong> ${endTime ? endTime.toLocaleString() : 'In progress'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error loading pipeline logs:', error);
+            }
+        }
+
+        function toggleDetails(detailsId) {
+            const details = document.getElementById(detailsId);
+            if (details) {
+                details.classList.toggle('hidden');
+            }
+        }
+
         async function refreshAllData(showLoading = true) {
             // Show update indicator for background updates
             if (!showLoading) {
@@ -558,7 +767,8 @@
             await Promise.all([
                 loadSchedulerData(),
                 loadSystemStats(),
-                loadOverview()
+                loadOverview(),
+                loadPipelineLogs() // Load pipeline logs if user is admin
             ]);
             
             if (showLoading) {
@@ -585,6 +795,14 @@
 
         // Auto-refresh every 30 seconds without loading spinner (smooth updates)
         autoRefreshInterval = setInterval(() => refreshAllData(false), 30000);
+
+        // Pipeline status filter change event
+        const statusFilterEl = document.getElementById('pipeline-status-filter');
+        if (statusFilterEl) {
+            statusFilterEl.addEventListener('change', () => {
+                loadPipelineLogs();
+            });
+        }
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {

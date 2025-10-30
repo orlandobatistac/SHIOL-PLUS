@@ -95,3 +95,71 @@ def toggle_premium(user_id: int, admin: dict = Depends(require_admin_access)):
     status = toggle_user_premium(user_id)
     logger.info(f"Admin {admin['id']} toggled premium for user {user_id} to {status}")
     return {"success": True, "premium_status": status}
+
+
+@router.get("/pipeline/execution-logs", summary="Get pipeline execution logs", response_model=dict, responses={
+    200: {"description": "Pipeline execution logs with statistics"},
+    403: {"description": "Admin required"}
+})
+def get_pipeline_logs(
+    limit: int = 20,
+    status: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    admin: dict = Depends(require_admin_access)
+):
+    """
+    Returns pipeline execution logs with optional filters. Admin only.
+    
+    Query parameters:
+    - limit: Maximum number of logs to return (default: 20, max: 100)
+    - status: Filter by status ('running', 'completed', 'failed', 'timeout')
+    - start_date: Filter logs after this date (YYYY-MM-DD)
+    - end_date: Filter logs before this date (YYYY-MM-DD)
+    
+    Returns:
+    - logs: Array of execution records sorted by start_time DESC
+    - statistics: Summary statistics (total runs, success rate, avg duration, etc.)
+    """
+    from src.database import get_pipeline_execution_logs, get_pipeline_execution_statistics
+    
+    # Enforce max limit
+    if limit > 100:
+        limit = 100
+    
+    # Validate status if provided
+    valid_statuses = ['running', 'completed', 'failed', 'timeout']
+    if status and status not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+        )
+    
+    try:
+        logs = get_pipeline_execution_logs(
+            limit=limit,
+            status=status,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        statistics = get_pipeline_execution_statistics()
+        
+        return {
+            "success": True,
+            "logs": logs,
+            "statistics": statistics,
+            "filters_applied": {
+                "limit": limit,
+                "status": status,
+                "start_date": start_date,
+                "end_date": end_date
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to retrieve pipeline execution logs: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve pipeline logs: {str(e)}"
+        )

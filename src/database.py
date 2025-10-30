@@ -516,10 +516,31 @@ def create_analytics_tables():
             )
         """)
 
+        # Table 5: Pipeline execution logs - tracks all pipeline runs
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pipeline_execution_logs (
+                execution_id TEXT PRIMARY KEY,
+                start_time DATETIME NOT NULL,
+                end_time DATETIME,
+                status TEXT NOT NULL DEFAULT 'running',
+                current_step TEXT,
+                steps_completed INTEGER DEFAULT 0,
+                total_steps INTEGER DEFAULT 5,
+                error TEXT,
+                metadata TEXT,
+                total_tickets_generated INTEGER DEFAULT 0,
+                target_draw_date DATE,
+                elapsed_seconds REAL,
+                CHECK (status IN ('running', 'completed', 'failed', 'timeout'))
+            )
+        """)
+
         # Create indexes for performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cooccurrence_significant ON cooccurrences(is_significant)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_generated_tickets_date ON generated_tickets(draw_date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_generated_tickets_strategy ON generated_tickets(strategy_used)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_logs_status ON pipeline_execution_logs(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_logs_start_time ON pipeline_execution_logs(start_time DESC)")
 
         conn.commit()
         conn.close()
@@ -2997,3 +3018,240 @@ def toggle_user_premium(user_id: int) -> str:
             cursor.execute("UPDATE users SET premium_expires_at = ?, is_premium = 1 WHERE id = ?", (premium_until, user_id))
             conn.commit()
             return 'active'
+
+
+# ============================================================
+# PIPELINE EXECUTION LOGS FUNCTIONS
+# ============================================================
+
+def insert_pipeline_execution_log(execution_id: str, start_time: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+    """
+    Insert a new pipeline execution log with 'running' status.
+    
+    Args:
+        execution_id: Unique execution identifier (8-char hex)
+        start_time: Start timestamp in ISO format
+        metadata: Optional dictionary with execution metadata (converted to JSON)
+    
+    Returns:
+        bool: True if inserted successfully
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            metadata_json = json.dumps(metadata, cls=NumpyEncoder) if metadata else None
+            cursor.execute(
+                """
+                INSERT INTO pipeline_execution_logs 
+                (execution_id, start_time, status, current_step, steps_completed, metadata)
+                VALUES (?, ?, 'running', NULL, 0, ?)
+                """,
+                (execution_id, start_time, metadata_json)
+            )
+            conn.commit()
+            logger.debug(f"Pipeline log inserted: {execution_id}")
+            return True
+    except sqlite3.Error as e:
+        logger.error(f"Failed to insert pipeline execution log: {e}")
+        return False
+
+
+def update_pipeline_execution_log(
+    execution_id: str,
+    status: Optional[str] = None,
+    current_step: Optional[str] = None,
+    steps_completed: Optional[int] = None,
+    end_time: Optional[str] = None,
+    error: Optional[str] = None,
+    total_tickets_generated: Optional[int] = None,
+    target_draw_date: Optional[str] = None,
+    elapsed_seconds: Optional[float] = None
+) -> bool:
+    """
+    Update an existing pipeline execution log.
+    
+    Args:
+        execution_id: Execution ID to update
+        status: New status ('running', 'completed', 'failed', 'timeout')
+        current_step: Current step description
+        steps_completed: Number of steps completed
+        end_time: End timestamp in ISO format
+        error: Error message if failed
+        total_tickets_generated: Number of tickets generated
+        target_draw_date: Target draw date (YYYY-MM-DD)
+        elapsed_seconds: Total elapsed time in seconds
+    
+    Returns:
+        bool: True if updated successfully
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Build dynamic UPDATE query
+            updates = []
+            params = []
+            
+            if status is not None:
+                updates.append("status = ?")
+                params.append(status)
+            if current_step is not None:
+                updates.append("current_step = ?")
+                params.append(current_step)
+            if steps_completed is not None:
+                updates.append("steps_completed = ?")
+                params.append(steps_completed)
+            if end_time is not None:
+                updates.append("end_time = ?")
+                params.append(end_time)
+            if error is not None:
+                updates.append("error = ?")
+                params.append(error)
+            if total_tickets_generated is not None:
+                updates.append("total_tickets_generated = ?")
+                params.append(total_tickets_generated)
+            if target_draw_date is not None:
+                updates.append("target_draw_date = ?")
+                params.append(target_draw_date)
+            if elapsed_seconds is not None:
+                updates.append("elapsed_seconds = ?")
+                params.append(elapsed_seconds)
+            
+            if not updates:
+                logger.warning(f"No updates provided for execution {execution_id}")
+                return False
+            
+            params.append(execution_id)
+            query = f"UPDATE pipeline_execution_logs SET {', '.join(updates)} WHERE execution_id = ?"
+            
+            cursor.execute(query, params)
+            conn.commit()
+            
+            if cursor.rowcount > 0:
+                logger.debug(f"Pipeline log updated: {execution_id} ({', '.join(updates)})")
+                return True
+            else:
+                logger.warning(f"No pipeline log found with execution_id: {execution_id}")
+                return False
+                
+    except sqlite3.Error as e:
+        logger.error(f"Failed to update pipeline execution log: {e}")
+        return False
+
+
+def get_pipeline_execution_logs(
+    limit: int = 20,
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve pipeline execution logs with optional filters.
+    
+    Args:
+        limit: Maximum number of logs to return (default: 20)
+        status: Filter by status ('running', 'completed', 'failed', 'timeout')
+        start_date: Filter logs after this date (YYYY-MM-DD)
+        end_date: Filter logs before this date (YYYY-MM-DD)
+    
+    Returns:
+        List of log dictionaries sorted by start_time DESC
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM pipeline_execution_logs WHERE 1=1"
+            params = []
+            
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+            if start_date:
+                query += " AND start_time >= ?"
+                params.append(start_date)
+            if end_date:
+                query += " AND start_time <= ?"
+                params.append(end_date)
+            
+            query += " ORDER BY start_time DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            columns = [desc[0] for desc in cursor.description]
+            logs = []
+            for row in rows:
+                log_dict = dict(zip(columns, row))
+                # Parse metadata JSON if exists
+                if log_dict.get('metadata'):
+                    try:
+                        log_dict['metadata'] = json.loads(log_dict['metadata'])
+                    except json.JSONDecodeError:
+                        log_dict['metadata'] = None
+                logs.append(log_dict)
+            
+            return logs
+            
+    except sqlite3.Error as e:
+        logger.error(f"Failed to retrieve pipeline execution logs: {e}")
+        return []
+
+
+def get_pipeline_execution_statistics() -> Dict[str, Any]:
+    """
+    Get statistics about pipeline executions.
+    
+    Returns:
+        Dictionary with statistics (total runs, success rate, avg duration, etc.)
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Total executions
+            cursor.execute("SELECT COUNT(*) FROM pipeline_execution_logs")
+            total_runs = cursor.fetchone()[0]
+            
+            # Completed vs failed
+            cursor.execute("SELECT status, COUNT(*) FROM pipeline_execution_logs GROUP BY status")
+            status_counts = dict(cursor.fetchall())
+            
+            # Average duration for completed runs
+            cursor.execute("""
+                SELECT AVG(elapsed_seconds), MIN(elapsed_seconds), MAX(elapsed_seconds)
+                FROM pipeline_execution_logs 
+                WHERE status = 'completed' AND elapsed_seconds IS NOT NULL
+            """)
+            duration_stats = cursor.fetchone()
+            
+            # Last execution
+            cursor.execute("""
+                SELECT execution_id, start_time, status, elapsed_seconds
+                FROM pipeline_execution_logs 
+                ORDER BY start_time DESC LIMIT 1
+            """)
+            last_execution = cursor.fetchone()
+            
+            return {
+                "total_runs": total_runs,
+                "status_breakdown": status_counts,
+                "avg_duration_seconds": duration_stats[0] if duration_stats[0] else None,
+                "min_duration_seconds": duration_stats[1] if duration_stats[1] else None,
+                "max_duration_seconds": duration_stats[2] if duration_stats[2] else None,
+                "last_execution": {
+                    "execution_id": last_execution[0],
+                    "start_time": last_execution[1],
+                    "status": last_execution[2],
+                    "elapsed_seconds": last_execution[3]
+                } if last_execution else None,
+                "success_rate": (
+                    status_counts.get('completed', 0) / total_runs * 100 
+                    if total_runs > 0 else 0.0
+                )
+            }
+            
+    except sqlite3.Error as e:
+        logger.error(f"Failed to retrieve pipeline execution statistics: {e}")
+        return {}

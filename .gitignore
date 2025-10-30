@@ -288,3 +288,10 @@ data/*.db.tmp
 data/*.sqlite
 data/*.sqlite3
 data/scheduler.db
+
+# ============================================
+# Private Documentation (business/internal)
+# ============================================
+docs/GETTING_STARTED_STARTER.md
+docs/PAQUETES_COMERCIALES.md
+docs/PROJECT_VALUATION.md
