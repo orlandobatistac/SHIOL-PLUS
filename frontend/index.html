@@ -1500,6 +1500,16 @@
                     }, 500);
                 }
 
+                // Clear active selection when tapping outside of cards (mobile)
+                document.addEventListener('click', (e) => {
+                    const list = document.getElementById('predictions-list');
+                    if (!list) return;
+                    if (activePredictionCard && !list.contains(e.target)) {
+                        activePredictionCard.classList.remove('active');
+                        activePredictionCard = null;
+                    }
+                });
+
                 // Update current time
                 function updateCurrentTime() {
                     const now = new Date();
@@ -1526,6 +1536,14 @@
                 let allPredictions = [];
                 let currentlyShown = 0;
                 const PREDICTIONS_PER_LOAD = 10;
+                // Active selection (mobile)
+                let activePredictionCard = null;
+                function setActivePredictionCard(card) {
+                    if (activePredictionCard === card) return;
+                    if (activePredictionCard) activePredictionCard.classList.remove('active');
+                    activePredictionCard = card;
+                    if (card) card.classList.add('active');
+                }
 
                 // Global variables for draws pagination
                 let allDraws = [];
@@ -1798,7 +1816,7 @@
                         // Mobile: render into list container, not table
                         if (isMobile) {
                             const cardDiv = document.createElement("div");
-                            cardDiv.className = `bg-canvas-card rounded-lg border border-white/5 p-4 space-y-3 ${isLocked ? 'locked-prediction' : ''}`;
+                            cardDiv.className = `prediction-card bg-canvas-card rounded-lg border border-white/5 p-4 space-y-3 ${isLocked ? 'locked-prediction' : ''}`;
                             
                             // Header: rank badge + status/lock with bottom divider
                             const rankHTML = `
@@ -1841,6 +1859,13 @@
                             
                             if (isLocked) {
                                 cardDiv.addEventListener('click', openUpgradeModal);
+                                cardDiv.style.cursor = 'pointer';
+                            } else {
+                                cardDiv.addEventListener('click', (e) => {
+                                    // Avoid clearing on internal elements
+                                    e.stopPropagation();
+                                    setActivePredictionCard(cardDiv);
+                                });
                                 cardDiv.style.cursor = 'pointer';
                             }
                             

@@ -111,6 +111,7 @@ body {
   padding: 1px;
   background: linear-gradient(to right, var(--canvas-accent), var(--canvas-accent2));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
@@ -254,4 +255,24 @@ textarea::placeholder {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Prediction card active state (mobile) */
+.prediction-card {
+  position: relative;
+}
+.prediction-card.active {
+  border-color: var(--canvas-accent) !important;
+  box-shadow: 0 0 0 2px rgba(0, 224, 255, 0.12), 0 8px 16px rgba(0, 224, 255, 0.08);
+}
+.prediction-card.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, var(--canvas-accent), var(--canvas-accent2));
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
 }
