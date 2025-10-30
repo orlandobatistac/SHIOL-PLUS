@@ -15,9 +15,6 @@ from loguru import logger
 from src.api_auth_endpoints import hash_password_secure
 import asyncio
 
-# Import pipeline trigger function
-from src.api import trigger_full_pipeline_automatically
-
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 @router.get("/users", summary="List all users", response_model=list, responses={
@@ -166,7 +163,7 @@ def get_pipeline_logs(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve pipeline logs: {str(e)}"
-
+        )
 
     @router.post("/pipeline/trigger", summary="Trigger full pipeline run", responses={
         200: {"description": "Pipeline started"},
@@ -182,6 +179,8 @@ def get_pipeline_logs(
                      If False, waits for the pipeline to finish and returns the result.
         """
         try:
+            # Lazy import to avoid circular import with src.api including this router
+            from src.api import trigger_full_pipeline_automatically
             if async_run:
                 # Schedule the pipeline without blocking the request
                 asyncio.create_task(trigger_full_pipeline_automatically())
