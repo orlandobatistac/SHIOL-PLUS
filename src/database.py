@@ -1521,6 +1521,10 @@ def get_draw_analytics(draw_date: str, limit: int = 50) -> Dict[str, Any]:
         confidence_buckets = {'high': {'count': 0, 'sum_conf': 0.0},
                               'medium': {'count': 0, 'sum_conf': 0.0},
                               'low': {'count': 0, 'sum_conf': 0.0}}
+        # Collect all rows (id -> confidence) to compute generation rank consistently
+        id_to_conf: Dict[int, float] = {}
+        # Build winning predictions list from computed prizes to avoid dependency on stored prize_won
+        computed_winners: List[Dict[str, Any]] = []
 
         try:
             from src.prize_calculator import calculate_prize_amount
@@ -1566,6 +1570,23 @@ def get_draw_analytics(draw_date: str, limit: int = 50) -> Dict[str, Any]:
             if prize_amount and prize_amount > 0:
                 winning_predictions += 1
 
+            # Keep confidence map for generation rank calculation
+            try:
+                id_to_conf[int(tid)] = float(conf) if conf is not None else 0.0
+            except Exception:
+                pass
+
+            # Build computed winners list independent of stored prize_won
+            if prize_amount and prize_amount > 0:
+                computed_winners.append({
+                    'id': int(tid) if tid is not None else None,
+                    'n1': a, 'n2': b, 'n3': c, 'n4': d, 'n5': e,
+                    'powerball': pb,
+                    'confidence_score': float(conf) if conf is not None else 0.0,
+                    'strategy_used': strat,
+                    'prize_won': float(prize_amount)
+                })
+
             # Prize tier breakdown
             tier = prize_desc or str(prize_amount)
             if tier not in prize_tiers:
@@ -1600,41 +1621,30 @@ def get_draw_analytics(draw_date: str, limit: int = 50) -> Dict[str, Any]:
             confidence_buckets[bucket]['count'] += 1
             confidence_buckets[bucket]['sum_conf'] += conf_val
 
-        # Prepare winning predictions (all with prizes, ordered by prize amount)
-        cursor.execute(
-            """
-            SELECT 
-                gt.id, gt.n1, gt.n2, gt.n3, gt.n4, gt.n5, gt.powerball,
-                gt.confidence_score, gt.strategy_used, gt.prize_won,
-                (
-                    SELECT 1 + COUNT(*)
-                    FROM generated_tickets g2
-                    WHERE g2.draw_date = gt.draw_date
-                      AND (
-                        g2.confidence_score > gt.confidence_score OR 
-                        (g2.confidence_score = gt.confidence_score AND g2.id < gt.id)
-                      )
-                ) AS generation_rank
-            FROM generated_tickets gt
-            WHERE gt.draw_date = ? AND gt.prize_won > 0
-            ORDER BY gt.prize_won DESC, gt.confidence_score DESC
-            """,
-            (draw_date,)
+        # Prepare winning predictions list from computed winners to ensure consistency
+        # Compute generation_rank by ordering all tickets by confidence desc, id asc
+        # Build ranking map
+        try:
+            # Create sorted list of (id, conf) pairs
+            conf_sorted = sorted(
+                [(pid, c) for pid, c in id_to_conf.items()],
+                key=lambda x: (-x[1], x[0] if x[0] is not None else 0)
+            )
+            rank_map: Dict[int, int] = {}
+            for idx, (pid, _) in enumerate(conf_sorted, start=1):
+                rank_map[pid] = idx
+        except Exception:
+            rank_map = {}
+
+        # Sort computed winners by prize desc, then confidence desc
+        winning_predictions_list: List[Dict[str, Any]] = sorted(
+            computed_winners,
+            key=lambda w: (-(w.get('prize_won') or 0.0), -(w.get('confidence_score') or 0.0))
         )
-        winning_rows = cursor.fetchall()
-        # IMPORTANT: Name this list differently to avoid shadowing the numeric
-        # 'winning_predictions' counter above
-        winning_predictions_list = []
-        for r in winning_rows:
-            winning_predictions_list.append({
-                'id': r[0],
-                'n1': r[1], 'n2': r[2], 'n3': r[3], 'n4': r[4], 'n5': r[5],
-                'powerball': r[6],
-                'confidence_score': float(r[7]) if r[7] is not None else 0.0,
-                'strategy_used': r[8],
-                'prize_won': float(r[9]) if r[9] is not None else 0.0,
-                'generation_rank': int(r[10]) if r[10] is not None else None,
-            })
+        # Attach generation rank if available
+        for w in winning_predictions_list:
+            pid = w.get('id')
+            w['generation_rank'] = rank_map.get(pid)
         
         # Also prepare top predictions by confidence (for reference)
         cursor.execute(
@@ -1676,8 +1686,8 @@ def get_draw_analytics(draw_date: str, limit: int = 50) -> Dict[str, Any]:
                 'powerball': winning_pb
             },
             'total_predictions': total_predictions,
-            # Keep this as a NUMBER (count of winning predictions)
-            'predictions_with_prizes': winning_predictions,
+            # Ensure this matches the computed winners list size for consistency in UI
+            'predictions_with_prizes': len(winning_predictions_list),
             'total_prize': total_prize,
             'prize_tiers': prize_tiers,
             'strategy_counts': strategy_counts,
