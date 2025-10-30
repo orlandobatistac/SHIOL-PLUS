@@ -165,33 +165,33 @@ def get_pipeline_logs(
             detail=f"Failed to retrieve pipeline logs: {str(e)}"
         )
 
-    @router.post("/pipeline/trigger", summary="Trigger full pipeline run", responses={
-        200: {"description": "Pipeline started"},
-        403: {"description": "Admin required"},
-        500: {"description": "Failed to start pipeline"}
-    })
-    async def trigger_pipeline(async_run: bool = True, admin: dict = Depends(require_admin_access)):
-        """
-        Triggers the full pipeline execution. Admin only.
+@router.post("/pipeline/trigger", summary="Trigger full pipeline run", responses={
+    200: {"description": "Pipeline started"},
+    403: {"description": "Admin required"},
+    500: {"description": "Failed to start pipeline"}
+})
+async def trigger_pipeline(async_run: bool = True, admin: dict = Depends(require_admin_access)):
+    """
+    Triggers the full pipeline execution. Admin only.
 
-        Params:
-        - async_run: If True (default), returns immediately after scheduling the run.
-                     If False, waits for the pipeline to finish and returns the result.
-        """
-        try:
-            # Lazy import to avoid circular import with src.api including this router
-            from src.api import trigger_full_pipeline_automatically
-            if async_run:
-                # Schedule the pipeline without blocking the request
-                asyncio.create_task(trigger_full_pipeline_automatically())
-                logger.info(f"Admin {admin['id']} triggered pipeline (async)")
-                return {"success": True, "message": "Pipeline started", "async": True}
-            else:
-                # Await completion (blocks until done)
-                result = await trigger_full_pipeline_automatically()
-                logger.info(f"Admin {admin['id']} triggered pipeline (sync)")
-                return {"success": True, "async": False, "result": result}
-        except Exception as e:
-            logger.error(f"Failed to trigger pipeline: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to trigger pipeline: {str(e)}")
+    Params:
+    - async_run: If True (default), returns immediately after scheduling the run.
+                 If False, waits for the pipeline to finish and returns the result.
+    """
+    try:
+        # Lazy import to avoid circular import with src.api including this router
+        from src.api import trigger_full_pipeline_automatically
+        if async_run:
+            # Schedule the pipeline without blocking the request
+            asyncio.create_task(trigger_full_pipeline_automatically())
+            logger.info(f"Admin {admin['id']} triggered pipeline (async)")
+            return {"success": True, "message": "Pipeline started", "async": True}
+        else:
+            # Await completion (blocks until done)
+            result = await trigger_full_pipeline_automatically()
+            logger.info(f"Admin {admin['id']} triggered pipeline (sync)")
+            return {"success": True, "async": False, "result": result}
+    except Exception as e:
+        logger.error(f"Failed to trigger pipeline: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger pipeline: {str(e)}")
 
