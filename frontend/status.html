@@ -225,6 +225,9 @@
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-sm font-semibold text-gray-400">Recent Executions (Last 20)</h3>
                         <div class="flex gap-2">
+                            <button id="run-pipeline-btn" onclick="runPipelineNow()" class="bg-pink-600/20 hover:bg-pink-600/30 text-pink-300 px-3 py-1 rounded text-sm">
+                                <i class="fas fa-bolt mr-1"></i>Run Now
+                            </button>
                             <select id="pipeline-status-filter" class="bg-white/5 border border-white/10 rounded px-3 py-1 text-sm text-gray-200">
                                 <option value="">All Status</option>
                                 <option value="completed">Completed</option>
@@ -735,6 +738,34 @@
 
             } catch (error) {
                 console.error('Error loading pipeline logs:', error);
+            }
+        }
+
+        async function runPipelineNow() {
+            const btn = document.getElementById('run-pipeline-btn');
+            if (!btn) return;
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Running...';
+
+            try {
+                const resp = await fetch('/api/v1/admin/pipeline/trigger?async_run=true', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    throw new Error(`Failed to start pipeline: ${resp.status} ${text}`);
+                }
+                showUpdateIndicator();
+                // Give backend a moment to insert the running log, then refresh timeline
+                setTimeout(() => loadPipelineLogs(), 1200);
+            } catch (e) {
+                console.error('Error triggering pipeline:', e);
+                alert('Failed to start pipeline: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
             }
         }
 
