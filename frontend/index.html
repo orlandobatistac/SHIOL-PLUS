@@ -348,11 +348,14 @@
                         </p>
                     </div>
 
-                    <div id="predictions-table" class="overflow-x-auto">
+                    <!-- Mobile list container -->
+                    <div id="predictions-list" class="sm:hidden space-y-3 hidden"></div>
+
+                    <div id="predictions-table" class="overflow-x-auto hidden sm:block">
                         <table
                             class="min-w-full divide-y divide-canvas-line"
                         >
-                            <thead class="bg-canvas-surface">
+                            <thead class="bg-canvas-surface hidden sm:table-header-group">
                                 <tr>
                                     <th
                                         class="px-4 py-3 text-left text-xs font-medium text-white/60 uppercase tracking-wider"
@@ -1743,19 +1746,24 @@
 
                         // Initialize pagination
                         currentlyShown = 0;
-                        const tbody =
-                            document.getElementById("predictions-tbody");
+                        const tbody = document.getElementById("predictions-tbody");
+                        const list = document.getElementById("predictions-list");
+                        const isMobile = window.innerWidth < 640;
                         tbody.innerHTML = "";
+                        if (list) list.innerHTML = "";
 
                         // Show initial predictions
                         showMorePredictions();
 
-                        document
-                            .getElementById("predictions-loading")
-                            .classList.add("hidden");
-                        document
-                            .getElementById("predictions-table")
-                            .classList.remove("hidden");
+                        document.getElementById("predictions-loading").classList.add("hidden");
+                        if (isMobile) {
+                            document.getElementById("predictions-list").classList.remove("hidden");
+                            document.getElementById("predictions-table").classList.add("hidden");
+                        } else {
+                            document.getElementById("predictions-table").classList.remove("hidden");
+                            const listEl = document.getElementById("predictions-list");
+                            if (listEl) listEl.classList.add("hidden");
+                        }
                     } catch (error) {
                         console.error("Error loading predictions:", error);
                         document
@@ -1773,6 +1781,8 @@
                 // Show more predictions function
                 function showMorePredictions() {
                     const tbody = document.getElementById("predictions-tbody");
+                    const list = document.getElementById("predictions-list");
+                    const isMobile = window.innerWidth < 640;
                     const startIndex = currentlyShown;
                     const endIndex = Math.min(
                         currentlyShown + PREDICTIONS_PER_LOAD,
@@ -1782,15 +1792,11 @@
                     // Add new predictions to table
                     for (let i = startIndex; i < endIndex; i++) {
                         const pred = allPredictions[i];
-                        const row = document.createElement("tr");
                         const rank = i + 1;
                         const isLocked = pred.access_type === 'locked';
                         
-                        // Mobile: Use card layout
-                        if (window.innerWidth < 640) {
-                            // Card-like row to mimic Recent Draws style
-                            row.className = "block mb-3";
-                            
+                        // Mobile: render into list container, not table
+                        if (isMobile) {
                             const cardDiv = document.createElement("div");
                             cardDiv.className = `bg-canvas-card rounded-lg border border-white/5 p-4 space-y-3 ${isLocked ? 'locked-prediction' : ''}`;
                             
@@ -1838,8 +1844,7 @@
                                 cardDiv.style.cursor = 'pointer';
                             }
                             
-                            row.appendChild(cardDiv);
-                            tbody.appendChild(row);
+                            list.appendChild(cardDiv);
                             continue;
                         }
                         
@@ -1848,6 +1853,7 @@
                         if (isLocked) {
                             rowClasses += " locked-prediction";
                         }
+                        const row = document.createElement("tr");
                         row.className = rowClasses;
 
                         // Create rank cell with canvas gradient
