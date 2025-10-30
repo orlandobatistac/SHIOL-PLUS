@@ -192,7 +192,7 @@
                 </div>
 
                 <!-- CTAs -->
-                <div id="hero-cta-container" class="mb-6 transition-opacity duration-300" style="opacity: 0;">
+                <div id="hero-cta-container" class="transition-opacity duration-300" style="opacity: 0;">
                     <!-- Dynamic CTAs will be rendered here by AuthManager -->
                     <div class="flex flex-col sm:flex-row gap-4 justify-center">
                         <button
@@ -211,18 +211,75 @@
                         </button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Countdown Badge -->
-                <div class="flex justify-center">
-                    <div class="inline-flex flex-col items-center gap-2 px-6 py-4 bg-white/5 border border-cyan-500/40 rounded-2xl">
-                        <div class="flex items-center gap-3">
-                            <span class="text-base font-semibold text-white">Next Draw:</span>
-                            <span id="urgency-countdown" class="text-base font-bold text-[#00e0ff]">Loading...</span>
-                            <span class="text-base font-semibold text-white">remaining</span>
-                        </div>
-                        <div id="draw-date-display" class="text-center text-white/60 text-sm">
-                            Loading draw date...
-                        </div>
+            <!-- Recent Draws Section -->
+            <div
+                class="bg-canvas-card rounded-xl border border-canvas-line mb-8"
+            >
+                <div class="p-6 border-b border-canvas-line">
+                    <h2
+                        class="text-2xl font-bold text-white flex items-center"
+                    >
+                        <svg class="w-6 h-6 mr-3 text-canvas-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="4" width="18" height="18" rx="2" stroke-width="2"/>
+                            <line x1="3" y1="10" x2="21" y2="10" stroke-width="2"/>
+                            <line x1="8" y1="2" x2="8" y2="6" stroke-width="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6" stroke-width="2"/>
+                        </svg>
+                        Recent Powerball Draws
+                    </h2>
+                    <p class="text-sm text-white/70 mt-1">
+                        Click on any draw to see AI insights with matches.
+                    </p>
+                </div>
+
+                <div class="p-6">
+                    <div id="draws-loading" class="text-center py-8 hidden">
+                        <i
+                            class="fas fa-spinner fa-spin text-3xl text-canvas-accent mb-3"
+                        ></i>
+                        <p class="text-white/70">
+                            Loading recent draws...
+                        </p>
+                    </div>
+
+                    <div id="no-draws" class="text-center py-8 hidden">
+                        <i
+                            class="fas fa-info-circle text-3xl text-white/40 mb-3"
+                        ></i>
+                        <p class="text-white/70">
+                            No recent Powerball draws found.
+                        </p>
+                    </div>
+
+                    <div id="draws-grid" class="space-y-3">
+                        <!-- Draws will be loaded here -->
+                    </div>
+
+                    <!-- Load More Button for Draws -->
+                    <div
+                        id="load-more-draws-container"
+                        class="text-center mt-6 hidden"
+                    >
+                        <button
+                            id="load-more-draws-btn"
+                            class="inline-flex items-center px-6 py-3 bg-canvas-surface border border-canvas-accent hover:bg-canvas-accent/10 text-white font-medium rounded-lg transition-all duration-200"
+                        >
+                            <i class="fas fa-plus-circle mr-2"></i>
+                            <span id="load-more-draws-text"
+                                >Load More Draws</span
+                            >
+                            <span
+                                id="load-more-draws-count"
+                                class="ml-2 px-2 py-1 bg-white/20 text-xs rounded-full"
+                                >+10</span
+                            >
+                        </button>
+                        <p class="text-xs text-white/60 mt-2">
+                            Showing <span id="draws-shown-count">0</span> of
+                            <span id="draws-total-available">0</span> draws
+                        </p>
                     </div>
                 </div>
             </div>
@@ -251,6 +308,20 @@
                             >Loading timestamp...</span
                         >
                     </p>
+                    
+                    <!-- Countdown Badge (moved from hero) -->
+                    <div class="flex justify-center mt-4">
+                        <div class="inline-flex flex-col items-center gap-2 px-6 py-3 bg-white/5 border border-cyan-500/40 rounded-xl">
+                            <div class="flex items-center gap-3">
+                                <span class="text-sm font-semibold text-white">Next Draw:</span>
+                                <span id="urgency-countdown" class="text-sm font-bold text-[#00e0ff]">Loading...</span>
+                                <span class="text-sm font-semibold text-white">remaining</span>
+                            </div>
+                            <div id="draw-date-display" class="text-center text-white/60 text-xs">
+                                Loading draw date...
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="p-6">
@@ -337,78 +408,6 @@
                 </div>
             </div>
 
-            <!-- Recent Draws Section -->
-            <div
-                class="bg-canvas-card rounded-xl border border-canvas-line mb-8"
-            >
-                <div class="p-6 border-b border-canvas-line">
-                    <h2
-                        class="text-2xl font-bold text-white flex items-center"
-                    >
-                        <svg class="w-6 h-6 mr-3 text-canvas-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <rect x="3" y="4" width="18" height="18" rx="2" stroke-width="2"/>
-                            <line x1="3" y1="10" x2="21" y2="10" stroke-width="2"/>
-                            <line x1="8" y1="2" x2="8" y2="6" stroke-width="2"/>
-                            <line x1="16" y1="2" x2="16" y2="6" stroke-width="2"/>
-                        </svg>
-                        Recent Powerball Draws
-                    </h2>
-                    <p class="text-sm text-white/70 mt-1">
-                        Click on any draw to see AI insights with matches.
-                    </p>
-                </div>
-
-                <div class="p-6">
-                    <div id="draws-loading" class="text-center py-8 hidden">
-                        <i
-                            class="fas fa-spinner fa-spin text-3xl text-canvas-accent mb-3"
-                        ></i>
-                        <p class="text-white/70">
-                            Loading recent draws...
-                        </p>
-                    </div>
-
-                    <div id="no-draws" class="text-center py-8 hidden">
-                        <i
-                            class="fas fa-info-circle text-3xl text-white/40 mb-3"
-                        ></i>
-                        <p class="text-white/70">
-                            No recent Powerball draws found.
-                        </p>
-                    </div>
-
-                    <div id="draws-grid" class="space-y-3">
-                        <!-- Draws will be loaded here -->
-                    </div>
-
-                    <!-- Load More Button for Draws -->
-                    <div
-                        id="load-more-draws-container"
-                        class="text-center mt-6 hidden"
-                    >
-                        <button
-                            id="load-more-draws-btn"
-                            class="inline-flex items-center px-6 py-3 bg-canvas-surface border border-canvas-accent hover:bg-canvas-accent/10 text-white font-medium rounded-lg transition-all duration-200"
-                        >
-                            <i class="fas fa-plus-circle mr-2"></i>
-                            <span id="load-more-draws-text"
-                                >Load More Draws</span
-                            >
-                            <span
-                                id="load-more-draws-count"
-                                class="ml-2 px-2 py-1 bg-white/20 text-xs rounded-full"
-                                >+10</span
-                            >
-                        </button>
-                        <p
-                            class="text-xs text-white/60 mt-2"
-                        >
-                            Showing <span id="draws-shown-count">10</span> of
-                            <span id="draws-total-available">0</span> draws
-                        </p>
-                    </div>
-                </div>
-            </div>
             <!-- Ticket Verification Section -->
             <div
                 class="bg-canvas-card rounded-xl border border-canvas-line mb-8"
