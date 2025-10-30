@@ -441,31 +441,68 @@ async def get_public_jackpot():
 
 @public_frontend_router.get("/api/v1/public/winners-stats")
 async def get_winners_stats():
-    """Calculate total prizes won by Shiol+ users based on evaluated predictions"""
+    """Calculate total prizes won by Shiol+ users by recomputing from official results.
+
+    We recompute prizes from generated_tickets using powerball_draws as the source of truth,
+    instead of relying on the stored prize_won column (which may be unset for some draws).
+    """
     try:
-        from src.database import get_db_connection
+        from src.database import get_db_connection, calculate_prize_amount
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Use the current schema: sum prize_won from generated_tickets
+        # Prefetch all official draw results into a map: draw_date -> (numbers, pb)
         cursor.execute(
             """
-            SELECT COUNT(CASE WHEN prize_won > 0 THEN 1 END) as winning_predictions,
-                   COALESCE(SUM(CASE WHEN prize_won > 0 THEN prize_won ELSE 0 END), 0) as total_won
+            SELECT draw_date, n1, n2, n3, n4, n5, pb
+            FROM powerball_draws
+            """
+        )
+        draw_rows = cursor.fetchall()
+        draws_map = {}
+        for dr in draw_rows:
+            date = str(dr[0])
+            draws_map[date] = {
+                'nums': [int(dr[1] or 0), int(dr[2] or 0), int(dr[3] or 0), int(dr[4] or 0), int(dr[5] or 0)],
+                'pb': int(dr[6] or 0)
+            }
+
+        # Fetch all predictions (only the fields we need)
+        cursor.execute(
+            """
+            SELECT draw_date, n1, n2, n3, n4, n5, powerball
             FROM generated_tickets
             """
         )
-        row = cursor.fetchone() or (0, 0.0)
+        preds = cursor.fetchall()
+
+        total_won = 0.0
+        winning_count = 0
+
+        for p in preds:
+            draw_date = str(p[0]) if p[0] else None
+            if not draw_date or draw_date not in draws_map:
+                continue
+            nums = [int(p[1] or 0), int(p[2] or 0), int(p[3] or 0), int(p[4] or 0), int(p[5] or 0)]
+            pb = int(p[6] or 0)
+
+            winning_nums = draws_map[draw_date]['nums']
+            winning_pb = draws_map[draw_date]['pb']
+
+            main_matches = len(set(nums) & set(winning_nums))
+            pb_match = (pb == winning_pb)
+
+            prize_amount, _ = calculate_prize_amount(main_matches, pb_match)
+            if prize_amount and prize_amount > 0:
+                total_won += float(prize_amount)
+                winning_count += 1
+
         conn.close()
 
-        winning_count = int(row[0] or 0)
-        total_won = float(row[1] or 0.0)
-
         formatted_total = f"${total_won:,.0f}"
-
         logger.info(
-            f"Calculated total prizes won: {formatted_total} from {winning_count} winning predictions"
+            f"Calculated total prizes won (recomputed): {formatted_total} from {winning_count} winning predictions"
         )
 
         return {
