@@ -1788,36 +1788,50 @@
                         
                         // Mobile: Use card layout
                         if (window.innerWidth < 640) {
-                            row.className = "block border-b border-canvas-line last:border-0";
+                            // Card-like row to mimic Recent Draws style
+                            row.className = "block mb-3";
                             
                             const cardDiv = document.createElement("div");
-                            cardDiv.className = `p-4 space-y-3 ${isLocked ? 'locked-prediction' : ''}`;
+                            cardDiv.className = `bg-canvas-card rounded-lg border border-white/5 p-4 space-y-3 ${isLocked ? 'locked-prediction' : ''}`;
                             
-                            // Rank badge
+                            // Header: rank badge + status/lock with bottom divider
                             const rankHTML = `
-                                <div class="flex items-center justify-between">
-                                    <span class="inline-flex items-center justify-center w-8 h-6 rounded-md ${rank <= 10 ? "bg-gradient-to-r from-canvas-accent to-canvas-accent2 text-white" : "bg-white/10 text-white/70"} text-sm font-bold shadow-md">
-                                        #${rank}
-                                    </span>
-                                    ${isLocked ? '<i class="fas fa-lock text-white/40 text-lg"></i>' : '<span class="text-emerald-400 text-sm font-medium">Unlocked</span>'}
+                                <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="inline-flex items-center justify-center w-8 h-6 rounded-md ${rank <= 10 ? "bg-gradient-to-r from-canvas-accent to-canvas-accent2 text-white" : "bg-white/10 text-white/70"} text-sm font-bold shadow-md">
+                                            #${rank}
+                                        </span>
+                                        ${isLocked ? '<span class="text-white/60 text-sm">Premium</span>' : '<span class="text-emerald-400 text-sm font-medium">Unlocked</span>'}
+                                    </div>
+                                    ${isLocked ? '<i class="fas fa-lock text-white/40 text-lg"></i>' : '<i class="fas fa-chevron-right text-white/30 text-lg"></i>'}
                                 </div>
                             `;
                             
                             // Numbers row
                             const numberBalls = [pred.n1, pred.n2, pred.n3, pred.n4, pred.n5]
                                 .filter((n) => n)
-                                .map((num) => `<span class="num-chip text-xs w-7 h-7">${num}</span>`)
+                                .map((num) => `<span class=\"num-chip text-xs w-7 h-7\">${num}</span>`)
                                 .join("");
                             
                             const numbersHTML = `
-                                <div class="flex items-center justify-center gap-1 flex-wrap ${isLocked ? 'blur-sm opacity-70' : ''}">
+                                <div class="flex items-center justify-center gap-1.5 flex-wrap ${isLocked ? 'blur-sm opacity-70' : ''}">
                                     ${numberBalls}
-                                    <div class="w-1"></div>
+                                    <div class="w-0.5"></div>
                                     <span class="num-chip powerball-chip text-xs w-7 h-7">${pred.pb}</span>
                                 </div>
                             `;
                             
-                            cardDiv.innerHTML = rankHTML + numbersHTML;
+                            // Meta row: Confidence value (or dash for locked)
+                            const confVal = (typeof pred.confidence_score === 'number') ? pred.confidence_score : ((typeof pred.confidence === 'number') ? pred.confidence : null);
+                            const confPct = confVal !== null ? `${Math.round(confVal * 100)}%` : '—';
+                            const metaHTML = `
+                                <div class="flex items-center justify-between pt-1 border-t border-white/5">
+                                    <span class="text-[10px] text-white/50 uppercase tracking-wide">Confidence</span>
+                                    <span class="text-xs text-white/80">${confPct}</span>
+                                </div>
+                            `;
+                            
+                            cardDiv.innerHTML = rankHTML + numbersHTML + metaHTML;
                             
                             if (isLocked) {
                                 cardDiv.addEventListener('click', openUpgradeModal);
