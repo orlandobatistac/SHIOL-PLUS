@@ -596,26 +596,19 @@
 
         async function loadPipelineLogs() {
             try {
-                // Check if user is admin
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    console.log('No token available, skipping pipeline logs');
-                    return;
-                }
-
                 // Get status filter
                 const statusFilter = document.getElementById('pipeline-status-filter')?.value || '';
                 const params = new URLSearchParams({ limit: '20' });
                 if (statusFilter) params.append('status', statusFilter);
 
+                // Try to fetch pipeline logs (will fail silently if not admin)
                 const response = await fetch(`/api/v1/admin/pipeline/execution-logs?${params}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    credentials: 'include'  // Use cookies for authentication
                 });
 
                 if (!response.ok) {
-                    if (response.status === 403) {
+                    if (response.status === 403 || response.status === 401) {
+                        // User is not admin or not authenticated, hide section silently
                         console.log('User is not admin, hiding pipeline logs section');
                         return;
                     }
