@@ -38,6 +38,15 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Responsive: smaller chips on mobile */
+@media (max-width: 640px) {
+  .num-chip {
+    height: 28px;
+    width: 28px;
+    font-size: 12px;
+  }
+}
+
 .num-chip-main {
   background: rgba(255, 255, 255, 0.95);
   color: #1f2937;
