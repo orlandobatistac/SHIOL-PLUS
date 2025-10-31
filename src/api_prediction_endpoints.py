@@ -404,7 +404,7 @@ async def get_detailed_predictions_by_draw(
                 "prediction_id": f"pred_{pred[0]}",
                 "numbers": [pred[2], pred[3], pred[4], pred[5], pred[6]],
                 "powerball": pred[7],
-                "total_score": pred[8] or 0,
+                "confidence_score": pred[8] if pred[8] is not None else 0,
                 "ai_method": pred[9] or "standard",
                 "matches_main": 0,
                 "matches_powerball": False,
