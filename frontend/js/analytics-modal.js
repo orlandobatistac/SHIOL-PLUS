@@ -335,8 +335,10 @@ async function fetchDrawAnalyticsComplete(drawDate) {
 
         // Row 3: Smart Insights with Matches (Winners Only)
         const tbody = document.getElementById('modal-predictions-tbody');
+        const list = document.getElementById('modal-predictions-list');
         const noWinnersEl = document.getElementById('modal-no-winners');
         const winnersSection = document.getElementById('modal-winners-section');
+        const isMobile = window.innerWidth < 640;
 
         if (tbody) {
             // Use winning_predictions if available (all with prizes), otherwise filter top_predictions
@@ -349,59 +351,115 @@ async function fetchDrawAnalyticsComplete(drawDate) {
             const winningPB = data.winning_numbers?.powerball;
 
             tbody.innerHTML = '';
+            if (list) list.innerHTML = '';
             
             if (winners.length === 0) {
-                if (winnersSection) winnersSection.querySelector('table').classList.add('hidden');
+                if (winnersSection) winnersSection.querySelector('table')?.classList.add('hidden');
                 if (noWinnersEl) noWinnersEl.classList.remove('hidden');
+                
+                const emptyMsg = `
+                    <div class="px-4 py-8 text-center text-white/60">
+                        <i class="fas fa-trophy text-2xl mb-2"></i>
+                        <br>
+                        No winning AI insights found for this draw.
+                        <br>
+                        <span class="text-sm">Try again with the next drawing!</span>
+                    </div>
+                `;
+                if (isMobile && list) {
+                    list.innerHTML = emptyMsg;
+                }
             } else {
-                if (winnersSection) winnersSection.querySelector('table').classList.remove('hidden');
+                if (winnersSection) winnersSection.querySelector('table')?.classList.remove('hidden');
                 if (noWinnersEl) noWinnersEl.classList.add('hidden');
 
                 winners.forEach((p, idx) => {
                     const nums = [p.n1, p.n2, p.n3, p.n4, p.n5];
                     const pbMatch = (p.powerball || p.pb) === winningPB;
                     
-                    const tr = document.createElement('tr');
-                    tr.className = 'hover:bg-canvas-line/10 transition-colors';
-                    
                     // Calculate matches for display
                     const whiteMatches = nums.filter(n => winningNums.includes(n)).length;
                     const matchDisplay = `${whiteMatches}${pbMatch ? '+PB' : ''}`;
-                    
-                    // Highlight winning numbers with glow effect
-                    const numsHTML = nums.map(n => {
-                        const isWin = winningNums.includes(n);
-                        const chipClass = isWin 
-                            ? 'num-chip bg-green-500/30 text-green-300 ring-2 ring-green-400/50 shadow-[0_0_10px_rgba(74,222,128,0.5)]' 
-                            : 'num-chip';
-                        return `<span class="${chipClass}">${n}</span>`;
-                    }).join('');
-                    
-                    // Si hay match, usa estilo de match para PB (verde) en lugar del rosa por defecto
-                    const pbClass = pbMatch
-                        ? 'num-chip num-chip-match-pb'
-                        : 'num-chip powerball-chip';
-                    
                     const displayRank = (p.generation_rank && Number.isFinite(p.generation_rank)) ? p.generation_rank : (idx + 1);
-                    tr.innerHTML = `
-                        <td class="px-4 py-3 text-white/60 font-medium">#${displayRank}</td>
-                        <td class="px-4 py-3">
-                            <div class="flex items-center gap-1 flex-wrap">${numsHTML}</div>
-                        </td>
-                        <td class="px-4 py-3"><span class="${pbClass}">${p.powerball || p.pb}</span></td>
-                        <td class="px-4 py-3">
-                            <span class="px-2 py-1 rounded text-xs font-medium bg-canvas-accent/20 text-canvas-accent">
-                                ${p.strategy_used || 'N/A'}
-                            </span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <span class="px-2 py-1 rounded text-xs font-bold ${pbMatch ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-white/10 text-white/70'}">
-                                ${matchDisplay}
-                            </span>
-                        </td>
-                        <td class="px-4 py-3 text-right font-bold text-canvas-accent">${formatCurrency(p.prize_won || 0)}</td>
-                    `;
-                    tbody.appendChild(tr);
+                    const prizeAmount = p.prize_won || 0;
+                    const prizeText = formatCurrency(prizeAmount);
+                    
+                    // Mobile: card layout
+                    if (isMobile && list) {
+                        const numsHTML = nums.map(n => {
+                            const isWin = winningNums.includes(n);
+                            const chipClass = isWin 
+                                ? 'num-chip text-xs w-7 h-7' 
+                                : 'num-chip text-xs w-7 h-7';
+                            const style = isWin ? 'style="background: #00e0ff; color: #0a0c14;"' : '';
+                            return `<span class="${chipClass}" ${style}>${n}</span>`;
+                        }).join('');
+                        
+                        const pbClass = pbMatch ? 'num-chip powerball-chip text-xs w-7 h-7' : 'num-chip powerball-chip text-xs w-7 h-7';
+                        const pbStyle = pbMatch ? 'style="background: #00e0ff; color: #0a0c14;"' : '';
+                        
+                        const cardDiv = document.createElement('div');
+                        cardDiv.className = 'bg-canvas-card rounded-lg border border-white/5 p-4 space-y-3';
+                        cardDiv.innerHTML = `
+                            <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center justify-center w-8 h-6 rounded-md bg-gradient-to-r from-canvas-accent to-canvas-accent2 text-white text-sm font-bold shadow-md">
+                                        #${displayRank}
+                                    </span>
+                                    <span class="text-xs text-white/60">${p.strategy_used || 'AI'}</span>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs text-white/50">Matches</div>
+                                    <div class="text-sm font-bold text-white">${matchDisplay}</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                                ${numsHTML}
+                                <div class="w-0.5"></div>
+                                <span class="${pbClass}" ${pbStyle}>${p.powerball || p.pb}</span>
+                            </div>
+                            <div class="flex items-center justify-between pt-1 border-t border-white/5">
+                                <span class="text-[10px] text-white/50 uppercase tracking-wide">Prize</span>
+                                <span class="text-sm font-bold text-emerald-400">${prizeText}</span>
+                            </div>
+                        `;
+                        list.appendChild(cardDiv);
+                    } else {
+                        // Desktop: table row
+                        const numsHTML = nums.map(n => {
+                            const isWin = winningNums.includes(n);
+                            const chipClass = isWin 
+                                ? 'num-chip bg-green-500/30 text-green-300 ring-2 ring-green-400/50 shadow-[0_0_10px_rgba(74,222,128,0.5)]' 
+                                : 'num-chip';
+                            return `<span class="${chipClass}">${n}</span>`;
+                        }).join('');
+                        
+                        const pbClass = pbMatch
+                            ? 'num-chip num-chip-match-pb'
+                            : 'num-chip powerball-chip';
+                        
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-canvas-line/10 transition-colors';
+                        tr.innerHTML = `
+                            <td class="px-4 py-3 text-white/60 font-medium">#${displayRank}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-1 flex-wrap">${numsHTML}</div>
+                            </td>
+                            <td class="px-4 py-3"><span class="${pbClass}">${p.powerball || p.pb}</span></td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 rounded text-xs font-medium bg-canvas-accent/20 text-canvas-accent">
+                                    ${p.strategy_used || 'N/A'}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 rounded text-xs font-bold ${pbMatch ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' : 'bg-white/10 text-white/70'}">
+                                    ${matchDisplay}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-right font-bold text-canvas-accent">${prizeText}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    }
                 });
             }
         }
