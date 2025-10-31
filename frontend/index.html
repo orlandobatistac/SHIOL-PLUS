@@ -1361,7 +1361,11 @@
                         </div>
 
                         <!-- Predictions Table -->
-                        <div class="overflow-x-auto bg-canvas-surface rounded-lg border border-canvas-line">
+                        <!-- Mobile list container -->
+                        <div id="modal-predictions-list" class="sm:hidden space-y-3 bg-canvas-surface rounded-lg border border-canvas-line p-3"></div>
+
+                        <!-- Desktop table -->
+                        <div class="hidden sm:block overflow-x-auto bg-canvas-surface rounded-lg border border-canvas-line">
                             <table
                                 class="min-w-full"
                             >
@@ -2405,20 +2409,36 @@
                 const tbody = document.getElementById(
                     "modal-predictions-tbody",
                 );
+                const list = document.getElementById("modal-predictions-list");
+                const isMobile = window.innerWidth < 640;
+                
                 tbody.innerHTML = "";
+                if (list) list.innerHTML = "";
 
                 if (predictions.length === 0) {
-                    const row = document.createElement("tr");
-                    row.innerHTML = `
-                    <td colspan="5" class="px-4 py-8 text-center text-white/60">
-                        <i class="fas fa-trophy text-2xl mb-2"></i>
-                        <br>
-                        No winning AI insights found for this draw.
-                        <br>
-                        <span class="text-sm">Try again with the next drawing!</span>
-                    </td>
-                `;
-                    tbody.appendChild(row);
+                    const emptyMsg = `
+                        <div class="px-4 py-8 text-center text-white/60">
+                            <i class="fas fa-trophy text-2xl mb-2"></i>
+                            <br>
+                            No winning AI insights found for this draw.
+                            <br>
+                            <span class="text-sm">Try again with the next drawing!</span>
+                        </div>
+                    `;
+                    
+                    if (isMobile && list) {
+                        list.innerHTML = emptyMsg;
+                    } else {
+                        const row = document.createElement("tr");
+                        row.innerHTML = `<td colspan="6" class="px-4 py-8 text-center text-white/60">
+                            <i class="fas fa-trophy text-2xl mb-2"></i>
+                            <br>
+                            No winning AI insights found for this draw.
+                            <br>
+                            <span class="text-sm">Try again with the next drawing!</span>
+                        </td>`;
+                        tbody.appendChild(row);
+                    }
                     return;
                 }
 
@@ -2437,9 +2457,6 @@
                     : null;
 
                 predictions.forEach((pred, index) => {
-                    const row = document.createElement("tr");
-                    row.className = "hover:bg-canvas-card/30 transition-colors";
-
                     // Create number balls HTML with highlighting for matches
                     const numbers = [
                         pred.n1,
@@ -2448,23 +2465,7 @@
                         pred.n4,
                         pred.n5,
                     ].filter((n) => n);
-                    const numbersHtml = numbers
-                        .map((num) => {
-                            const isMatch = winningMainNumbers.includes(num);
-                            if (isMatch) {
-                                return `<span class="num-chip" style="background: #00e0ff; color: #0a0c14;">${num}</span>`;
-                            } else {
-                                return `<span class="num-chip">${num}</span>`;
-                            }
-                        })
-                        .join("");
-
-                    // Highlight Powerball if it matches
-                    const pbMatch = pred.pb === winningPowerball;
-                    const powerballHtml = pbMatch 
-                        ? `<span class="num-chip" style="background: #00e0ff; color: #0a0c14;">${pred.pb}</span>`
-                        : `<span class="num-chip powerball-chip">${pred.pb}</span>`;
-
+                    
                     const matchesText = `${pred.matches_main || 0}${pred.matches_powerball ? "+PB" : ""}`;
                     const prizeAmount = pred.prize_info
                         ? pred.prize_info.amount
@@ -2474,23 +2475,89 @@
                             ? `$${prizeAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                             : "-";
 
-                    row.innerHTML = `
-                    <td class="px-4 py-3 text-sm text-white font-bold">#${idToRankMap[pred.id] || index + 1}</td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center justify-start gap-1">
-                            ${numbersHtml}
-                        </div>
-                    </td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center justify-center">
-                            ${powerballHtml}
-                        </div>
-                    </td>
-                    <td class="px-4 py-3 text-sm font-medium text-white">${matchesText}</td>
-                    <td class="px-4 py-3 text-sm font-medium text-white">${prizeText}</td>
-                `;
+                    // Highlight Powerball if it matches
+                    const pbMatch = pred.pb === winningPowerball;
+                    
+                    // Mobile: card layout
+                    if (isMobile && list) {
+                        const numbersHtml = numbers
+                            .map((num) => {
+                                const isMatch = winningMainNumbers.includes(num);
+                                if (isMatch) {
+                                    return `<span class="num-chip text-xs w-7 h-7" style="background: #00e0ff; color: #0a0c14;">${num}</span>`;
+                                } else {
+                                    return `<span class="num-chip text-xs w-7 h-7">${num}</span>`;
+                                }
+                            })
+                            .join("");
+                        
+                        const powerballHtml = pbMatch 
+                            ? `<span class="num-chip powerball-chip text-xs w-7 h-7" style="background: #00e0ff; color: #0a0c14;">${pred.pb}</span>`
+                            : `<span class="num-chip powerball-chip text-xs w-7 h-7">${pred.pb}</span>`;
+                        
+                        const cardDiv = document.createElement("div");
+                        cardDiv.className = "bg-canvas-card rounded-lg border border-white/5 p-4 space-y-3";
+                        cardDiv.innerHTML = `
+                            <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center justify-center w-8 h-6 rounded-md bg-gradient-to-r from-canvas-accent to-canvas-accent2 text-white text-sm font-bold shadow-md">
+                                        #${idToRankMap[pred.id] || index + 1}
+                                    </span>
+                                    <span class="text-xs text-white/60">${pred.strategy_used || 'AI'}</span>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs text-white/50">Matches</div>
+                                    <div class="text-sm font-bold text-white">${matchesText}</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                                ${numbersHtml}
+                                <div class="w-0.5"></div>
+                                ${powerballHtml}
+                            </div>
+                            <div class="flex items-center justify-between pt-1 border-t border-white/5">
+                                <span class="text-[10px] text-white/50 uppercase tracking-wide">Prize</span>
+                                <span class="text-sm font-bold ${prizeAmount > 0 ? 'text-emerald-400' : 'text-white/40'}">${prizeText}</span>
+                            </div>
+                        `;
+                        list.appendChild(cardDiv);
+                    } else {
+                        // Desktop: table row
+                        const numbersHtml = numbers
+                            .map((num) => {
+                                const isMatch = winningMainNumbers.includes(num);
+                                if (isMatch) {
+                                    return `<span class="num-chip" style="background: #00e0ff; color: #0a0c14;">${num}</span>`;
+                                } else {
+                                    return `<span class="num-chip">${num}</span>`;
+                                }
+                            })
+                            .join("");
+                        
+                        const powerballHtml = pbMatch 
+                            ? `<span class="num-chip" style="background: #00e0ff; color: #0a0c14;">${pred.pb}</span>`
+                            : `<span class="num-chip powerball-chip">${pred.pb}</span>`;
 
-                    tbody.appendChild(row);
+                        const row = document.createElement("tr");
+                        row.className = "hover:bg-canvas-card/30 transition-colors";
+                        row.innerHTML = `
+                            <td class="px-4 py-3 text-sm text-white font-bold">#${idToRankMap[pred.id] || index + 1}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center justify-start gap-1">
+                                    ${numbersHtml}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center justify-center">
+                                    ${powerballHtml}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-white/70">${pred.strategy_used || 'AI'}</td>
+                            <td class="px-4 py-3 text-sm font-medium text-white">${matchesText}</td>
+                            <td class="px-4 py-3 text-sm font-medium text-white">${prizeText}</td>
+                        `;
+                        tbody.appendChild(row);
+                    }
                 });
             }
 
