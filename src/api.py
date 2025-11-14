@@ -792,8 +792,21 @@ async def trigger_full_pipeline_automatically():
             polling_start = datetime.now()
             
             try:
-                # Execute unified adaptive polling
-                polling_result = realtime_draw_polling_unified(expected_draw_date=expected_draw_date)
+                # Define callback function to update pipeline status during polling
+                def update_polling_status(exec_id, status_msg):
+                    """Update pipeline execution log with current polling status."""
+                    db.update_pipeline_execution_log(
+                        execution_id=exec_id,
+                        current_step=status_msg,
+                        metadata=json.dumps(metadata)
+                    )
+                
+                # Execute unified adaptive polling with status updates
+                polling_result = realtime_draw_polling_unified(
+                    expected_draw_date=expected_draw_date,
+                    execution_id=execution_id,
+                    update_status_callback=update_polling_status
+                )
                 
                 polling_elapsed = (datetime.now() - polling_start).total_seconds()
                 

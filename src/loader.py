@@ -700,38 +700,38 @@ def quick_health_check_sources() -> Dict[str, bool]:
     return health_status
 
 
-def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
+def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = None, update_status_callback=None) -> Dict:
     """
     UNIFIED ADAPTIVE POLLING across all 3 data sources.
     
     Strategy:
-    - Single loop tries ALL 3 sources each iteration (NC Scraping → MUSL → NC CSV)
-    - Adaptive intervals: 2min (first 30min) → 5min (next 30min) → 10min (after 60min)
-    - Timeout at 6:00 AM next day (Daily Full Sync takes over)
+    - Single loop tries ALL 3 sources each iteration (Powerball → NC Scraping → MUSL)
+    - Adaptive intervals: 30s (first 30min) → 5min (next 90min) → 15min (after 2h)
+    - Timeout at 6 hours (Daily Full Sync takes over at 6 AM)
     - First source that responds wins
-    
-    This replaces the old smart polling system with a simpler, more reliable approach
-    similar to the original Excel-based hourly polling.
     
     Args:
         expected_draw_date: Draw date to poll for (YYYY-MM-DD format)
+        execution_id: Pipeline execution ID (optional, for status logging)
+        update_status_callback: Callback function to update pipeline status (optional)
+            Signature: update_status_callback(execution_id, current_step, metadata)
         
     Returns:
         Dict with polling results:
         {
             'success': bool,
             'draw_data': Dict or None,
-            'source': str (web_scraping|musl_api|nclottery_csv),
+            'source': str (powerball_official|web_scraping|musl_api),
             'attempts': int,
             'elapsed_seconds': float,
             'result': str (success|timeout|error)
         }
     
     Example Timeline (Monday 11:05 PM draw):
-        23:05:00 → Attempt #1 (Web→MUSL→NY): None (interval: 2min)
-        23:07:00 → Attempt #2 (Web→MUSL→NY): None (interval: 2min)
-        23:09:00 → Attempt #3 (Web→MUSL→NY): ✅ Web scraping SUCCESS!
-        Result: {'success': True, 'source': 'web_scraping', 'attempts': 3, 'elapsed': 240s}
+        23:05:00 → Attempt #1 (Powerball→NC→MUSL): None (interval: 30s)
+        23:05:30 → Attempt #2 (Powerball→NC→MUSL): None (interval: 30s)
+        23:06:00 → Attempt #3 (Powerball→NC→MUSL): ✅ Powerball Official SUCCESS!
+        Result: {'success': True, 'source': 'powerball_official', 'attempts': 3, 'elapsed': 60s}
     """
     from datetime import datetime, timedelta
     from src.date_utils import DateManager
@@ -831,6 +831,14 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
             f"({elapsed_minutes:.1f}min elapsed, {phase})"
         )
         logger.info("-" * 80)
+        
+        # Update pipeline status with current attempt
+        if execution_id and update_status_callback:
+            status_msg = f"STEP 1C/7: Searching for draw (Attempt #{attempts}, {elapsed_minutes:.1f}min elapsed)"
+            try:
+                update_status_callback(execution_id, status_msg)
+            except Exception as e:
+                logger.warning(f"Failed to update pipeline status: {e}")
         
         # TRY ONLY HEALTHY SOURCES (determined by pre-check)
         for idx, (source_name, source_key, source_func) in enumerate(active_sources, 1):
