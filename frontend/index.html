@@ -1629,25 +1629,33 @@
                             allPredictions.length;
 
                         // Update draw date
-                        if (allPredictions.length > 0 && allPredictions[0].draw_date) {
+                        if (allPredictions.length > 0) {
+                            console.log('First prediction:', allPredictions[0]);
                             const drawDateStr = allPredictions[0].draw_date;
-                            try {
-                                // Parse draw_date (format: YYYY-MM-DD)
-                                const [year, month, day] = drawDateStr.split('-').map(Number);
-                                const drawDate = new Date(year, month - 1, day);
-                                const formattedDrawDate = drawDate.toLocaleDateString('en-US', {
-                                    weekday: 'long',
-                                    month: 'long',
-                                    day: 'numeric',
-                                    timeZone: 'America/New_York'
-                                });
-                                
-                                const drawDateElement = document.getElementById('predictions-draw-date');
-                                if (drawDateElement) {
-                                    drawDateElement.textContent = formattedDrawDate;
+                            console.log('Draw date string:', drawDateStr);
+                            
+                            if (drawDateStr) {
+                                try {
+                                    // Parse draw_date (format: YYYY-MM-DD)
+                                    const [year, month, day] = drawDateStr.split('-').map(Number);
+                                    const drawDate = new Date(year, month - 1, day);
+                                    const formattedDrawDate = drawDate.toLocaleDateString('en-US', {
+                                        weekday: 'long',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        timeZone: 'America/New_York'
+                                    });
+                                    
+                                    console.log('Formatted draw date:', formattedDrawDate);
+                                    const drawDateElement = document.getElementById('predictions-draw-date');
+                                    if (drawDateElement) {
+                                        drawDateElement.textContent = formattedDrawDate;
+                                    }
+                                } catch (e) {
+                                    console.error('Error formatting draw date:', e);
                                 }
-                            } catch (e) {
-                                console.warn('Error formatting draw date:', e);
+                            } else {
+                                console.warn('draw_date is empty or null');
                             }
                         }
 
