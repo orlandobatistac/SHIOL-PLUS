@@ -61,7 +61,7 @@ The pipeline was designed to wait for the draw to become available, but:
 
 ## The Fix
 
-### Changed Timeout from 6.9 Hours → 5 Minutes
+### Changed Timeout from 6.9 Hours → 2.5 Minutes
 
 **File: `src/loader.py` (lines 740-755)**
 
@@ -73,63 +73,46 @@ timeout_hours = (next_day_6am - current_et).total_seconds() / 3600
 logger.info(f"Timeout at: {next_day_6am.strftime('%Y-%m-%d %H:%M:%S %Z')} ({timeout_hours:.1f} hours)")
 
 # NEW CODE (fixed)
-timeout_seconds = 300  # 5 minutes max
+timeout_seconds = 150  # 2.5 minutes max (< 180s systemd timeout)
 timeout_timestamp = start_time.timestamp() + timeout_seconds
-logger.info(f"Timeout at: 5 minutes (max {timeout_seconds}s)")
+logger.info(f"Timeout at: 2 minutes (max {timeout_seconds}s)")
 ```
 
-### Rationale for 5 Minutes
+### Rationale for 2.5 Minutes
 
 1. **Real-time polling is for IMMEDIATE availability** after drawing
    - Powerball drawing: Mon/Wed/Sat ~10:59 PM ET
    - Results published: ~10:59 PM → 11:30 PM ET (30 minutes)
-   - If not available in first 5 minutes, data source problem exists
+   - If not available in first 2.5 minutes, data source problem exists
 
-2. **5 minutes allows 2 healthy polling attempts** (Phase 1 with 2-minute intervals)
+2. **2.5 minutes allows 1-2 polling attempts** (Phase 1 with 2-minute intervals)
    ```
    Time 0:00 - Attempt #1
    Time 2:00 - Attempt #2 (after 120s wait)
-   Time 3:00 - Timeout (300s limit)
+   Time 2:30 - Timeout (150s limit)
    ```
 
 3. **Graceful degradation**
-   - Polling fails after 5 minutes with status='timeout'
+   - Polling fails after 2.5 minutes with status='timeout'
    - Pipeline marks draw as NOT FOUND
    - Daily Full Sync job at 6 AM will pick up any missed draws
    - No lost data, just delayed by a few hours
 
-4. **Prevents systemd timeout conflict**
-   - 5 minutes (300s) << systemd timeout (180s)... wait, that's WRONG!
-   - Actually: 5 minutes (300s) > systemd timeout (180s)
-   - BUT: The polling now FAILS at 5 minutes instead of waiting indefinitely
-   - Systemd won't kill process because polling will exit cleanly
-
-**Wait, issue:** Actually, if polling waits 300s but systemd timeout is 180s, we still have a problem!
-
-### Real Solution: Both Timeout Changes Needed
-
-The actual fix requires TWO changes:
-
-1. **Polling timeout: 5 minutes** (code already deployed)
-   - Polling loop will timeout and return after 5 minutes
-   - But systemd will kill it at 3 minutes (180s)
-
-2. **Systemd timeout needs increase** (NOT YET DEPLOYED)
-   - Service file: `/etc/systemd/system/shiolplus.service`
-   - Current: `TimeoutStopSec=180`
-   - Should be: `TimeoutStopSec=360` (6 minutes)
+4. **CRITICAL: Timeout < systemd timeout prevents forced restart**
+   - Polling timeout: **2.5 minutes (150s)**
+   - Systemd graceful shutdown timeout: **180 seconds (3 minutes)**
+   - **150s < 180s → Pipeline exits cleanly before SIGKILL**
+   - Systemd will NOT forcefully kill process
+   - Service restarts happen as designed, not as forced kills
 
 ### Updated Service Configuration
 
 File: `/etc/systemd/system/shiolplus.service`
 
-```ini
-[Service]
-...
-# Give pipeline 5 minutes + 1 minute buffer to exit gracefully
-TimeoutStopSec=360
-...
-```
+✅ **NO CHANGES NEEDED** - Systemd timeout (180s) is already sufficient
+- Pipeline timeout: 150s (2.5 minutes)
+- Systemd timeout: 180s (3 minutes)
+- Buffer: 30 seconds (graceful shutdown window)
 
 ## Expected Behavior After Fix
 
@@ -141,35 +124,33 @@ TimeoutStopSec=360
 ✅ Result: Pipeline completes successfully
 ```
 
-### Failed Polling (draw unavailable after 5 min)
+### Failed Polling (draw unavailable after 2.5 min)
 ```
 04:05:00 - Attempt #1: No data
           - Wait 120s
 04:07:01 - Attempt #2: No data
-          - Wait 120s
-04:09:01 - Timeout reached (300s)
+          - Wait up to 29s
+04:07:30 - Timeout reached (150s)
           - polling_result = {'success': False, 'result': 'timeout'}
           - STEP 1C logs: "Draw not available yet - daily sync will catch it at 6 AM"
           - Pipeline exits with status='failed'
-          - Systemd does NOT kill process (already exiting)
-✅ Result: Clean failure, no service restart, no stuck process
+          - Pipeline.exit_gracefully() is called
+          - Systemd receives SIGTERM and waits 30s (default graceful window)
+          - Pipeline shutdown completes WELL before 180s systemd timeout
+✅ Result: Clean failure, no forced restart, service continues normally
 ```
 
 ## Deployment Status
 
-✅ **Code deployed to production** (commit 635c8e9)
-- `realtime_draw_polling_unified()` now times out after 5 minutes
-- Systemd graceful shutdown still 180 seconds (needs manual update on server)
+✅ **Code deployed to production** (commit 146fa14)
+- `realtime_draw_polling_unified()` now times out after 2.5 minutes
+- Timeout is **guaranteed to exit before** systemd kills process
+- Pipeline will fail gracefully with status='timeout' if draw unavailable
 
-⚠️ **Manual action required on production server:**
-Update `/etc/systemd/system/shiolplus.service`:
-```bash
-ssh root@server
-nano /etc/systemd/system/shiolplus.service
-# Change TimeoutStopSec=180 to TimeoutStopSec=360
-systemctl daemon-reload
-systemctl restart shiolplus
-```
+✅ **NO manual action required on production server**
+- Systemd timeout (180s) is already sufficient
+- No configuration changes needed
+- Changes auto-deployed via GitHub Actions
 
 ## Prevention for Future
 
@@ -192,4 +173,6 @@ Add alerts for:
 - **Original Issue**: Pipeline stuck waiting for draw availability indefinitely
 - **Affected Execution IDs**: `5344348f` (04:05 AM), `3d3b56e8` (04:08 AM)
 - **Underlying Cause**: Polling timeout (6.9h) > systemd timeout (3min)
-- **Date Fixed**: 2025-11-14 (commit 635c8e9)
+- **Root Mechanism**: While polling waited indefinitely, systemd forcefully killed process at 180s
+- **Date Fixed**: 2025-11-14 (commit 146fa14)
+- **Status**: ✅ Production deployment complete, no manual intervention needed
