@@ -279,52 +279,45 @@ def save_generated_tickets(tickets: List[Dict], draw_date: str):
     """
     Save generated tickets to `generated_tickets` table.
     
-    Behavior: Deletes any existing tickets for the same draw_date BEFORE inserting new ones.
-    This ensures exactly 200 tickets per draw_date (or whatever number is generated).
-    Prevents accumulation when pipeline runs multiple times on the same day.
+    Behavior: Does NOT delete existing tickets - appends to them.
+    This allows batch-wise saving during pipeline execution.
+    Note: The pipeline itself deletes old tickets BEFORE starting generation.
     """
     if not tickets:
-        logger.info("No generated tickets to save")
+        logger.debug(f"No tickets to save for {draw_date}")
         return 0
 
     try:
-        conn = db.get_db_connection()
-        cursor = conn.cursor()
+        with db.get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        # Step 1: Delete any existing tickets for this draw_date to ensure clean state
-        cursor.execute("DELETE FROM generated_tickets WHERE draw_date = ?", (draw_date,))
-        deleted_count = cursor.rowcount
-        if deleted_count > 0:
-            logger.info(f"Cleaned up {deleted_count} old tickets for {draw_date} before saving new ones")
+            # Prepare new records
+            records = []
+            for t in tickets:
+                whites = t.get('white_balls')
+                if not whites or len(whites) != 5:
+                    continue
+                records.append((
+                    draw_date,
+                    t.get('strategy'),
+                    int(whites[0]), int(whites[1]), int(whites[2]), int(whites[3]), int(whites[4]),
+                    int(t.get('powerball', 0)),
+                    float(t.get('confidence', 0.5))
+                ))
 
-        # Step 2: Prepare new records
-        records = []
-        for t in tickets:
-            whites = t.get('white_balls')
-            if not whites or len(whites) != 5:
-                continue
-            records.append((
-                draw_date,
-                t.get('strategy'),
-                int(whites[0]), int(whites[1]), int(whites[2]), int(whites[3]), int(whites[4]),
-                int(t.get('powerball', 0)),
-                float(t.get('confidence', 0.5))
-            ))
+            # Insert new tickets
+            cursor.executemany(
+                """
+                INSERT INTO generated_tickets (draw_date, strategy_used, n1, n2, n3, n4, n5, powerball, confidence_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                records
+            )
 
-        # Step 3: Insert new tickets
-        cursor.executemany(
-            """
-            INSERT INTO generated_tickets (draw_date, strategy_used, n1, n2, n3, n4, n5, powerball, confidence_score)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            records
-        )
-
-        conn.commit()
-        inserted = cursor.rowcount
-        conn.close()
-        logger.info(f"Saved {inserted} generated tickets for {draw_date} (deleted {deleted_count} old ones)")
-        return inserted
+            conn.commit()
+            inserted = cursor.rowcount
+            logger.debug(f"Saved {inserted} tickets for {draw_date}")
+            return inserted
     except Exception as e:
         logger.error(f"Failed to save generated tickets: {e}")
         return 0
@@ -1198,36 +1191,63 @@ async def trigger_full_pipeline_automatically():
         )
         
         try:
+            import gc
             from src.strategy_generators import StrategyManager
             from src.date_utils import DateManager
 
             manager = StrategyManager()
 
-            # Generate 200 predictions (40 sets of 5 tickets each)
-            all_tickets = []
-            for batch in range(40):
-                tickets = manager.generate_balanced_tickets(5)
-                all_tickets.extend(tickets)
-                if (batch + 1) % 10 == 0:
-                    logger.info(f"[{execution_id}] Generated {len(all_tickets)}/200 tickets...")
-
-            # Save to database
+            # Get next draw date early (before generation)
             next_draw = DateManager.calculate_next_drawing_date()
-            saved = save_generated_tickets(all_tickets, next_draw)
+            
+            # Delete old predictions for this draw BEFORE generating new ones
+            # This prevents duplicate accumulation
+            with db.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM generated_tickets WHERE draw_date = ?", (next_draw,))
+                deleted_count = cursor.rowcount
+                conn.commit()
+            
+            if deleted_count > 0:
+                logger.info(f"[{execution_id}] Deleted {deleted_count} old predictions for {next_draw}")
 
-            logger.info(f"[{execution_id}] Generated and saved {saved} tickets for {next_draw}")
-
-            # Get strategy distribution
+            # Generate and save predictions in BATCHES (5 batches of 40 tickets each)
+            # This reduces memory footprint and prevents OOM kills
+            total_saved = 0
             strategy_dist = {}
-            for ticket in all_tickets:
-                strategy = ticket['strategy']
-                strategy_dist[strategy] = strategy_dist.get(strategy, 0) + 1
-
+            batch_size = 40  # Save every 40 tickets
+            
+            for batch_num in range(5):
+                batch_tickets = []
+                
+                # Generate 40 tickets per batch
+                for _ in range(8):  # 8 sets of 5 = 40 tickets
+                    tickets = manager.generate_balanced_tickets(5)
+                    batch_tickets.extend(tickets)
+                    
+                    # Track strategy distribution
+                    for ticket in tickets:
+                        strategy = ticket['strategy']
+                        strategy_dist[strategy] = strategy_dist.get(strategy, 0) + 1
+                
+                # Save this batch to database immediately (don't hold in memory)
+                batch_saved = save_generated_tickets(batch_tickets, next_draw)
+                total_saved += batch_saved
+                
+                logger.info(f"[{execution_id}] Batch {batch_num + 1}/5: Saved {batch_saved} tickets ({total_saved}/200 total)")
+                
+                # Clear batch from memory immediately
+                del batch_tickets
+                
+                # Force garbage collection every 40 tickets to prevent memory bloat
+                gc.collect()
+            
+            logger.info(f"[{execution_id}] Generated and saved {total_saved} tickets for {next_draw}")
             logger.info(f"[{execution_id}] Strategy distribution: {strategy_dist}")
             
             # VALIDATION GATE 5
             expected_count = 200
-            validation_result = validate_step_5_prediction(saved, expected_count, execution_id)
+            validation_result = validate_step_5_prediction(total_saved, expected_count, execution_id)
             
             if not validation_result['success']:
                 # CRITICAL FAILURE - HALT PIPELINE
@@ -1241,11 +1261,12 @@ async def trigger_full_pipeline_automatically():
                     current_step="FAILED at STEP 6/7",
                     end_time=datetime.now().isoformat(),
                     error=f"STEP 6 VALIDATION FAILED: {error_detail}",
-                    total_tickets_generated=saved,
+                    total_tickets_generated=total_saved,
                     target_draw_date=next_draw,
                     elapsed_seconds=elapsed
                 )
                 
+                active_pipeline_execution_id = None
                 return {
                     'success': False,
                     'execution_id': execution_id,
@@ -1277,7 +1298,7 @@ async def trigger_full_pipeline_automatically():
                 steps_completed=7,
                 total_steps=7,
                 end_time=datetime.now().isoformat(),
-                total_tickets_generated=saved,
+                total_tickets_generated=total_saved,
                 target_draw_date=next_draw,
                 elapsed_seconds=elapsed,
                 data_source=final_data_source
@@ -1285,7 +1306,7 @@ async def trigger_full_pipeline_automatically():
             
             logger.info(f"[{execution_id}] 🎉 ========== PIPELINE STATUS: COMPLETED ==========")
             logger.info(f"[{execution_id}] ✅ All 7 steps executed successfully in {elapsed:.2f}s")
-            logger.info(f"[{execution_id}] 📊 Generated {saved} tickets for draw {next_draw}")
+            logger.info(f"[{execution_id}] 📊 Generated {total_saved} tickets for draw {next_draw}")
             logger.info(f"[{execution_id}] 📡 Data source: {final_data_source}")
             logger.info(f"[{execution_id}] =====================================")
 
@@ -1295,7 +1316,7 @@ async def trigger_full_pipeline_automatically():
                 'status': 'completed',
                 'execution_id': execution_id,
                 'elapsed_seconds': elapsed,
-                'tickets_generated': saved,
+                'tickets_generated': total_saved,
                 'target_draw': next_draw,
                 'message': 'Pipeline completed successfully - all steps executed'
             }
