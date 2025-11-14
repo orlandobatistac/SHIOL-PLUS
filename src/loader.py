@@ -375,6 +375,82 @@ def scrape_powerball_website(expected_draw_date: str) -> Optional[Dict]:
         return None
 
 
+def scrape_powerball_official(expected_draw_date: str) -> Optional[Dict]:
+    """Scrape the official Powerball site for the winning numbers."""
+    try:
+        from bs4 import BeautifulSoup
+        logger.info(f"🌐 [powerball_official] Scraping powerball.com for date {expected_draw_date}")
+
+        url = "https://www.powerball.com/"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        card = soup.find('div', class_='card h-100 number-card number-powerball complete')
+        if not card:
+            logger.info("🌐 [powerball_official] Draw card not yet marked complete")
+            return None
+
+        date_elem = card.find('h5', class_='title-date')
+        if not date_elem:
+            logger.warning("🌐 [powerball_official] Unable to locate draw date element")
+            return None
+
+        draw_date_text = date_elem.get_text(strip=True)
+        try:
+            parsed_date = pd.to_datetime(draw_date_text, format='%a, %b %d, %Y')
+        except Exception:
+            parsed_date = pd.to_datetime(draw_date_text, errors='coerce')
+        if parsed_date is pd.NaT:
+            logger.warning(f"🌐 [powerball_official] Cannot parse draw date '{draw_date_text}'")
+            return None
+
+        normalized_date = parsed_date.strftime('%Y-%m-%d')
+        if normalized_date != expected_draw_date:
+            logger.info(f"🌐 [powerball_official] Draw for {normalized_date} found, expected {expected_draw_date}")
+            return None
+
+        white_ball_elements = card.select('div.form-control.col.white-balls.item-powerball')
+        if len(white_ball_elements) != 5:
+            logger.warning(f"🌐 [powerball_official] Found {len(white_ball_elements)} white balls")
+            return None
+
+        white_balls = [int(el.get_text(strip=True)) for el in white_ball_elements]
+        powerball_elem = card.select_one('div.form-control.col.powerball.item-powerball')
+        if not powerball_elem:
+            logger.warning("🌐 [powerball_official] Missing powerball value")
+            return None
+        powerball = int(powerball_elem.get_text(strip=True))
+
+        multiplier_elem = card.select_one('span.multiplier')
+        multiplier = int(multiplier_elem.get_text(strip=True).replace('x', '')) if multiplier_elem else 1
+
+        result = {
+            'draw_date': expected_draw_date,
+            'n1': white_balls[0],
+            'n2': white_balls[1],
+            'n3': white_balls[2],
+            'n4': white_balls[3],
+            'n5': white_balls[4],
+            'pb': powerball,
+            'multiplier': multiplier,
+            'source': 'powerball_official'
+        }
+
+        logger.info(f"🌐 [powerball_official] ✅ Found draw {normalized_date}: [{', '.join(map(str, white_balls))}] + PB {powerball} (x{multiplier})")
+        return result
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"🌐 [powerball_official] Network error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"🌐 [powerball_official] Unexpected error: {e}", exc_info=True)
+        return None
+
+
 def fetch_single_draw_musl(expected_draw_date: str) -> Optional[Dict]:
     """
     Fetches single draw from MUSL API v3 (Layer 2 - Fast, Official).
@@ -624,27 +700,39 @@ def quick_health_check_sources() -> Dict[str, bool]:
     Returns:
         Dict with source availability:
         {
+            'powerball_official': bool,
             'web_scraping': bool,
-            'musl_api': bool,
-            'nclottery_csv': bool
+            'musl_api': bool
         }
     
     Example:
         >>> health = quick_health_check_sources()
         >>> print(health)
-        {'web_scraping': True, 'musl_api': True, 'nclottery_csv': False}
+        {'powerball_official': True, 'web_scraping': True, 'musl_api': False}
     """
     import requests
     
     health_status = {
+        'powerball_official': False,
         'web_scraping': False,
-        'musl_api': False,
-        'nclottery_csv': False
+        'musl_api': False
     }
     
     logger.info("🏥 [health_check] Running quick health check on all sources (5s timeout)...")
     
-    # Test 1: NC Lottery Web Scraping
+    # Test 1: Powerball Official website
+    try:
+        url = "https://www.powerball.com/"
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        if response.status_code == 200 and 'number-powerball' in response.text:
+            health_status['powerball_official'] = True
+            logger.info(f"   ✅ Powerball Official: HEALTHY ({response.status_code})")
+        else:
+            logger.warning(f"   ⚠️  Powerball Official: DEGRADED (status {response.status_code})")
+    except Exception as e:
+        logger.warning(f"   ❌ Powerball Official: UNAVAILABLE ({str(e)[:50]})")
+
+    # Test 2: NC Lottery Web Scraping
     try:
         url = "https://nclottery.com/powerball"
         headers = {
@@ -659,7 +747,7 @@ def quick_health_check_sources() -> Dict[str, bool]:
     except Exception as e:
         logger.warning(f"   ❌ NC Lottery Scraping: UNAVAILABLE ({str(e)[:50]})")
     
-    # Test 2: MUSL API
+    # Test 3: MUSL API
     try:
         api_key = os.getenv("MUSL_API_KEY")
         if not api_key:
@@ -679,19 +767,6 @@ def quick_health_check_sources() -> Dict[str, bool]:
                 logger.warning(f"   ⚠️  MUSL API: DEGRADED (status {response.status_code})")
     except Exception as e:
         logger.warning(f"   ❌ MUSL API: UNAVAILABLE ({str(e)[:50]})")
-    
-    # Test 3: NC Lottery CSV
-    try:
-        url = "https://nclottery.com/powerball-download"
-        headers = {"User-Agent": "SHIOL+ Powerball Analytics"}
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200 and response.text.startswith('"Date"'):
-            health_status['nclottery_csv'] = True
-            logger.info(f"   ✅ NC CSV Download: HEALTHY ({response.status_code}, CSV format OK)")
-        else:
-            logger.warning(f"   ⚠️  NC CSV Download: DEGRADED (invalid format or status {response.status_code})")
-    except Exception as e:
-        logger.warning(f"   ❌ NC CSV Download: UNAVAILABLE ({str(e)[:50]})")
     
     healthy_count = sum(health_status.values())
     logger.info(f"🏥 [health_check] Complete: {healthy_count}/3 sources healthy")
@@ -778,12 +853,12 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
     
     # Build active sources list based on health check
     active_sources = []
+    if healthy_sources['powerball_official']:
+        active_sources.append(('Powerball Official', 'powerball_official', scrape_powerball_official))
     if healthy_sources['web_scraping']:
         active_sources.append(('NC Lottery Scraping', 'web_scraping', scrape_powerball_website))
     if healthy_sources['musl_api']:
         active_sources.append(('MUSL API', 'musl_api', fetch_single_draw_musl))
-    if healthy_sources['nclottery_csv']:
-        active_sources.append(('NC CSV', 'nclottery_csv', fetch_single_draw_nclottery_csv))
     
     logger.info(f"🚀 [unified_polling] Strategy: {' → '.join([s[0] for s in active_sources])} ({len(active_sources)}/{3} sources active)")
     logger.info(f"🚀 [unified_polling] Intervals: 30s (0-30min) → 5min (30min-2h) → 15min (2h+)")
