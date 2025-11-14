@@ -244,8 +244,11 @@
                         </svg>
                         AI Insights for Next Drawing
                     </h2>
-                    <p class="text-sm text-white/70 mt-1">
-                        200 AI-generated insights for <span id="predictions-draw-date" class="text-white/90 font-medium">Next Drawing</span> • <span id="predictions-timestamp" class="text-white/60">Loading...</span>
+                    <p class="text-sm text-white/70 mt-2">
+                        200 AI-generated insights for <span id="predictions-draw-date" class="text-white/90 font-medium">Next Drawing</span>
+                    </p>
+                    <p class="text-xs text-white/60 mt-1">
+                        Last updated: <span id="predictions-timestamp">Loading...</span>
                     </p>
                 </div>
 
@@ -1629,33 +1632,25 @@
                             allPredictions.length;
 
                         // Update draw date
-                        if (allPredictions.length > 0) {
-                            console.log('First prediction:', allPredictions[0]);
+                        if (allPredictions.length > 0 && allPredictions[0].draw_date) {
                             const drawDateStr = allPredictions[0].draw_date;
-                            console.log('Draw date string:', drawDateStr);
-                            
-                            if (drawDateStr) {
-                                try {
-                                    // Parse draw_date (format: YYYY-MM-DD)
-                                    const [year, month, day] = drawDateStr.split('-').map(Number);
-                                    const drawDate = new Date(year, month - 1, day);
-                                    const formattedDrawDate = drawDate.toLocaleDateString('en-US', {
-                                        weekday: 'long',
-                                        month: 'long',
-                                        day: 'numeric',
-                                        timeZone: 'America/New_York'
-                                    });
-                                    
-                                    console.log('Formatted draw date:', formattedDrawDate);
-                                    const drawDateElement = document.getElementById('predictions-draw-date');
-                                    if (drawDateElement) {
-                                        drawDateElement.textContent = formattedDrawDate;
-                                    }
-                                } catch (e) {
-                                    console.error('Error formatting draw date:', e);
+                            try {
+                                // Parse draw_date (format: YYYY-MM-DD)
+                                const [year, month, day] = drawDateStr.split('-').map(Number);
+                                const drawDate = new Date(year, month - 1, day);
+                                const formattedDrawDate = drawDate.toLocaleDateString('en-US', {
+                                    weekday: 'long',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    timeZone: 'America/New_York'
+                                });
+                                
+                                const drawDateElement = document.getElementById('predictions-draw-date');
+                                if (drawDateElement) {
+                                    drawDateElement.textContent = formattedDrawDate;
                                 }
-                            } else {
-                                console.warn('draw_date is empty or null');
+                            } catch (e) {
+                                console.warn('Error formatting draw date:', e);
                             }
                         }
 
