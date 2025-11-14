@@ -740,19 +740,21 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
     start_time = datetime.now()
     attempts = 0
     
-    # Calculate timeout: 2.5 minutes max for real-time polling
-    # Rationale: If draw isn't available in 2.5 min, it won't arrive during ceremony
-    # Daily Full Sync at 6 AM will catch it
-    # Must be < systemd timeout (180s) to ensure graceful shutdown
+    # Calculate timeout: 6 hours for adaptive polling
+    # Rationale: Draw numbers may take hours to publish (multiple sources, variable delays)
+    # Polling adapts intervals: 30s (0-30min), 5min (30min-2h), 15min (2h+)
+    # Daily Full Sync at 6 AM ET is absolute safety net
     current_et = DateManager.get_current_et_time()
-    timeout_seconds = 150  # 2.5 minutes max (< 180s systemd timeout)
+    timeout_seconds = 6 * 3600  # 6 hours = 21600 seconds
     timeout_timestamp = start_time.timestamp() + timeout_seconds
+    timeout_et = current_et.replace(hour=(current_et.hour + 6) % 24)
     
     logger.info("=" * 80)
     logger.info(f"🚀 [unified_polling] STARTING UNIFIED ADAPTIVE POLLING")
     logger.info(f"🚀 [unified_polling] Target draw date: {expected_draw_date}")
     logger.info(f"🚀 [unified_polling] Started at: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-    logger.info(f"🚀 [unified_polling] Timeout at: 2.5 minutes (max {timeout_seconds}s)")
+    logger.info(f"🚀 [unified_polling] Timeout at: {timeout_et.strftime('%Y-%m-%d %H:%M:%S %Z')} (6 hours)")
+    logger.info(f"🚀 [unified_polling] Adaptive intervals: 30s (0-30min) → 5min (30min-2h) → 15min (2h+)")
     logger.info("=" * 80)
     
     # ========== PRE-CHECK: HEALTH CHECK ALL SOURCES ==========
@@ -784,7 +786,7 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
         active_sources.append(('NC CSV', 'nclottery_csv', fetch_single_draw_nclottery_csv))
     
     logger.info(f"🚀 [unified_polling] Strategy: {' → '.join([s[0] for s in active_sources])} ({len(active_sources)}/{3} sources active)")
-    logger.info(f"🚀 [unified_polling] Intervals: 2min (0-30min) → 5min (30-60min) → 10min (60min+)")
+    logger.info(f"🚀 [unified_polling] Intervals: 30s (0-30min) → 5min (30min-2h) → 15min (2h+)")
     logger.info("=" * 80)
     
     while True:
@@ -795,10 +797,10 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
         # Check timeout BEFORE attempting
         if datetime.now().timestamp() >= timeout_timestamp:
             logger.warning("=" * 80)
-            logger.warning(f"⏱ [unified_polling] TIMEOUT REACHED after 2.5 minutes")
+            logger.warning(f"⏱ [unified_polling] TIMEOUT REACHED after 6 hours")
             logger.warning(f"⏱ [unified_polling] Total attempts: {attempts}")
             logger.warning(f"⏱ [unified_polling] Elapsed time: {elapsed_minutes:.1f} minutes")
-            logger.warning(f"⏱ [unified_polling] Draw not available yet - daily sync will catch it at 6 AM")
+            logger.warning(f"⏱ [unified_polling] Draw still not available from any source - daily sync will catch it at 6 AM")
             logger.warning("=" * 80)
             return {
                 'success': False,
@@ -810,15 +812,18 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
             }
         
         # Determine interval based on elapsed time (adaptive)
+        # Phase 1 (0-30 min): Check every 30 seconds (frequent during ceremony)
+        # Phase 2 (30 min-2 hours): Check every 5 minutes (less frequent)
+        # Phase 3 (2+ hours): Check every 15 minutes (very spacious)
         if elapsed_minutes < 30:
-            interval_seconds = 120  # 2 minutes
-            phase = "Phase 1 (0-30min)"
-        elif elapsed_minutes < 60:
+            interval_seconds = 30   # 30 seconds
+            phase = "Phase 1 (0-30min): frequent polling"
+        elif elapsed_minutes < 120:
             interval_seconds = 300  # 5 minutes
-            phase = "Phase 2 (30-60min)"
+            phase = "Phase 2 (30min-2h): normal polling"
         else:
-            interval_seconds = 600  # 10 minutes
-            phase = "Phase 3 (60min+)"
+            interval_seconds = 900  # 15 minutes
+            phase = "Phase 3 (2h+): sparse polling"
         
         logger.info("-" * 80)
         logger.info(
@@ -850,16 +855,17 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
                 logger.error(f"   Layer {idx}/{len(active_sources)}: {source_name} failed with exception: {e}")
         
         # All active sources failed - wait and retry
-        logger.info(f"   ⏸ All {len(active_sources)} active sources returned no data. Waiting {interval_seconds}s before retry...")
-        
-        # Sleep with timeout check (don't oversleep past 6 AM)
-        sleep_until = datetime.now().timestamp() + interval_seconds
-        if sleep_until > timeout_timestamp:
-            # Sleep only until timeout
+        next_attempt_time = datetime.now().timestamp() + interval_seconds
+        if next_attempt_time > timeout_timestamp:
             remaining_sleep = timeout_timestamp - datetime.now().timestamp()
             if remaining_sleep > 0:
+                logger.info(f"   ⏸ No data from any source. Sleeping {remaining_sleep:.0f}s (until timeout)...")
                 time.sleep(remaining_sleep)
+            else:
+                logger.info(f"   ⏸ Timeout reached, exiting polling loop")
+                break
         else:
+            logger.info(f"   ⏸ No data from any source. Sleeping {interval_seconds}s before retry (Attempt #{attempts+1})...")
             time.sleep(interval_seconds)
 
 
