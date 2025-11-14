@@ -162,121 +162,114 @@ async def adaptive_learning_update():
     This reads `strategy_performance` table and updates `current_weight` and `confidence`.
     """
     try:
-        conn = db.get_db_connection()
-        cursor = conn.cursor()
+        with db.get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("SELECT strategy_name, total_plays, total_wins FROM strategy_performance")
-        rows = cursor.fetchall()
+            cursor.execute("SELECT strategy_name, total_plays, total_wins FROM strategy_performance")
+            rows = cursor.fetchall()
 
-        # Compute raw scores (win_rate with small prior) and normalize
-        scores = {}
-        for name, plays, wins in rows:
-            plays = plays or 0
-            wins = wins or 0
-            win_rate = (wins / plays) if plays > 0 else 0.01
-            # Add small prior to avoid zero
-            scores[name] = win_rate + 0.01
+            # Compute raw scores (win_rate with small prior) and normalize
+            scores = {}
+            for name, plays, wins in rows:
+                plays = plays or 0
+                wins = wins or 0
+                win_rate = (wins / plays) if plays > 0 else 0.01
+                # Add small prior to avoid zero
+                scores[name] = win_rate + 0.01
 
-        total_score = sum(scores.values()) if scores else 0.0
+            total_score = sum(scores.values()) if scores else 0.0
 
-        for name, raw in scores.items():
-            new_weight = (raw / total_score) if total_score > 0 else (1.0 / max(1, len(scores)))
-            # Confidence increases with number of plays, bounded [0.1, 0.95]
-            cursor.execute("SELECT total_plays FROM strategy_performance WHERE strategy_name = ?", (name,))
-            tp = cursor.fetchone()
-            plays = tp[0] if tp and tp[0] is not None else 0
-            confidence = min(0.95, 0.1 + (plays / (plays + 100)) if plays >= 0 else 0.1)
+            for name, raw in scores.items():
+                new_weight = (raw / total_score) if total_score > 0 else (1.0 / max(1, len(scores)))
+                # Confidence increases with number of plays, bounded [0.1, 0.95]
+                cursor.execute("SELECT total_plays FROM strategy_performance WHERE strategy_name = ?", (name,))
+                tp = cursor.fetchone()
+                plays = tp[0] if tp and tp[0] is not None else 0
+                confidence = min(0.95, 0.1 + (plays / (plays + 100)) if plays >= 0 else 0.1)
 
-            cursor.execute(
-                "UPDATE strategy_performance SET current_weight = ?, confidence = ?, last_updated = CURRENT_TIMESTAMP WHERE strategy_name = ?",
-                (float(new_weight), float(confidence), name)
-            )
+                cursor.execute(
+                    "UPDATE strategy_performance SET current_weight = ?, confidence = ?, last_updated = CURRENT_TIMESTAMP WHERE strategy_name = ?",
+                    (float(new_weight), float(confidence), name)
+                )
 
-        conn.commit()
-        conn.close()
-        logger.info("Adaptive learning update: strategy weights updated")
-        return True
+            conn.commit()
+            logger.info("Adaptive learning update: strategy weights updated")
+            return True
     except Exception as e:
         logger.error(f"Adaptive learning update failed: {e}")
-        try:
-            conn.close()
-        except Exception:
-            pass
         return False
 
 
 async def evaluate_predictions_for_draw(draw_date: str):
     """Evaluate predictions for a specific draw date and record performance."""
     try:
-        conn = db.get_db_connection()
-        cursor = conn.cursor()
+        with db.get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        # Get official result
-        cursor.execute("SELECT n1, n2, n3, n4, n5, pb FROM powerball_draws WHERE draw_date = ?", (draw_date,))
-        official = cursor.fetchone()
-        if not official:
-            logger.warning(f"No official draw found for {draw_date}")
-            conn.close()
-            return False
+            # Get official result
+            cursor.execute("SELECT n1, n2, n3, n4, n5, pb FROM powerball_draws WHERE draw_date = ?", (draw_date,))
+            official = cursor.fetchone()
+            if not official:
+                logger.warning(f"No official draw found for {draw_date}")
+                return False
 
-        winning_nums = [official[0], official[1], official[2], official[3], official[4]]
-        winning_pb = official[5]
+            winning_nums = [official[0], official[1], official[2], official[3], official[4]]
+            winning_pb = official[5]
 
-        # Find predictions for this draw that haven't been evaluated
-        cursor.execute(
-            "SELECT id, n1, n2, n3, n4, n5, powerball FROM generated_tickets WHERE draw_date = ? AND evaluated = 0",
-            (draw_date,)
-        )
+            # Find predictions for this draw that haven't been evaluated
+            cursor.execute(
+                "SELECT id, n1, n2, n3, n4, n5, powerball FROM generated_tickets WHERE draw_date = ? AND evaluated = 0",
+                (draw_date,)
+            )
 
-        preds = cursor.fetchall()
+            preds = cursor.fetchall()
 
-        for row in preds:
-            pred_id = row[0]
-            pred_nums = [row[1], row[2], row[3], row[4], row[5]]
-            pred_pb = row[6]
+            for row in preds:
+                pred_id = row[0]
+                pred_nums = [row[1], row[2], row[3], row[4], row[5]]
+                pred_pb = row[6]
 
-            matches_main = len(set(pred_nums) & set(winning_nums))
-            matches_pb = 1 if pred_pb == winning_pb else 0
+                matches_main = len(set(pred_nums) & set(winning_nums))
+                matches_pb = 1 if pred_pb == winning_pb else 0
 
-            prize_amount, prize_description = db.calculate_prize_amount(matches_main, bool(matches_pb))
+                prize_amount, prize_description = db.calculate_prize_amount(matches_main, bool(matches_pb))
 
-            # Insert into performance_tracking using the SAME connection/cursor to avoid locks
-            try:
-                db.save_performance_tracking(
-                    pred_id,
-                    draw_date,
-                    winning_nums,
-                    winning_pb,
-                    matches_main,
-                    matches_pb,
-                    prize_description or 'Non-winning',
-                    0.0,
-                    {},
-                    cursor=cursor,
-                )
-            except Exception as ex:
-                logger.error(f"Failed to save performance tracking for prediction {pred_id}: {ex}")
+                # Insert into performance_tracking using the SAME connection/cursor to avoid locks
+                try:
+                    db.save_performance_tracking(
+                        pred_id,
+                        draw_date,
+                        winning_nums,
+                        winning_pb,
+                        matches_main,
+                        matches_pb,
+                        prize_description or 'Non-winning',
+                        0.0,
+                        {},
+                        cursor=cursor,
+                    )
+                except Exception as ex:
+                    logger.error(f"Failed to save performance tracking for prediction {pred_id}: {ex}")
 
-            # Update predictions_log evaluated fields
-            try:
-                cursor.execute(
-                    "UPDATE generated_tickets SET evaluated = 1, matches_wb = ?, matches_pb = ?, prize_won = ?, prize_description = ?, evaluation_date = CURRENT_TIMESTAMP WHERE id = ?",
-                    (matches_main, matches_pb, float(prize_amount), prize_description or '', pred_id)
-                )
-            except Exception as ex:
-                logger.error(f"Failed to update prediction {pred_id}: {ex}")
+                # Update predictions_log evaluated fields
+                try:
+                    cursor.execute(
+                        "UPDATE generated_tickets SET evaluated = 1, matches_wb = ?, matches_pb = ?, prize_won = ?, prize_description = ?, evaluation_date = CURRENT_TIMESTAMP WHERE id = ?",
+                        (matches_main, matches_pb, float(prize_amount), prize_description or '', pred_id)
+                    )
+                except Exception as ex:
+                    logger.error(f"Failed to update prediction {pred_id}: {ex}")
 
-            # Commit per prediction to release write lock early and avoid contention
-            try:
-                conn.commit()
-            except Exception as ex:
-                logger.warning(f"Commit failed after processing prediction {pred_id}: {ex}")
+                # Commit per prediction to release write lock early and avoid contention
+                try:
+                    conn.commit()
+                except Exception as ex:
+                    logger.warning(f"Commit failed after processing prediction {pred_id}: {ex}")
 
-        # Final safety commit (most work committed per-iteration already)
-        conn.commit()
-        conn.close()
-        logger.info(f"Evaluated {len(preds)} predictions for draw {draw_date}")
-        return True
+            # Final safety commit (most work committed per-iteration already)
+            conn.commit()
+            logger.info(f"Evaluated {len(preds)} predictions for draw {draw_date}")
+            return True
     except Exception as e:
         logger.error(f"Error evaluating predictions for {draw_date}: {e}")
         return False
@@ -1034,81 +1027,68 @@ async def trigger_full_pipeline_automatically():
             }
 
         # ========== STEP 4: COMPREHENSIVE EVALUATION (CRITICAL - NOW PRIORITIZED) ==========
-        logger.info(f"[{execution_id}] STEP 4/7: Comprehensive Evaluation - All pending draws...")
-        logger.info(f"[{execution_id}]   Evaluating ALL draws with and without predictions")
+        logger.info(f"[{execution_id}] STEP 4/7: Evaluation - Recent draws with predictions...")
+        logger.info(f"[{execution_id}]   Evaluating draws that have pending predictions")
         db.update_pipeline_execution_log(
             execution_id=execution_id,
-            current_step="STEP 4/7: Comprehensive evaluation",
+            current_step="STEP 4/7: Evaluation of pending predictions",
             steps_completed=3
         )
         
         try:
-            # Get ALL draws from database
+            # Get ONLY draws that have UNEVALUATED predictions (not all draws)
+            # This prevents the pipeline from processing thousands of historical draws
             from src.database import get_db_connection
             
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                # Get all draws ordered by date
+                # Get draws with PENDING/UNEVALUATED predictions only (evaluated = 0)
                 cursor.execute("""
-                    SELECT draw_date, n1, n2, n3, n4, n5, pb 
-                    FROM powerball_draws 
+                    SELECT DISTINCT draw_date
+                    FROM generated_tickets 
+                    WHERE evaluated = 0
                     ORDER BY draw_date DESC
+                    LIMIT 100
                 """)
-                all_draws = cursor.fetchall()
+                draws_with_pending = cursor.fetchall()
             
-            logger.info(f"[{execution_id}] Found {len(all_draws)} total draws to process")
+            logger.info(f"[{execution_id}] Found {len(draws_with_pending)} draws with pending predictions to evaluate")
             
             evaluated_count = 0
-            no_predictions_count = 0
             error_count = 0
             
-            # Process each draw
-            for draw in all_draws:
-                draw_date = draw[0]
+            # Process only draws with pending predictions (timeout: 5 mins max for this step)
+            step_start = datetime.now()
+            step_timeout = 300  # 5 minutes
+            
+            for draw_tuple in draws_with_pending:
+                draw_date = draw_tuple[0]
+                
+                # Check timeout
+                step_elapsed = (datetime.now() - step_start).total_seconds()
+                if step_elapsed > step_timeout:
+                    logger.warning(f"[{execution_id}] ⏱️ STEP 4 TIMEOUT: {step_elapsed/60:.1f}min - halting remaining evaluations")
+                    break
                 
                 try:
-                    # Check if this draw has predictions
-                    with get_db_connection() as conn:
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            SELECT COUNT(*) FROM generated_tickets 
-                            WHERE draw_date = ?
-                        """, (draw_date,))
-                        prediction_count = cursor.fetchone()[0]
-                    
-                    if prediction_count > 0:
-                        # Has predictions - evaluate them
-                        await evaluate_predictions_for_draw(draw_date)
-                        evaluated_count += 1
-                        if evaluated_count <= 5:  # Log first 5
-                            logger.info(f"[{execution_id}]   ✅ Evaluated {draw_date} ({prediction_count} predictions)")
-                    else:
-                        # No predictions - mark as no_predictions in results
-                        with get_db_connection() as conn:
-                            cursor = conn.cursor()
-                            # Insert/update draw_evaluation_results with no_predictions flag
-                            cursor.execute("""
-                                INSERT OR REPLACE INTO draw_evaluation_results 
-                                (draw_date, total_tickets, matches_3, matches_4, matches_5, matches_5_pb, 
-                                 total_prize, has_predictions, evaluation_date, notes)
-                                VALUES (?, 0, 0, 0, 0, 0, 0, 0, ?, 'No predictions generated for this draw')
-                            """, (draw_date, datetime.now().isoformat()))
-                            conn.commit()
-                        
-                        no_predictions_count += 1
-                        if no_predictions_count <= 5:  # Log first 5
-                            logger.info(f"[{execution_id}]   ℹ️  {draw_date} - No predictions (marked)")
+                    # Evaluate predictions for this draw
+                    await evaluate_predictions_for_draw(draw_date)
+                    evaluated_count += 1
+                    if evaluated_count <= 5:  # Log first 5
+                        logger.info(f"[{execution_id}]   ✅ Evaluated {draw_date}")
                     
                 except Exception as e:
                     error_count += 1
                     if error_count <= 3:  # Log first 3 errors
                         logger.warning(f"[{execution_id}]   ⚠️ Error evaluating {draw_date}: {e}")
             
+            step_elapsed = (datetime.now() - step_start).total_seconds()
+            
             # Summary
             logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluation summary")
-            logger.info(f"[{execution_id}]   Total draws: {len(all_draws)}")
-            logger.info(f"[{execution_id}]   Evaluated with predictions: {evaluated_count}")
-            logger.info(f"[{execution_id}]   Marked as no predictions: {no_predictions_count}")
+            logger.info(f"[{execution_id}]   Draws with pending predictions: {len(draws_with_pending)}")
+            logger.info(f"[{execution_id}]   Actually evaluated: {evaluated_count}")
+            logger.info(f"[{execution_id}]   Elapsed time: {step_elapsed:.1f}s")
             if error_count > 0:
                 logger.warning(f"[{execution_id}]   Errors encountered: {error_count}")
             
@@ -1116,8 +1096,8 @@ async def trigger_full_pipeline_automatically():
             validation_result = {
                 'success': True,
                 'evaluated_count': evaluated_count,
-                'no_predictions_count': no_predictions_count,
-                'error_count': error_count
+                'error_count': error_count,
+                'step_duration_seconds': step_elapsed
             }
             
             # Success - continue
@@ -1145,8 +1125,10 @@ async def trigger_full_pipeline_automatically():
         )
         
         try:
+            step_start = datetime.now()
             await adaptive_learning_update()
-            logger.info(f"[{execution_id}] Strategy weights updated via Bayesian learning")
+            step_elapsed = (datetime.now() - step_start).total_seconds()
+            logger.info(f"[{execution_id}] ✅ Strategy weights updated via Bayesian learning ({step_elapsed:.1f}s)")
             
             # VALIDATION GATE 4
             validation_result = validate_step_4_adaptive_learning(execution_id)
@@ -1166,6 +1148,7 @@ async def trigger_full_pipeline_automatically():
                     elapsed_seconds=elapsed
                 )
                 
+                active_pipeline_execution_id = None
                 return {
                     'success': False,
                     'execution_id': execution_id,
