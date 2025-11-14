@@ -740,17 +740,18 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
     start_time = datetime.now()
     attempts = 0
     
-    # Calculate timeout: 6:00 AM next day in ET
+    # Calculate timeout: 5 minutes max for real-time polling
+    # Rationale: If draw isn't available in 5 min, it won't arrive during ceremony
+    # Daily Full Sync at 6 AM will catch it
     current_et = DateManager.get_current_et_time()
-    next_day_6am = current_et.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    timeout_timestamp = next_day_6am.timestamp()
-    timeout_hours = (next_day_6am - current_et).total_seconds() / 3600
+    timeout_seconds = 300  # 5 minutes max
+    timeout_timestamp = start_time.timestamp() + timeout_seconds
     
     logger.info("=" * 80)
     logger.info(f"🚀 [unified_polling] STARTING UNIFIED ADAPTIVE POLLING")
     logger.info(f"🚀 [unified_polling] Target draw date: {expected_draw_date}")
     logger.info(f"🚀 [unified_polling] Started at: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-    logger.info(f"🚀 [unified_polling] Timeout at: {next_day_6am.strftime('%Y-%m-%d %H:%M:%S %Z')} ({timeout_hours:.1f} hours)")
+    logger.info(f"🚀 [unified_polling] Timeout at: 5 minutes (max {timeout_seconds}s)")
     logger.info("=" * 80)
     
     # ========== PRE-CHECK: HEALTH CHECK ALL SOURCES ==========
@@ -793,10 +794,10 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
         # Check timeout BEFORE attempting
         if datetime.now().timestamp() >= timeout_timestamp:
             logger.warning("=" * 80)
-            logger.warning(f"⏱ [unified_polling] TIMEOUT REACHED at 6:00 AM")
+            logger.warning(f"⏱ [unified_polling] TIMEOUT REACHED after 5 minutes")
             logger.warning(f"⏱ [unified_polling] Total attempts: {attempts}")
             logger.warning(f"⏱ [unified_polling] Elapsed time: {elapsed_minutes:.1f} minutes")
-            logger.warning(f"⏱ [unified_polling] Handing off to Daily Full Sync job...")
+            logger.warning(f"⏱ [unified_polling] Draw not available yet - daily sync will catch it at 6 AM")
             logger.warning("=" * 80)
             return {
                 'success': False,
