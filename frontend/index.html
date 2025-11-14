@@ -245,7 +245,7 @@
                         AI Insights for Next Drawing
                     </h2>
                     <p class="text-sm text-white/70 mt-1">
-                        200 AI-generated insights • <span id="predictions-timestamp" class="text-white/60">Loading...</span>
+                        200 AI-generated insights for <span id="predictions-draw-date" class="text-white/90 font-medium">Next Drawing</span> • <span id="predictions-timestamp" class="text-white/60">Loading...</span>
                     </p>
                 </div>
 
@@ -1627,6 +1627,29 @@
                         // Update totals and timestamp
                         document.getElementById("total-available").textContent =
                             allPredictions.length;
+
+                        // Update draw date
+                        if (allPredictions.length > 0 && allPredictions[0].draw_date) {
+                            const drawDateStr = allPredictions[0].draw_date;
+                            try {
+                                // Parse draw_date (format: YYYY-MM-DD)
+                                const [year, month, day] = drawDateStr.split('-').map(Number);
+                                const drawDate = new Date(year, month - 1, day);
+                                const formattedDrawDate = drawDate.toLocaleDateString('en-US', {
+                                    weekday: 'long',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    timeZone: 'America/New_York'
+                                });
+                                
+                                const drawDateElement = document.getElementById('predictions-draw-date');
+                                if (drawDateElement) {
+                                    drawDateElement.textContent = formattedDrawDate;
+                                }
+                            } catch (e) {
+                                console.warn('Error formatting draw date:', e);
+                            }
+                        }
 
                         // Update prediction creation timestamp
                         if (
