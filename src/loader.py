@@ -740,18 +740,19 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
     start_time = datetime.now()
     attempts = 0
     
-    # Calculate timeout: 5 minutes max for real-time polling
-    # Rationale: If draw isn't available in 5 min, it won't arrive during ceremony
+    # Calculate timeout: 2.5 minutes max for real-time polling
+    # Rationale: If draw isn't available in 2.5 min, it won't arrive during ceremony
     # Daily Full Sync at 6 AM will catch it
+    # Must be < systemd timeout (180s) to ensure graceful shutdown
     current_et = DateManager.get_current_et_time()
-    timeout_seconds = 300  # 5 minutes max
+    timeout_seconds = 150  # 2.5 minutes max (< 180s systemd timeout)
     timeout_timestamp = start_time.timestamp() + timeout_seconds
     
     logger.info("=" * 80)
     logger.info(f"🚀 [unified_polling] STARTING UNIFIED ADAPTIVE POLLING")
     logger.info(f"🚀 [unified_polling] Target draw date: {expected_draw_date}")
     logger.info(f"🚀 [unified_polling] Started at: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-    logger.info(f"🚀 [unified_polling] Timeout at: 5 minutes (max {timeout_seconds}s)")
+    logger.info(f"🚀 [unified_polling] Timeout at: 2.5 minutes (max {timeout_seconds}s)")
     logger.info("=" * 80)
     
     # ========== PRE-CHECK: HEALTH CHECK ALL SOURCES ==========
@@ -794,7 +795,7 @@ def realtime_draw_polling_unified(expected_draw_date: str) -> Dict:
         # Check timeout BEFORE attempting
         if datetime.now().timestamp() >= timeout_timestamp:
             logger.warning("=" * 80)
-            logger.warning(f"⏱ [unified_polling] TIMEOUT REACHED after 5 minutes")
+            logger.warning(f"⏱ [unified_polling] TIMEOUT REACHED after 2.5 minutes")
             logger.warning(f"⏱ [unified_polling] Total attempts: {attempts}")
             logger.warning(f"⏱ [unified_polling] Elapsed time: {elapsed_minutes:.1f} minutes")
             logger.warning(f"⏱ [unified_polling] Draw not available yet - daily sync will catch it at 6 AM")
