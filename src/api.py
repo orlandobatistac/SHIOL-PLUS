@@ -778,8 +778,69 @@ async def trigger_full_pipeline_automatically():
             )
             
         else:
-            # Draw NOT in DB - execute polling
-            logger.info(f"[{execution_id}] 🔍 STEP 1C/7: Draw not in DB, starting adaptive polling...")
+            # Draw NOT in DB - validate draw time has passed before polling
+            logger.info(f"[{execution_id}] 🔍 STEP 1C/7: Draw not in DB, validating draw time...")
+            
+            # Validate that the expected draw time has passed
+            # If it hasn't, skip polling and exit gracefully
+            from datetime import datetime as dt_class
+            current_et = DateManager.get_current_et_time()
+            expected_draw_dt = dt_class.strptime(expected_draw_date, '%Y-%m-%d')
+            
+            # Draw time is 10:59 PM ET on the draw date
+            draw_time_et = DateManager.POWERBALL_TIMEZONE.localize(
+                expected_draw_dt.replace(hour=22, minute=59, second=0)
+            )
+            
+            time_until_draw = (draw_time_et - current_et).total_seconds()
+            
+            if time_until_draw > 0:
+                # Draw hasn't happened yet - skip polling and exit gracefully
+                hours_until = time_until_draw / 3600
+                logger.warning(f"[{execution_id}] ⏰ STEP 1C SKIPPED: Draw {expected_draw_date} hasn't occurred yet")
+                logger.warning(f"[{execution_id}]   Current time: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                logger.warning(f"[{execution_id}]   Draw time: {draw_time_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                logger.warning(f"[{execution_id}]   Time until draw: {hours_until:.1f} hours")
+                logger.warning(f"[{execution_id}]   Pipeline will exit gracefully - scheduler will retry after draw")
+                
+                elapsed = (datetime.now() - start_time).total_seconds()
+                
+                metadata['polling_summary'] = {
+                    "enabled": False,
+                    "result": "skipped_future_draw",
+                    "reason": f"Draw time not reached - {hours_until:.1f} hours until draw",
+                    "current_time_et": current_et.isoformat(),
+                    "draw_time_et": draw_time_et.isoformat(),
+                    "hours_until_draw": hours_until
+                }
+                
+                db.update_pipeline_execution_log(
+                    execution_id=execution_id,
+                    status="completed",
+                    current_step="✅ COMPLETED (draw not ready yet)",
+                    end_time=datetime.now().isoformat(),
+                    elapsed_seconds=elapsed,
+                    steps_completed=1,
+                    metadata=json.dumps(metadata)
+                )
+                
+                active_pipeline_execution_id = None
+                logger.info(f"[{execution_id}] 🚀 PIPELINE STATUS: COMPLETED (graceful exit - draw not ready)")
+                
+                return {
+                    'success': True,
+                    'status': 'completed',
+                    'execution_id': execution_id,
+                    'result': 'draw_not_ready',
+                    'message': f'Draw {expected_draw_date} has not occurred yet - will retry after draw time',
+                    'hours_until_draw': hours_until,
+                    'elapsed_seconds': elapsed
+                }
+            
+            # Draw time has passed - proceed with polling
+            logger.info(f"[{execution_id}] ✅ Draw time validation passed - draw {expected_draw_date} should be available")
+            logger.info(f"[{execution_id}]   Draw was {abs(time_until_draw) / 3600:.1f} hours ago")
+            logger.info(f"[{execution_id}]   Starting adaptive polling...")
             logger.info(f"[{execution_id}]   Strategy: NC Lottery Scraping → MUSL API → NC CSV (3-layer fallback)")
             
             db.update_pipeline_execution_log(
