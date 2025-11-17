@@ -119,8 +119,8 @@ class DateManager:
         logger.info(f"Calculating next drawing date from: {reference_date.isoformat()}")
         logger.debug(f"Reference weekday: {current_weekday} ({'Monday' if current_weekday == 0 else 'Wednesday' if current_weekday == 2 else 'Saturday' if current_weekday == 5 else 'Other'})")
 
-        # CORRECTION: Drawing days are Wednesday (2) and Saturday (5)
-        # DO NOT include Monday (0) as in previous code
+        # NOTE: Drawing days are Monday (0), Wednesday (2), and Saturday (5)
+        # Monday was added to the Powerball schedule in August 2021
 
         # If it's a drawing day and before 10:59 PM ET, the drawing is that day
         cutoff_reached = (
