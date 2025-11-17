@@ -292,28 +292,92 @@ class RangeBalancedStrategy(BaseStrategy):
 
 
 class AIGuidedStrategy(BaseStrategy):
-    """Use existing ML model predictions (backward compatibility)"""
+    """Use ML model (XGBoost) predictions for intelligent ticket generation"""
 
     def __init__(self):
         super().__init__("ai_guided")
+        self._predictor = None
+        self._ml_available = self._initialize_ml_predictor()
+
+    def _initialize_ml_predictor(self) -> bool:
+        """Initialize the ML predictor. Returns True if successful."""
+        try:
+            from src.predictor import Predictor
+            self._predictor = Predictor()
+            
+            # Verify model is loaded
+            if self._predictor.model is not None:
+                logger.info(f"{self.name}: XGBoost ML model loaded successfully")
+                return True
+            else:
+                logger.warning(f"{self.name}: ML model not available, will use fallback")
+                return False
+        except Exception as e:
+            logger.warning(f"{self.name}: Could not initialize ML predictor: {e}")
+            return False
 
     def generate(self, count: int = 5) -> List[Dict]:
-        """Generate using existing IntelligentGenerator"""
+        """Generate tickets using XGBoost ML model probabilities"""
         tickets = []
 
+        # Try ML-guided generation first
+        if self._ml_available and self._predictor is not None:
+            try:
+                # Get probability predictions from ML model
+                wb_probs, pb_probs = self._predictor.predict_probabilities(use_ensemble=False)
+                
+                logger.info(f"{self.name}: Successfully obtained ML probabilities")
+                
+                # Generate tickets using ML probabilities
+                for _ in range(count):
+                    try:
+                        # Sample white balls using ML probabilities
+                        white_balls = sorted(np.random.choice(
+                            range(1, 70),
+                            size=5,
+                            replace=False,
+                            p=wb_probs
+                        ).tolist())
+                        
+                        # Sample powerball using ML probabilities
+                        powerball = int(np.random.choice(range(1, 27), p=pb_probs))
+                        
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.85  # Higher confidence since using ML
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"{self.name}: Error generating ticket with ML probs: {e}")
+                        # Fallback to random for this ticket
+                        white_balls = sorted(random.sample(range(1, 70), 5))
+                        powerball = random.randint(1, 26)
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.50
+                        })
+                
+                logger.info(f"{self.name}: Generated {len(tickets)} tickets using ML model")
+                return tickets
+                
+            except Exception as e:
+                logger.error(f"{self.name}: ML prediction pipeline failed: {e}, using fallback")
+                # Continue to fallback below
+
+        # Fallback: Use IntelligentGenerator (frequency-based)
         try:
             from src.intelligent_generator import IntelligentGenerator
-            # Try to instantiate IntelligentGenerator with zero args first; if it requires historical_data, handle gracefully
+            
             try:
                 gen = IntelligentGenerator()
             except TypeError:
-                try:
-                    # Try passing draws from DB if available
-                    historical = self.draws_df if hasattr(self, 'draws_df') else None
-                    gen = IntelligentGenerator(historical)
-                except Exception as inner_e:
-                    logger.error(f"IntelligentGenerator instantiation failed: {inner_e}")
-                    raise
+                # Try passing historical data if required
+                historical = self.draws_df if hasattr(self, 'draws_df') else None
+                gen = IntelligentGenerator(historical)
 
             for _ in range(count):
                 try:
@@ -323,11 +387,10 @@ class AIGuidedStrategy(BaseStrategy):
                         'white_balls': sorted(prediction['numbers']),
                         'powerball': prediction['powerball'],
                         'strategy': self.name,
-                        'confidence': prediction.get('score', 0.80)
+                        'confidence': prediction.get('score', 0.70)
                     })
                 except Exception as e:
-                    logger.error(f"ML prediction failed: {e}, using fallback")
-                    # Fallback to random
+                    logger.error(f"{self.name}: IntelligentGenerator failed: {e}")
                     white_balls = sorted(random.sample(range(1, 70), 5))
                     powerball = random.randint(1, 26)
                     tickets.append({
@@ -336,9 +399,10 @@ class AIGuidedStrategy(BaseStrategy):
                         'strategy': self.name,
                         'confidence': 0.50
                     })
+                    
         except ImportError as e:
-            logger.error(f"Cannot import IntelligentGenerator: {e}")
-            # Pure fallback
+            logger.error(f"{self.name}: Cannot import IntelligentGenerator: {e}")
+            # Final fallback to pure random
             for _ in range(count):
                 white_balls = sorted(random.sample(range(1, 70), 5))
                 powerball = random.randint(1, 26)
