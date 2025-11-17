@@ -560,10 +560,46 @@ Notes:
 
 - Draws samples distributed across three ranges: low (1–23), mid (24–46), high (47–69). Typical selection is 2 low, 2 mid, 1 high.
 
-### 4.6 AIGuidedStrategy
+### 4.6 AIGuidedStrategy (ML-Powered)
 
-- Wraps the project `IntelligentGenerator` (src/intelligent_generator.py). The code attempts multiple instantiation patterns for backward compatibility.
-- If ML model is unavailable or generation fails, it falls back to random generation.
+**Updated: November 2025 - Now uses XGBoost ML model**
+
+This strategy now integrates the trained XGBoost machine learning model for intelligent prediction:
+
+- **Primary Mode**: Uses `Predictor.predict_probabilities()` to obtain ML-based probability distributions
+  - XGBoost MultiOutputClassifier generates white ball probabilities (1-69)
+  - Separate powerball probabilities (1-26)
+  - Samples numbers using ML-guided probability distributions
+  - Confidence score: 0.85 (higher than other strategies)
+
+- **Fallback Mode**: If ML model unavailable, falls back to `IntelligentGenerator` (frequency-based analysis)
+  - Uses historical frequency analysis
+  - Confidence score: 0.70
+
+- **Final Fallback**: Pure random generation if both fail
+  - Confidence score: 0.50
+
+**Technical Details:**
+```python
+# ML model integration flow:
+AIGuidedStrategy.__init__()
+  └─> _initialize_ml_predictor()
+      └─> Predictor(config/config.ini)
+          └─> ModelTrainer.load_model('models/shiolplus.pkl')
+              └─> XGBoost MultiOutputClassifier loaded
+
+AIGuidedStrategy.generate(count=5)
+  └─> predictor.predict_probabilities(use_ensemble=False)
+      └─> Returns (wb_probs, pb_probs) numpy arrays
+  └─> np.random.choice(range(1,70), p=wb_probs, replace=False)
+  └─> np.random.choice(range(1,27), p=pb_probs)
+```
+
+**Model Information:**
+- File: `models/shiolplus.pkl` (18.2 MB)
+- Type: `sklearn.multioutput.MultiOutputClassifier` wrapping XGBoost
+- Features: 15 engineered features (frequency, temporal, pattern-based)
+- Targets: 95 binary outputs (69 white balls + 26 powerballs)
 
 ### 4.7 RandomBaselineStrategy
 
@@ -801,94 +837,117 @@ The production pipeline generates predictions through `StrategyManager.generate_
 │                                                             │
 │  ┌─────────────────────┐  ┌─────────────────────┐          │
 │  │ AIGuidedStrategy    │  │ RandomBaseline      │          │
-│  │ ↓                   │  │ (Control group)     │          │
-│  │ IntelligentGen...   │  │                     │          │
+│  │ ↓ [ML-POWERED]      │  │ (Control group)     │          │
+│  │ XGBoost Model       │  │                     │          │
 │  └─────────────────────┘  └─────────────────────┘          │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-#### Deprecated System: Predictor + EnsemblePredictor
+**Note**: As of November 2025, AIGuidedStrategy is now integrated with the XGBoost ML model, making it a true ML-powered strategy.
+
+#### Integration: Predictor + XGBoost Model
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│          DEPRECATED (NOT USED IN PRODUCTION)                │
+│        ML MODEL INTEGRATION (ACTIVE SINCE NOV 2025)         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Predictor.predict_probabilities()                          │
+│  AIGuidedStrategy._initialize_ml_predictor()                │
 │            ↓                                                │
-│  ensemble_predictor.predict_ensemble()                      │
+│  Predictor.predict_probabilities(use_ensemble=False)        │
 │            ↓                                                │
-│  Dummy EnsemblePredictor                                    │
-│  - Returns uniform distribution (1/69, 1/26)                │
-│  - Effectively disabled                                     │
-│  - Never called by pipeline                                 │
+│  ModelTrainer.predict_probabilities(features)               │
+│            ↓                                                │
+│  XGBoost MultiOutputClassifier                              │
+│  - Input: 15 engineered features                            │
+│  - Output: 95 binary probabilities (69 WB + 26 PB)          │
+│            ↓                                                │
+│  Returns: (wb_probs[69], pb_probs[26])                      │
+│            ↓                                                │
+│  np.random.choice() with ML probabilities                   │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 11.3 AIGuidedStrategy: The Intelligence Layer
+### 11.3 AIGuidedStrategy: The ML-Powered Intelligence Layer
 
 **Class:** `AIGuidedStrategy` (src/strategy_generators.py)  
-**Wrapper for:** `IntelligentGenerator` (src/intelligent_generator.py)
+**Updated:** November 2025 - Now uses trained XGBoost model
 
-#### Initialization Flow
+#### Initialization Flow (Current)
 
 ```python
-# In AIGuidedStrategy.generate()
-from src.intelligent_generator import IntelligentGenerator
+# In AIGuidedStrategy.__init__()
+def _initialize_ml_predictor(self) -> bool:
+    from src.predictor import Predictor
+    self._predictor = Predictor()
+    
+    if self._predictor.model is not None:
+        logger.info("XGBoost ML model loaded successfully")
+        return True
+    return False
 
-gen = IntelligentGenerator(historical_data)
-prediction = gen.generate_smart_play()
+# In AIGuidedStrategy.generate()
+if self._ml_available:
+    wb_probs, pb_probs = self._predictor.predict_probabilities(use_ensemble=False)
+    # Sample using ML probabilities
+    white_balls = np.random.choice(range(1, 70), size=5, replace=False, p=wb_probs)
+    powerball = np.random.choice(range(1, 27), p=pb_probs)
 ```
 
-#### IntelligentGenerator Algorithm
+#### ML Model Pipeline
 
-**Input:** Historical draw data (1,853 draws from SQLite)
+**XGBoost Model Details:**
+- **File**: `models/shiolplus.pkl` (18.2 MB)
+- **Type**: `MultiOutputClassifier` wrapping XGBoost base estimators
+- **Architecture**: One binary classifier per target (95 total)
+  - 69 classifiers for white balls (1-69)
+  - 26 classifiers for powerball (1-26)
 
-**Process:**
+**Feature Engineering (15 features):**
+1. Even/odd count
+2. Number sum
+3. Number spread (max - min)
+4. Consecutive count
+5. Average delay (since last seen)
+6. Max delay
+7. Min delay
+8. Distance to recent draws
+9. Distance to top-N frequent numbers
+10. Distance to centroid
+11. Temporal weight
+12. Increasing trend count
+13. Decreasing trend count
+14. Stable trend count
+15. (Reserved)
 
-1. **Frequency Analysis**
-   - Calculate occurrence count for each white ball (1-69)
-   - Calculate occurrence count for each powerball (1-26)
-   - Sort by frequency (descending)
+**Prediction Process:**
 
-2. **Smart Selection**
-   - White balls: Select from medium-high frequency range
-     - Skip top 5 most common (avoid over-concentration)
-     - Take next 20 candidates (indices 5-25)
-     - Randomly select 5 unique numbers from this pool
-   - Powerball: Similar strategy
-     - Skip top 2 most common
-     - Take next 13 candidates (indices 2-15)
-     - Randomly select 1 from this pool
-
-3. **Deterministic Scoring** (PlayScorer)
-   - Even/odd balance (2-3 even numbers = +0.25)
-   - Number spread (30-50 range = +0.25)
-   - Sum total (120-240 = +0.25)
-   - Range distribution (balanced across low/mid/high = +0.25)
-   - Final score: 0.0 to 1.0
+1. **Feature Generation**: `FeatureEngineer.engineer_features(use_temporal_analysis=True)`
+2. **Model Inference**: `model.predict_proba(features)` → 95 probability arrays
+3. **Probability Extraction**: Extract P(y=1) for each target
+4. **Normalization**: Ensure probabilities sum to 1.0 for sampling
+5. **Sampling**: Use probabilities to guide random selection
 
 **Output:**
 ```python
 {
-    'numbers': [12, 16, 19, 21, 44],
-    'powerball': 25,
-    'score': 0.7,
-    'method': 'intelligent_generator',
-    'timestamp': '2025-10-24T...'
+    'white_balls': [12, 16, 19, 21, 44],  # Sampled using ML probabilities
+    'powerball': 25,                      # Sampled using ML probabilities
+    'strategy': 'ai_guided',
+    'confidence': 0.85                    # Higher confidence for ML
 }
 ```
 
-#### Key Characteristics
+#### Key Characteristics (Updated)
 
-- ✅ **Uses historical data:** Real draw patterns inform selection
-- ✅ **Deterministic with randomness:** Same data → similar patterns, but variation
-- ✅ **Multi-criteria scoring:** 4 independent metrics combined
-- ❌ **No XGBoost model:** Despite imports, model is NOT used in generation
-- ❌ **No ensemble:** Single generator, not multiple models
-- ❌ **Not predictive:** Cannot forecast future draws (lottery is random)
+- ✅ **Uses trained ML model:** XGBoost with 15 engineered features
+- ✅ **Probability-guided sampling:** Numbers selected according to ML predictions
+- ✅ **Multi-layer fallback:** ML → IntelligentGenerator → Random
+- ✅ **Historical data integration:** Model trained on 1,800+ draws
+- ✅ **Active in production:** Integrated into StrategyManager pipeline
+- ⚠️ **Not predictive:** Lottery is random; ML provides informed sampling, not guarantees
 
 ### 11.4 Adaptive Learning System
 
@@ -924,48 +983,61 @@ After 200:   Best strategy = 25%, Worst = 5%
 
 ### 11.6 Current System Limitations
 
-1. **No true ML:** Despite naming, "AI-guided" uses frequency analysis, not machine learning
-2. **Dummy ensemble:** Predictor class exists but returns uniform probabilities (unused)
-3. **Limited intelligence:** Frequency analysis is basic; doesn't capture complex patterns
-4. **Random lottery:** No system can predict truly random draws (inherent limitation)
-5. **XGBoost unused:** Model file exists (`models/shiolplus.pkl`) but not integrated into generation
+1. **Limited intelligence (fallback mode):** When ML unavailable, uses frequency analysis (basic pattern detection)
+2. **Dummy ensemble (deprecated):** Old EnsemblePredictor class returns uniform probabilities (not used)
+3. **Random lottery:** No system can predict truly random draws (inherent limitation)
+4. ~~**XGBoost unused:**~~ **✓ RESOLVED (Nov 2025):** XGBoost model now integrated into AIGuidedStrategy
 
-### 11.7 Proposed Technical Improvements
+### 11.7 Technical Improvements (Historical Reference)
 
-#### Improvement 1: Integrate Real XGBoost Model into AIGuidedStrategy
+#### ~~Improvement 1: Integrate Real XGBoost Model into AIGuidedStrategy~~ ✓ COMPLETED
 
-**Current State:** XGBoost model exists but isn't used by generation pipeline.
+**Status:** ✅ **IMPLEMENTED (November 2025)**
 
-**Proposal:**
+**Previous State:** XGBoost model existed but wasn't used by generation pipeline.
+
+**Current Implementation:**
 ```python
 class AIGuidedStrategy(BaseStrategy):
     def __init__(self):
         super().__init__("ai_guided")
-        # Load actual XGBoost model
-        self.predictor = Predictor()
+        # Load actual XGBoost model ✓ DONE
+        self._predictor = None
+        self._ml_available = self._initialize_ml_predictor()
+    
+    def _initialize_ml_predictor(self) -> bool:
+        from src.predictor import Predictor
+        self._predictor = Predictor()
+        return self._predictor.model is not None
         
     def generate(self, count: int = 5) -> List[Dict]:
-        # Get probability distribution from model
-        wb_probs, pb_probs = self.predictor.predict_probabilities(use_ensemble=False)
-        
-        # Use DeterministicGenerator with model probabilities
-        gen = DeterministicGenerator(historical_data)
-        tickets = gen.generate_diverse_predictions(
-            wb_probs, pb_probs, 
-            num_plays=count,
-            num_candidates=count * 20  # Generate 20x candidates, select best
-        )
-        return tickets
+        if self._ml_available:
+            # Get probability distribution from ML model ✓ DONE
+            wb_probs, pb_probs = self._predictor.predict_probabilities(use_ensemble=False)
+            
+            # Sample using ML probabilities ✓ DONE
+            for _ in range(count):
+                white_balls = np.random.choice(
+                    range(1, 70), size=5, replace=False, p=wb_probs
+                )
+                powerball = np.random.choice(range(1, 27), p=pb_probs)
+                # ... build ticket with confidence=0.85
+        else:
+            # Fallback to IntelligentGenerator
 ```
 
-**Benefits:**
-- Actually uses trained ML model
-- Leverages feature engineering (temporal, streak, seasonality)
-- More sophisticated than raw frequency analysis
-- Preserves deterministic scoring for quality
+**Results:**
+- ✅ ML model actively used in production pipeline
+- ✅ Leverages 15 engineered features (temporal, pattern-based, statistical)
+- ✅ More sophisticated than raw frequency analysis
+- ✅ Confidence score increased to 0.85 (vs 0.70 for frequency-based)
+- ✅ Seamless fallback to IntelligentGenerator if ML unavailable
+- ✅ All tests passing (5/5 in test_ml_integration.py)
 
-**Estimated Effort:** 2-3 hours  
-**Expected Improvement:** 10-15% better pattern recognition
+**Implementation Date:** November 2025  
+**Code Changes:** src/strategy_generators.py (AIGuidedStrategy rewritten)  
+**Test Coverage:** tests/test_ml_integration.py (5 comprehensive tests)  
+**Documentation:** Demo script at scripts/demo_ml_integration.py
 
 ---
 
@@ -1137,20 +1209,20 @@ def generate_smart_play(self):
    - Improves existing system
    - Compatible with current architecture
 
-**Low Priority:**
-3. **Improvement 1: XGBoost Integration** (nice-to-have)
-   - Most complex
-   - Model already trained but integration needed
-   - Marginal improvement (lottery is random)
+**~~Low Priority:~~ COMPLETED:**
+3. ~~**Improvement 1: XGBoost Integration**~~ ✅ **DONE (Nov 2025)**
+   - ✓ Model integrated into AIGuidedStrategy
+   - ✓ Tests added and passing
+   - ✓ Documentation updated
 
 ### 11.9 Technical Debt Notes
 
 **Items to Address:**
 
-1. **Unused Code Cleanup:**
-   - Remove `Predictor.predict_probabilities()` or integrate it
-   - Remove dummy `EnsemblePredictor` class
-   - Clean up imports in `predictor.py`
+1. **~~Unused Code Cleanup:~~** PARTIALLY RESOLVED
+   - ✓ `Predictor.predict_probabilities()` now actively used by AIGuidedStrategy
+   - ⚠️ Consider removing dummy `EnsemblePredictor` class (low priority)
+   - ⚠️ Clean up unused imports in `predictor.py` (low priority)
 
 2. **Documentation:**
    - Update README to clarify "AI" refers to strategy selection, not deep learning
