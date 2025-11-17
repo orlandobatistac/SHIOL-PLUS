@@ -2368,6 +2368,14 @@ app.include_router(draw_router, prefix="/api/v1/draws")
 app.include_router(ticket_router)  # Ticket verification endpoints
 app.include_router(public_frontend_router)
 
+# Import and mount v3 analytics router (SHIOL+ v2)
+try:
+    from src.v2.analytics_api import analytics_router
+    app.include_router(analytics_router)  # Analytics v3 endpoints
+    logger.info("SHIOL+ v2 analytics router mounted at /api/v3/analytics")
+except Exception as e:
+    logger.warning(f"Could not mount v3 analytics router: {e}")
+
 # Serve default /favicon.ico from static assets to avoid 404 when not present at root
 from fastapi.responses import FileResponse
 
