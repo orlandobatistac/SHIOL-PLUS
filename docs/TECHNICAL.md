@@ -720,9 +720,15 @@ Example response excerpt:
 - GET /api/v1/health — simple health check.
 - GET /api/v1/scheduler/health — returns scheduler job list and next run times.
 
+### Admin Endpoints
+
+- POST /api/v1/admin/pipeline/trigger?async_run=true — Manually trigger the full pipeline run (admin only).
+  - Uses FastAPI BackgroundTasks to ensure immediate HTTP response, preventing nginx 504 Gateway Timeout.
+  - See `docs/NGINX_TIMEOUT_FIX.md` for technical details on the timeout prevention mechanism.
+
 Router composition:
 
-- `api.py` includes routers: `auth_router`, `billing_router`, `prediction_router`, `draw_router`, `ticket_router`, and `public_frontend_router`.
+- `api.py` includes routers: `auth_router`, `billing_router`, `prediction_router`, `draw_router`, `ticket_router`, `admin_router`, and `public_frontend_router`.
 
 ---
 

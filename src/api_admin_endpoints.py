@@ -1,7 +1,7 @@
 """
 Admin endpoints for user management in system status.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from src.database import (
     get_all_users,
     get_user_by_id_admin,
@@ -165,29 +165,49 @@ def get_pipeline_logs(
             detail=f"Failed to retrieve pipeline logs: {str(e)}"
         )
 
+async def _run_pipeline_in_background():
+    """
+    Internal wrapper to run the pipeline in background.
+    This ensures the HTTP response is sent before the pipeline starts.
+    """
+    try:
+        from src.api import trigger_full_pipeline_automatically
+        await trigger_full_pipeline_automatically()
+    except Exception as e:
+        logger.error(f"Background pipeline execution failed: {e}")
+
 @router.post("/pipeline/trigger", summary="Trigger full pipeline run", responses={
     200: {"description": "Pipeline started"},
     403: {"description": "Admin required"},
     500: {"description": "Failed to start pipeline"}
 })
-async def trigger_pipeline(async_run: bool = True, admin: dict = Depends(require_admin_access)):
+async def trigger_pipeline(
+    background_tasks: BackgroundTasks,
+    async_run: bool = True, 
+    admin: dict = Depends(require_admin_access)
+):
     """
     Triggers the full pipeline execution. Admin only.
 
     Params:
     - async_run: If True (default), returns immediately after scheduling the run.
                  If False, waits for the pipeline to finish and returns the result.
+    
+    Note: Using FastAPI BackgroundTasks to ensure response is sent before pipeline starts.
+    This prevents nginx 504 Gateway Timeout errors on long-running pipelines.
     """
     try:
         # Lazy import to avoid circular import with src.api including this router
         from src.api import trigger_full_pipeline_automatically
+        
         if async_run:
-            # Schedule the pipeline without blocking the request
-            asyncio.create_task(trigger_full_pipeline_automatically())
-            logger.info(f"Admin {admin['id']} triggered pipeline (async)")
+            # Use BackgroundTasks to ensure response is sent BEFORE pipeline starts
+            # This prevents 504 Gateway Timeout from nginx
+            background_tasks.add_task(_run_pipeline_in_background)
+            logger.info(f"Admin {admin['id']} triggered pipeline (async via BackgroundTasks)")
             return {"success": True, "message": "Pipeline started", "async": True}
         else:
-            # Await completion (blocks until done)
+            # Await completion (blocks until done) - only for synchronous requests
             result = await trigger_full_pipeline_automatically()
             logger.info(f"Admin {admin['id']} triggered pipeline (sync)")
             return {"success": True, "async": False, "result": result}
