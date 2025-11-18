@@ -553,12 +553,38 @@ def create_analytics_tables():
         if rows_updated > 0:
             logger.info(f"Updated total_steps from 5 to 7 for {rows_updated} existing pipeline logs")
 
+        # Table 6: Pre-generated tickets for fast API retrieval
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pre_generated_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mode TEXT NOT NULL,
+                pipeline_run_id TEXT,
+                n1 INTEGER NOT NULL,
+                n2 INTEGER NOT NULL,
+                n3 INTEGER NOT NULL,
+                n4 INTEGER NOT NULL,
+                n5 INTEGER NOT NULL,
+                powerball INTEGER NOT NULL,
+                confidence_score REAL DEFAULT 0.5,
+                strategy_used TEXT,
+                metadata TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                CHECK (n1 < n2 AND n2 < n3 AND n3 < n4 AND n4 < n5),
+                CHECK (n1 >= 1 AND n5 <= 69),
+                CHECK (powerball >= 1 AND powerball <= 26),
+                CHECK (mode IN ('random_forest', 'lstm', 'v1', 'v2', 'hybrid'))
+            )
+        """)
+
         # Create indexes for performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cooccurrence_significant ON cooccurrences(is_significant)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_generated_tickets_date ON generated_tickets(draw_date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_generated_tickets_strategy ON generated_tickets(strategy_used)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_logs_status ON pipeline_execution_logs(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_logs_start_time ON pipeline_execution_logs(start_time DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pre_generated_mode ON pre_generated_tickets(mode)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pre_generated_created_at ON pre_generated_tickets(created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pre_generated_pipeline_run ON pre_generated_tickets(pipeline_run_id)")
 
         conn.commit()
         conn.close()
@@ -3361,4 +3387,293 @@ def get_pipeline_execution_statistics() -> Dict[str, Any]:
             "max_duration_seconds": None,
             "last_execution": None,
             "success_rate": 0.0
+        }
+
+
+# ============================================================================
+# BATCH TICKET PRE-GENERATION FUNCTIONS
+# ============================================================================
+
+def insert_batch_tickets(tickets: List[Dict[str, Any]], mode: str, pipeline_run_id: Optional[str] = None) -> int:
+    """
+    Insert pre-generated tickets into the database for fast retrieval.
+    
+    Args:
+        tickets: List of ticket dictionaries with format:
+                 {
+                     'white_balls': [int, int, int, int, int],
+                     'powerball': int,
+                     'strategy': str (optional),
+                     'confidence': float (optional)
+                 }
+        mode: Prediction mode ('random_forest', 'lstm', 'v1', 'v2', 'hybrid')
+        pipeline_run_id: Optional pipeline execution ID for tracking
+    
+    Returns:
+        Number of tickets inserted
+        
+    Raises:
+        ValueError: If ticket format is invalid
+        sqlite3.Error: If database operation fails
+    """
+    if not tickets:
+        logger.warning("No tickets provided for batch insertion")
+        return 0
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            inserted = 0
+            
+            for ticket in tickets:
+                # Validate ticket format
+                if 'white_balls' not in ticket or 'powerball' not in ticket:
+                    logger.warning(f"Skipping invalid ticket (missing required fields): {ticket}")
+                    continue
+                
+                white_balls = ticket['white_balls']
+                powerball = ticket['powerball']
+                
+                # Validate white balls
+                if not isinstance(white_balls, list) or len(white_balls) != 5:
+                    logger.warning(f"Skipping invalid ticket (white_balls must be list of 5): {ticket}")
+                    continue
+                
+                # Ensure sorted and valid range
+                sorted_balls = sorted(white_balls)
+                if sorted_balls != white_balls or not all(1 <= n <= 69 for n in white_balls):
+                    logger.warning(f"Skipping invalid ticket (white_balls must be sorted, unique, 1-69): {ticket}")
+                    continue
+                
+                # Validate powerball
+                if not isinstance(powerball, int) or not (1 <= powerball <= 26):
+                    logger.warning(f"Skipping invalid ticket (powerball must be 1-26): {ticket}")
+                    continue
+                
+                # Extract optional fields
+                strategy = ticket.get('strategy', mode)
+                confidence = ticket.get('confidence', 0.5)
+                
+                # Prepare metadata
+                metadata = json.dumps({
+                    'original_mode': mode,
+                    'generated_at': datetime.now().isoformat()
+                }, cls=NumpyEncoder)
+                
+                # Insert ticket
+                cursor.execute(
+                    """
+                    INSERT INTO pre_generated_tickets (
+                        mode, pipeline_run_id, n1, n2, n3, n4, n5, powerball,
+                        confidence_score, strategy_used, metadata
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        mode, pipeline_run_id,
+                        white_balls[0], white_balls[1], white_balls[2], white_balls[3], white_balls[4],
+                        powerball, confidence, strategy, metadata
+                    )
+                )
+                inserted += 1
+            
+            conn.commit()
+            logger.info(f"Inserted {inserted}/{len(tickets)} pre-generated tickets for mode={mode}, pipeline_run_id={pipeline_run_id}")
+            return inserted
+            
+    except sqlite3.Error as e:
+        logger.error(f"Database error inserting batch tickets: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error inserting batch tickets: {e}")
+        raise
+
+
+def get_cached_tickets(mode: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Retrieve pre-generated (cached) tickets from the database.
+    
+    This is optimized for fast retrieval (<10ms) and returns tickets
+    that were pre-generated in the background.
+    
+    Args:
+        mode: Prediction mode ('random_forest', 'lstm', 'v1', 'v2', 'hybrid')
+        limit: Maximum number of tickets to retrieve (default: 10)
+    
+    Returns:
+        List of ticket dictionaries with format:
+        {
+            'white_balls': [int, int, int, int, int],
+            'powerball': int,
+            'strategy': str,
+            'confidence': float,
+            'cached': True,
+            'created_at': str,
+            'pipeline_run_id': str (optional)
+        }
+        
+    Raises:
+        sqlite3.Error: If database operation fails
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Retrieve tickets ordered by creation time (most recent first)
+            cursor.execute(
+                """
+                SELECT n1, n2, n3, n4, n5, powerball, confidence_score, strategy_used,
+                       created_at, pipeline_run_id, metadata
+                FROM pre_generated_tickets
+                WHERE mode = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (mode, limit)
+            )
+            
+            rows = cursor.fetchall()
+            tickets = []
+            
+            for row in rows:
+                ticket = {
+                    'white_balls': [row[0], row[1], row[2], row[3], row[4]],
+                    'powerball': row[5],
+                    'confidence': row[6],
+                    'strategy': row[7] or mode,
+                    'cached': True,
+                    'created_at': row[8],
+                    'pipeline_run_id': row[9]
+                }
+                
+                # Parse metadata if available
+                if row[10]:
+                    try:
+                        metadata = json.loads(row[10])
+                        ticket['metadata'] = metadata
+                    except json.JSONDecodeError:
+                        pass
+                
+                tickets.append(ticket)
+            
+            logger.info(f"Retrieved {len(tickets)} cached tickets for mode={mode}")
+            return tickets
+            
+    except sqlite3.Error as e:
+        logger.error(f"Database error retrieving cached tickets: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error retrieving cached tickets: {e}")
+        raise
+
+
+def clear_old_batch_tickets(days: int = 7) -> int:
+    """
+    Remove pre-generated tickets older than specified days.
+    
+    This cleanup function should be called periodically to prevent
+    the table from growing indefinitely.
+    
+    Args:
+        days: Remove tickets older than this many days (default: 7)
+    
+    Returns:
+        Number of tickets deleted
+        
+    Raises:
+        sqlite3.Error: If database operation fails
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Calculate cutoff datetime
+            from datetime import timedelta
+            cutoff_date = datetime.now() - timedelta(days=days)
+            cutoff_str = cutoff_date.isoformat()
+            
+            # Delete old tickets
+            cursor.execute(
+                """
+                DELETE FROM pre_generated_tickets
+                WHERE created_at < ?
+                """,
+                (cutoff_str,)
+            )
+            
+            deleted = cursor.rowcount
+            conn.commit()
+            
+            logger.info(f"Deleted {deleted} pre-generated tickets older than {days} days")
+            return deleted
+            
+    except sqlite3.Error as e:
+        logger.error(f"Database error clearing old batch tickets: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error clearing old batch tickets: {e}")
+        raise
+
+
+def get_batch_ticket_stats() -> Dict[str, Any]:
+    """
+    Get statistics about pre-generated tickets in the database.
+    
+    Returns:
+        Dictionary with statistics:
+        {
+            'total_tickets': int,
+            'by_mode': {mode: count},
+            'oldest_ticket': str (datetime),
+            'newest_ticket': str (datetime)
+        }
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Total count
+            cursor.execute("SELECT COUNT(*) FROM pre_generated_tickets")
+            total = cursor.fetchone()[0]
+            
+            # Count by mode
+            cursor.execute(
+                """
+                SELECT mode, COUNT(*) as count
+                FROM pre_generated_tickets
+                GROUP BY mode
+                """
+            )
+            by_mode = {row[0]: row[1] for row in cursor.fetchall()}
+            
+            # Oldest and newest
+            cursor.execute(
+                """
+                SELECT MIN(created_at), MAX(created_at)
+                FROM pre_generated_tickets
+                """
+            )
+            oldest, newest = cursor.fetchone()
+            
+            return {
+                'total_tickets': total,
+                'by_mode': by_mode,
+                'oldest_ticket': oldest,
+                'newest_ticket': newest
+            }
+            
+    except sqlite3.Error as e:
+        logger.error(f"Database error getting batch ticket stats: {e}")
+        return {
+            'total_tickets': 0,
+            'by_mode': {},
+            'oldest_ticket': None,
+            'newest_ticket': None
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error getting batch ticket stats: {e}")
+        return {
+            'total_tickets': 0,
+            'by_mode': {},
+            'oldest_ticket': None,
+            'newest_ticket': None
         }
