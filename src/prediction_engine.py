@@ -17,8 +17,8 @@ class UnifiedPredictionEngine:
     
     Modes:
         - v1: Current StrategyManager implementation (default)
-        - v2: Future ML-based implementation (not implemented)
-        - hybrid: Combination of v1 and v2 (not implemented)
+        - v2: ML-based implementation using XGBoost predictor
+        - hybrid: Weighted combination of v1 and v2 (70% v2 + 30% v1 by default)
     
     Usage:
         engine = UnifiedPredictionEngine()
@@ -126,10 +126,7 @@ class UnifiedPredictionEngine:
         elif self.mode == 'v2':
             return self._generate_v2(count)
         elif self.mode == 'hybrid':
-            raise NotImplementedError(
-                "hybrid mode (v1 + v2 combination) is not yet implemented. "
-                "Use PREDICTION_MODE=v1 for current implementation."
-            )
+            return self._generate_hybrid(count)
         else:
             # Should never reach here due to validation in __init__
             raise ValueError(f"Unknown mode: {self.mode}")
@@ -219,6 +216,143 @@ class UnifiedPredictionEngine:
             )
             # Fallback to v1 if ML generation fails
             return self._generate_v1(count)
+    
+    def _generate_hybrid(self, count: int) -> List[Dict]:
+        """
+        Generate tickets using hybrid mode (combination of v1 and v2).
+        
+        This method combines predictions from both v1 (StrategyManager) and v2 (ML Predictor)
+        implementations using configurable weights. By default, it uses 70% v2 and 30% v1.
+        
+        Features:
+        - Weighted combination: Allocates tickets based on HYBRID_V2_WEIGHT and HYBRID_V1_WEIGHT
+        - Automatic fallback: If v2 fails, falls back to 100% v1
+        - Deduplication: Removes duplicate tickets to ensure unique predictions
+        - Preserves diversity: Maintains strategy diversity from both implementations
+        
+        Args:
+            count: Total number of tickets to generate
+            
+        Returns:
+            List of deduplicated ticket dictionaries from both v1 and v2 sources
+        """
+        # Get weights from environment variables or use defaults
+        v2_weight = float(os.getenv('HYBRID_V2_WEIGHT', '0.7'))  # 70% v2 by default
+        v1_weight = float(os.getenv('HYBRID_V1_WEIGHT', '0.3'))  # 30% v1 by default
+        
+        # Validate and normalize weights
+        total_weight = v2_weight + v1_weight
+        if total_weight <= 0:
+            logger.warning("Invalid hybrid weights (sum <= 0), using default 70/30 split")
+            v2_weight, v1_weight = 0.7, 0.3
+            total_weight = 1.0
+        else:
+            # Normalize weights to sum to 1.0
+            v2_weight = v2_weight / total_weight
+            v1_weight = v1_weight / total_weight
+        
+        # Calculate ticket counts for each mode (ensure at least 1 from each if count >= 2)
+        v2_count = max(1, int(count * v2_weight)) if count >= 2 else count
+        v1_count = max(1, count - v2_count) if count >= 2 else 0
+        
+        # Adjust if total exceeds requested count
+        if v2_count + v1_count > count:
+            if v2_weight >= v1_weight:
+                v1_count = count - v2_count
+            else:
+                v2_count = count - v1_count
+        
+        logger.info(
+            f"Hybrid mode: generating {v2_count} v2 tickets ({v2_weight*100:.0f}%) "
+            f"and {v1_count} v1 tickets ({v1_weight*100:.0f}%)"
+        )
+        
+        # Track generation time
+        start_time = time.time()
+        all_tickets = []
+        
+        # Generate v2 tickets first (with fallback to v1 if fails)
+        try:
+            if v2_count > 0:
+                logger.debug(f"Generating {v2_count} tickets from v2 (ML Predictor)")
+                v2_tickets = self._generate_v2(v2_count)
+                
+                # Tag tickets with source for transparency
+                for ticket in v2_tickets:
+                    if 'source' not in ticket:
+                        ticket['source'] = 'v2_ml'
+                
+                all_tickets.extend(v2_tickets)
+                logger.debug(f"Successfully generated {len(v2_tickets)} v2 tickets")
+        except Exception as e:
+            logger.error(f"v2 generation failed in hybrid mode: {e}")
+            logger.warning(f"Falling back: will generate {v2_count + v1_count} v1 tickets instead")
+            # Fallback: generate all tickets from v1
+            v1_count += v2_count
+            v2_count = 0
+        
+        # Generate v1 tickets
+        if v1_count > 0:
+            logger.debug(f"Generating {v1_count} tickets from v1 (StrategyManager)")
+            try:
+                v1_tickets = self._generate_v1(v1_count)
+                
+                # Tag tickets with source for transparency
+                for ticket in v1_tickets:
+                    if 'source' not in ticket:
+                        ticket['source'] = 'v1_strategy'
+                
+                all_tickets.extend(v1_tickets)
+                logger.debug(f"Successfully generated {len(v1_tickets)} v1 tickets")
+            except Exception as e:
+                logger.error(f"v1 generation failed in hybrid mode: {e}")
+                # If even v1 fails, we're in trouble - return whatever we have
+        
+        # Deduplication: Remove duplicate tickets based on white_balls + powerball
+        deduplicated_tickets = self._deduplicate_tickets(all_tickets)
+        
+        # Calculate and store metrics
+        generation_time = time.time() - start_time
+        self._update_generation_metrics(generation_time)
+        
+        logger.info(
+            f"Hybrid mode generated {len(all_tickets)} tickets "
+            f"({len(deduplicated_tickets)} after deduplication) in {generation_time:.3f}s"
+        )
+        
+        return deduplicated_tickets
+    
+    def _deduplicate_tickets(self, tickets: List[Dict]) -> List[Dict]:
+        """
+        Remove duplicate tickets based on white_balls and powerball combination.
+        
+        Preserves the first occurrence of each unique ticket, maintaining
+        the diversity and confidence scores from the original generation.
+        
+        Args:
+            tickets: List of ticket dictionaries to deduplicate
+            
+        Returns:
+            List of unique tickets (first occurrence preserved)
+        """
+        seen = set()
+        deduplicated = []
+        
+        for ticket in tickets:
+            # Create a hashable key from white_balls and powerball
+            white_balls = tuple(sorted(ticket.get('white_balls', [])))
+            powerball = ticket.get('powerball', 0)
+            key = (white_balls, powerball)
+            
+            if key not in seen:
+                seen.add(key)
+                deduplicated.append(ticket)
+            else:
+                logger.debug(
+                    f"Removed duplicate ticket: {list(white_balls)} + PB {powerball}"
+                )
+        
+        return deduplicated
     
     def _update_generation_metrics(self, generation_time: float):
         """
