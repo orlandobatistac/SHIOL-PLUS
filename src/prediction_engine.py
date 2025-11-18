@@ -19,6 +19,8 @@ class UnifiedPredictionEngine:
         - v1: Current StrategyManager implementation (default)
         - v2: ML-based implementation using XGBoost predictor
         - hybrid: Weighted combination of v1 and v2 (70% v2 + 30% v1 by default)
+        - lstm: LSTM neural network for temporal pattern analysis
+        - random_forest: Random Forest ensemble for robust predictions
     
     Usage:
         engine = UnifiedPredictionEngine()
@@ -30,14 +32,14 @@ class UnifiedPredictionEngine:
         Initialize prediction engine with specified mode.
         
         Args:
-            mode: Override for PREDICTION_MODE env var. One of: 'v1', 'v2', 'hybrid'
+            mode: Override for PREDICTION_MODE env var. One of: 'v1', 'v2', 'hybrid', 'lstm', 'random_forest'
                   If None, reads from PREDICTION_MODE env var (default: 'v1')
         """
         # Get mode from parameter or environment variable
         self.mode = mode or os.getenv('PREDICTION_MODE', 'v1').lower()
         
         # Validate mode
-        valid_modes = ['v1', 'v2', 'hybrid']
+        valid_modes = ['v1', 'v2', 'hybrid', 'lstm', 'random_forest']
         if self.mode not in valid_modes:
             logger.warning(
                 f"Invalid PREDICTION_MODE '{self.mode}', falling back to 'v1'. "
@@ -60,6 +62,10 @@ class UnifiedPredictionEngine:
             self._initialize_v1_backend()
         elif self.mode == 'v2':
             self._initialize_v2_backend()
+        elif self.mode == 'lstm':
+            self._initialize_lstm_backend()
+        elif self.mode == 'random_forest':
+            self._initialize_rf_backend()
     
     def _initialize_v1_backend(self):
         """Initialize v1 backend (StrategyManager)"""
@@ -105,6 +111,67 @@ class UnifiedPredictionEngine:
             self.mode = 'v1'
             self._initialize_v1_backend()
     
+    def _initialize_lstm_backend(self):
+        """
+        Initialize LSTM backend for temporal pattern analysis.
+        """
+        try:
+            from src.ml_models.lstm_model import LSTMModel
+            from src.database import get_all_draws
+            
+            # Check if we have enough historical data
+            draws_df = get_all_draws()
+            if len(draws_df) < 20:
+                logger.warning(
+                    f"Insufficient data for LSTM ({len(draws_df)} draws). "
+                    "Need at least 20 draws. Falling back to v1 mode."
+                )
+                self.mode = 'v1'
+                self._initialize_v1_backend()
+                return
+            
+            self._backend = LSTMModel(use_pretrained=True)
+            logger.info("LSTM backend initialized successfully")
+        except ImportError as e:
+            logger.warning(
+                f"LSTM model requires TensorFlow. Install with: pip install tensorflow. "
+                f"Error: {e}. Falling back to v1 mode."
+            )
+            self.mode = 'v1'
+            self._initialize_v1_backend()
+        except Exception as e:
+            logger.error(f"Failed to initialize LSTM backend: {e}")
+            logger.warning("Falling back to v1 mode due to initialization error")
+            self.mode = 'v1'
+            self._initialize_v1_backend()
+    
+    def _initialize_rf_backend(self):
+        """
+        Initialize Random Forest backend for ensemble predictions.
+        """
+        try:
+            from src.ml_models.random_forest_model import RandomForestModel
+            from src.database import get_all_draws
+            
+            # Check if we have enough historical data
+            draws_df = get_all_draws()
+            if len(draws_df) < 50:
+                logger.warning(
+                    f"Insufficient data for Random Forest ({len(draws_df)} draws). "
+                    "Need at least 50 draws. Falling back to v1 mode."
+                )
+                self.mode = 'v1'
+                self._initialize_v1_backend()
+                return
+            
+            self._backend = RandomForestModel(use_pretrained=True)
+            logger.info("Random Forest backend initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Random Forest backend: {e}")
+            logger.warning("Falling back to v1 mode due to initialization error")
+            self.mode = 'v1'
+            self._initialize_v1_backend()
+    
     def generate_tickets(self, count: int = 5) -> List[Dict]:
         """
         Generate prediction tickets using the configured implementation.
@@ -127,6 +194,10 @@ class UnifiedPredictionEngine:
             return self._generate_v2(count)
         elif self.mode == 'hybrid':
             return self._generate_hybrid(count)
+        elif self.mode == 'lstm':
+            return self._generate_lstm(count)
+        elif self.mode == 'random_forest':
+            return self._generate_rf(count)
         else:
             # Should never reach here due to validation in __init__
             raise ValueError(f"Unknown mode: {self.mode}")
@@ -321,6 +392,108 @@ class UnifiedPredictionEngine:
         )
         
         return deduplicated_tickets
+    
+    def _generate_lstm(self, count: int) -> List[Dict]:
+        """
+        Generate tickets using LSTM model for temporal pattern analysis.
+        
+        Args:
+            count: Number of tickets to generate
+            
+        Returns:
+            List of ticket dictionaries in standard format
+        """
+        # Track generation time
+        start_time = time.time()
+        
+        try:
+            # Initialize backend if not already done
+            if self._backend is None:
+                self._initialize_lstm_backend()
+            
+            # Check if backend is still None (fallback occurred)
+            if self._backend is None or self.mode != 'lstm':
+                logger.warning("LSTM backend not available, using v1 fallback")
+                return self._generate_v1(count)
+            
+            # Get historical draws for LSTM
+            from src.database import get_all_draws
+            draws_df = get_all_draws()
+            
+            # Generate tickets using LSTM model
+            logger.info(f"Generating {count} tickets using LSTM model")
+            tickets = self._backend.generate_tickets(draws_df, count)
+            
+            # Calculate and store metrics
+            generation_time = time.time() - start_time
+            self._update_generation_metrics(generation_time)
+            
+            logger.info(
+                f"Generated {len(tickets)} tickets using LSTM mode in {generation_time:.3f}s "
+                f"(avg: {self._generation_metrics['avg_generation_time']:.3f}s)"
+            )
+            
+            return tickets
+            
+        except Exception as e:
+            generation_time = time.time() - start_time
+            logger.error(
+                f"Error in LSTM generation after {generation_time:.3f}s: {e}. "
+                "Falling back to v1 mode."
+            )
+            # Fallback to v1 if LSTM generation fails
+            return self._generate_v1(count)
+    
+    def _generate_rf(self, count: int) -> List[Dict]:
+        """
+        Generate tickets using Random Forest ensemble model.
+        
+        Args:
+            count: Number of tickets to generate
+            
+        Returns:
+            List of ticket dictionaries in standard format
+        """
+        # Track generation time
+        start_time = time.time()
+        
+        try:
+            # Initialize backend if not already done
+            if self._backend is None:
+                self._initialize_rf_backend()
+            
+            # Check if backend is still None (fallback occurred)
+            if self._backend is None or self.mode != 'random_forest':
+                logger.warning("Random Forest backend not available, using v1 fallback")
+                return self._generate_v1(count)
+            
+            # Get historical draws for Random Forest
+            from src.database import get_all_draws
+            draws_df = get_all_draws()
+            
+            # Generate tickets using Random Forest model
+            logger.info(f"Generating {count} tickets using Random Forest model")
+            tickets = self._backend.generate_tickets(draws_df, count)
+            
+            # Calculate and store metrics
+            generation_time = time.time() - start_time
+            self._update_generation_metrics(generation_time)
+            
+            logger.info(
+                f"Generated {len(tickets)} tickets using Random Forest mode in {generation_time:.3f}s "
+                f"(avg: {self._generation_metrics['avg_generation_time']:.3f}s)"
+            )
+            
+            return tickets
+            
+        except Exception as e:
+            generation_time = time.time() - start_time
+            logger.error(
+                f"Error in Random Forest generation after {generation_time:.3f}s: {e}. "
+                "Falling back to v1 mode."
+            )
+            # Fallback to v1 if Random Forest generation fails
+            return self._generate_v1(count)
     
     def _deduplicate_tickets(self, tickets: List[Dict]) -> List[Dict]:
         """
