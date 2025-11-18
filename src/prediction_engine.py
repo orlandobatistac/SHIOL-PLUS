@@ -78,7 +78,7 @@ class UnifiedPredictionEngine:
         Initialize v2 backend (ML-based Predictor) with lazy XGBoost loading.
         
         This method checks for XGBoost availability and initializes the ML predictor.
-        If XGBoost is not available, it falls back to v1 mode.
+        If XGBoost is not available, it falls back to v1 backend without changing mode.
         """
         # Lazy check for XGBoost availability
         if self._xgboost_available is None:
@@ -90,13 +90,12 @@ class UnifiedPredictionEngine:
                 self._xgboost_available = False
                 logger.warning(
                     "XGBoost not installed. Install with: pip install xgboost. "
-                    "Falling back to v1 mode."
+                    "Using v1 backend as fallback."
                 )
         
-        # If XGBoost is not available, fallback to v1
+        # If XGBoost is not available, use v1 backend as fallback
         if not self._xgboost_available:
-            logger.warning("v2 mode requires XGBoost. Falling back to v1 mode.")
-            self.mode = 'v1'
+            logger.warning("v2 mode requires XGBoost. Using v1 backend as fallback.")
             self._initialize_v1_backend()
             return
         
@@ -107,8 +106,7 @@ class UnifiedPredictionEngine:
             logger.info("v2 backend (ML Predictor) initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize v2 backend: {e}")
-            logger.warning("Falling back to v1 mode due to initialization error")
-            self.mode = 'v1'
+            logger.warning("Using v1 backend as fallback due to initialization error")
             self._initialize_v1_backend()
     
     def _initialize_lstm_backend(self):
@@ -124,9 +122,8 @@ class UnifiedPredictionEngine:
             if len(draws_df) < 20:
                 logger.warning(
                     f"Insufficient data for LSTM ({len(draws_df)} draws). "
-                    "Need at least 20 draws. Falling back to v1 mode."
+                    "Need at least 20 draws. Using v1 backend as fallback."
                 )
-                self.mode = 'v1'
                 self._initialize_v1_backend()
                 return
             
@@ -135,14 +132,12 @@ class UnifiedPredictionEngine:
         except ImportError as e:
             logger.warning(
                 f"LSTM model requires TensorFlow. Install with: pip install tensorflow. "
-                f"Error: {e}. Falling back to v1 mode."
+                f"Error: {e}. Using v1 backend as fallback."
             )
-            self.mode = 'v1'
             self._initialize_v1_backend()
         except Exception as e:
             logger.error(f"Failed to initialize LSTM backend: {e}")
-            logger.warning("Falling back to v1 mode due to initialization error")
-            self.mode = 'v1'
+            logger.warning("Using v1 backend as fallback due to initialization error")
             self._initialize_v1_backend()
     
     def _initialize_rf_backend(self):
@@ -158,9 +153,8 @@ class UnifiedPredictionEngine:
             if len(draws_df) < 50:
                 logger.warning(
                     f"Insufficient data for Random Forest ({len(draws_df)} draws). "
-                    "Need at least 50 draws. Falling back to v1 mode."
+                    "Need at least 50 draws. Using v1 backend as fallback."
                 )
-                self.mode = 'v1'
                 self._initialize_v1_backend()
                 return
             
@@ -168,8 +162,7 @@ class UnifiedPredictionEngine:
             logger.info("Random Forest backend initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Random Forest backend: {e}")
-            logger.warning("Falling back to v1 mode due to initialization error")
-            self.mode = 'v1'
+            logger.warning("Using v1 backend as fallback due to initialization error")
             self._initialize_v1_backend()
     
     def generate_tickets(self, count: int = 5) -> List[Dict]:
@@ -245,8 +238,13 @@ class UnifiedPredictionEngine:
             if self._backend is None:
                 self._initialize_v2_backend()
             
-            # Check if backend is still None (fallback occurred)
-            if self._backend is None or self.mode != 'v2':
+            # Check if backend has the predict_diverse_plays method (v2 backend)
+            # This is more duck-typing friendly and works with both real and mock objects
+            has_v2_backend = (self._backend is not None and 
+                            hasattr(self._backend, 'predict_diverse_plays'))
+            
+            # Check if backend is v2-compatible (fallback to v1 if not)
+            if not has_v2_backend:
                 logger.warning("v2 backend not available, using v1 fallback")
                 return self._generate_v1(count)
             
@@ -420,8 +418,14 @@ class UnifiedPredictionEngine:
             if self._backend is None:
                 self._initialize_lstm_backend()
             
-            # Check if backend is still None (fallback occurred)
-            if self._backend is None or self.mode != 'lstm':
+            # Check if backend has the generate_tickets method (LSTM backend)
+            # This is more duck-typing friendly and works with both real and mock objects
+            has_lstm_backend = (self._backend is not None and 
+                              hasattr(self._backend, 'generate_tickets') and
+                              not hasattr(self._backend, 'generate_balanced_tickets'))
+            
+            # Check if backend is LSTM-compatible (fallback to v1 if not)
+            if not has_lstm_backend:
                 logger.warning("LSTM backend not available, using v1 fallback")
                 return self._generate_v1(count)
             
@@ -471,8 +475,14 @@ class UnifiedPredictionEngine:
             if self._backend is None:
                 self._initialize_rf_backend()
             
-            # Check if backend is still None (fallback occurred)
-            if self._backend is None or self.mode != 'random_forest':
+            # Check if backend has the generate_tickets method (RF backend)
+            # This is more duck-typing friendly and works with both real and mock objects
+            has_rf_backend = (self._backend is not None and 
+                            hasattr(self._backend, 'generate_tickets') and
+                            not hasattr(self._backend, 'generate_balanced_tickets'))
+            
+            # Check if backend is Random Forest-compatible (fallback to v1 if not)
+            if not has_rf_backend:
                 logger.warning("Random Forest backend not available, using v1 fallback")
                 return self._generate_v1(count)
             
