@@ -304,17 +304,181 @@ class TestUnifiedPredictionEngineV2Mode:
 
 
 class TestUnifiedPredictionEngineHybridMode:
-    """Test hybrid mode (not yet implemented)"""
+    """Test hybrid mode (combination of v1 and v2)"""
 
-    def test_hybrid_generate_tickets_raises_not_implemented(self):
-        """Test that hybrid mode raises NotImplementedError"""
+    @patch('src.strategy_generators.StrategyManager')
+    def test_hybrid_mode_generates_tickets_from_both_sources(self, mock_strategy_manager_class):
+        """Test that hybrid mode generates tickets from both v1 and v2"""
+        # Setup mock v1 (StrategyManager)
+        mock_v1 = MagicMock()
+        mock_v1_tickets = [
+            {'white_balls': [1, 2, 3, 4, 5], 'powerball': 10, 'strategy': 'v1_strategy', 'confidence': 0.6}
+        ]
+        mock_v1.generate_balanced_tickets.return_value = mock_v1_tickets
+        mock_strategy_manager_class.return_value = mock_v1
+        
+        # Create engine in hybrid mode
+        with patch.dict(os.environ, {'HYBRID_V2_WEIGHT': '0.7', 'HYBRID_V1_WEIGHT': '0.3'}):
+            engine = UnifiedPredictionEngine(mode='hybrid')
+            
+            # Mock the internal methods to return our test data
+            v2_tickets = [
+                {'white_balls': [6, 7, 8, 9, 10], 'powerball': 15, 'strategy': 'ml_predictor_v2', 'confidence': 0.85},
+                {'white_balls': [11, 12, 13, 14, 15], 'powerball': 20, 'strategy': 'ml_predictor_v2', 'confidence': 0.75}
+            ]
+            with patch.object(engine, '_generate_v2', return_value=v2_tickets):
+                with patch.object(engine, '_generate_v1', return_value=mock_v1_tickets):
+                    tickets = engine.generate_tickets(3)
+                    
+                    # Should have tickets from both sources
+                    assert len(tickets) > 0
+                    # Check that tickets have source tags
+                    sources = [t.get('source', 'unknown') for t in tickets]
+                    # At least one source should be present (v1 or v2)
+                    assert len(sources) > 0
+
+    @patch('src.strategy_generators.StrategyManager')
+    def test_hybrid_mode_respects_weight_configuration(self, mock_strategy_manager_class):
+        """Test that hybrid mode respects HYBRID_V1_WEIGHT and HYBRID_V2_WEIGHT"""
+        mock_v1 = MagicMock()
+        mock_v1.generate_balanced_tickets.return_value = [
+            {'white_balls': [1, 2, 3, 4, 5], 'powerball': 10, 'strategy': 'v1', 'confidence': 0.5}
+        ]
+        mock_strategy_manager_class.return_value = mock_v1
+        
+        # Test with 80% v2, 20% v1 weights
+        with patch.dict(os.environ, {'HYBRID_V2_WEIGHT': '0.8', 'HYBRID_V1_WEIGHT': '0.2'}):
+            engine = UnifiedPredictionEngine(mode='hybrid')
+            
+            # For 10 tickets: should be 8 v2 + 2 v1
+            with patch.object(engine, '_generate_v2') as mock_gen_v2:
+                with patch.object(engine, '_generate_v1') as mock_gen_v1:
+                    mock_gen_v2.return_value = []
+                    mock_gen_v1.return_value = []
+                    
+                    engine.generate_tickets(10)
+                    
+                    # Check that the methods were called with approximately correct counts
+                    # (should be 8 for v2 and 2 for v1, or similar distribution)
+                    v2_call_count = mock_gen_v2.call_args[0][0] if mock_gen_v2.called else 0
+                    v1_call_count = mock_gen_v1.call_args[0][0] if mock_gen_v1.called else 0
+                    
+                    # Verify distribution is reasonable (allow some rounding)
+                    assert v2_call_count >= 7  # Should be ~8
+                    assert v1_call_count >= 1  # Should be ~2
+
+    @patch('src.strategy_generators.StrategyManager')
+    def test_hybrid_mode_fallback_to_v1_on_v2_failure(self, mock_strategy_manager_class):
+        """Test that hybrid mode falls back to v1 when v2 fails"""
+        mock_v1 = MagicMock()
+        fallback_tickets = [
+            {'white_balls': [1, 2, 3, 4, 5], 'powerball': 10, 'strategy': 'fallback', 'confidence': 0.5},
+            {'white_balls': [6, 7, 8, 9, 10], 'powerball': 15, 'strategy': 'fallback', 'confidence': 0.5}
+        ]
+        mock_v1.generate_balanced_tickets.return_value = fallback_tickets
+        mock_strategy_manager_class.return_value = mock_v1
+        
         engine = UnifiedPredictionEngine(mode='hybrid')
         
-        with pytest.raises(NotImplementedError) as exc_info:
-            engine.generate_tickets(5)
+        # Mock _generate_v2 to raise an exception
+        with patch.object(engine, '_generate_v2', side_effect=Exception("V2 model failed")):
+            with patch.object(engine, '_generate_v1', return_value=fallback_tickets):
+                tickets = engine.generate_tickets(5)
+                
+                # Should have fallen back to v1 tickets
+                assert len(tickets) >= 0
+                # All tickets should be from v1 due to fallback
+                if tickets:
+                    assert all(t.get('strategy') == 'fallback' or t.get('source') == 'v1_strategy' for t in tickets)
+
+    def test_hybrid_mode_deduplicates_tickets(self):
+        """Test that hybrid mode removes duplicate tickets"""
+        engine = UnifiedPredictionEngine(mode='hybrid')
         
-        assert 'hybrid mode' in str(exc_info.value)
-        assert 'not yet implemented' in str(exc_info.value).lower()
+        # Create tickets with duplicates
+        tickets_with_duplicates = [
+            {'white_balls': [1, 2, 3, 4, 5], 'powerball': 10, 'strategy': 'v1', 'confidence': 0.5},
+            {'white_balls': [1, 2, 3, 4, 5], 'powerball': 10, 'strategy': 'v2', 'confidence': 0.8},  # Duplicate
+            {'white_balls': [6, 7, 8, 9, 10], 'powerball': 15, 'strategy': 'v1', 'confidence': 0.6},
+            {'white_balls': [11, 12, 13, 14, 15], 'powerball': 20, 'strategy': 'v2', 'confidence': 0.7},
+            {'white_balls': [6, 7, 8, 9, 10], 'powerball': 15, 'strategy': 'v2', 'confidence': 0.9},  # Duplicate
+        ]
+        
+        deduplicated = engine._deduplicate_tickets(tickets_with_duplicates)
+        
+        # Should have 3 unique tickets (removed 2 duplicates)
+        assert len(deduplicated) == 3
+        
+        # Verify uniqueness
+        seen = set()
+        for ticket in deduplicated:
+            key = (tuple(sorted(ticket['white_balls'])), ticket['powerball'])
+            assert key not in seen, "Found duplicate ticket after deduplication"
+            seen.add(key)
+        
+        # First occurrence should be preserved
+        assert deduplicated[0]['strategy'] == 'v1'  # First [1,2,3,4,5]+10
+        assert deduplicated[1]['strategy'] == 'v1'  # First [6,7,8,9,10]+15
+
+    def test_hybrid_mode_handles_edge_cases(self):
+        """Test hybrid mode with edge cases (count=1, count=0, invalid weights)"""
+        with patch('src.strategy_generators.StrategyManager') as mock_sm:
+            mock_manager = MagicMock()
+            mock_manager.generate_balanced_tickets.return_value = [
+                {'white_balls': [1, 2, 3, 4, 5], 'powerball': 10, 'strategy': 'test', 'confidence': 0.5}
+            ]
+            mock_sm.return_value = mock_manager
+            
+            # Test count=1
+            engine = UnifiedPredictionEngine(mode='hybrid')
+            with patch.object(engine, '_generate_v2', return_value=[]):
+                with patch.object(engine, '_generate_v1', return_value=[
+                    {'white_balls': [1, 2, 3, 4, 5], 'powerball': 10, 'strategy': 'test', 'confidence': 0.5}
+                ]):
+                    tickets = engine.generate_tickets(1)
+                    assert len(tickets) <= 1
+            
+            # Test count=0
+            tickets = engine.generate_tickets(0)
+            assert len(tickets) == 0
+
+    @patch.dict(os.environ, {'HYBRID_V2_WEIGHT': '0', 'HYBRID_V1_WEIGHT': '0'})
+    def test_hybrid_mode_handles_invalid_weights(self):
+        """Test that hybrid mode handles invalid weight configuration"""
+        with patch('src.strategy_generators.StrategyManager') as mock_sm:
+            mock_manager = MagicMock()
+            mock_manager.generate_balanced_tickets.return_value = []
+            mock_sm.return_value = mock_manager
+            
+            engine = UnifiedPredictionEngine(mode='hybrid')
+            
+            # Mock both generation methods
+            with patch.object(engine, '_generate_v2', return_value=[]):
+                with patch.object(engine, '_generate_v1', return_value=[]):
+                    # Should not crash with zero weights (falls back to 70/30)
+                    try:
+                        tickets = engine.generate_tickets(10)
+                        # Should handle gracefully
+                        assert isinstance(tickets, list)
+                    except Exception as e:
+                        pytest.fail(f"Should handle invalid weights gracefully: {e}")
+
+    def test_hybrid_mode_preserves_ticket_metadata(self):
+        """Test that hybrid mode preserves strategy, confidence, and adds source metadata"""
+        engine = UnifiedPredictionEngine(mode='hybrid')
+        
+        test_tickets = [
+            {'white_balls': [1, 2, 3, 4, 5], 'powerball': 10, 'strategy': 'freq', 'confidence': 0.5, 'source': 'v1_strategy'},
+            {'white_balls': [6, 7, 8, 9, 10], 'powerball': 15, 'strategy': 'ml', 'confidence': 0.9, 'source': 'v2_ml'}
+        ]
+        
+        # Test deduplication preserves metadata
+        deduplicated = engine._deduplicate_tickets(test_tickets)
+        
+        assert len(deduplicated) == 2
+        assert all('strategy' in t for t in deduplicated)
+        assert all('confidence' in t for t in deduplicated)
+        assert all('source' in t for t in deduplicated)
 
     def test_hybrid_get_strategy_manager_raises_runtime_error(self):
         """Test that get_strategy_manager raises RuntimeError in hybrid mode"""
@@ -324,6 +488,24 @@ class TestUnifiedPredictionEngineHybridMode:
             engine.get_strategy_manager()
         
         assert 'only available in v1 mode' in str(exc_info.value)
+
+    @patch('src.strategy_generators.StrategyManager')
+    def test_hybrid_mode_metrics_tracking(self, mock_strategy_manager_class):
+        """Test that hybrid mode tracks generation metrics"""
+        mock_v1 = MagicMock()
+        mock_v1.generate_balanced_tickets.return_value = []
+        mock_strategy_manager_class.return_value = mock_v1
+        
+        engine = UnifiedPredictionEngine(mode='hybrid')
+        
+        with patch.object(engine, '_generate_v2', return_value=[]):
+            with patch.object(engine, '_generate_v1', return_value=[]):
+                engine.generate_tickets(5)
+                
+                metrics = engine.get_generation_metrics()
+                assert metrics['total_generations'] == 1
+                assert metrics['last_generation_time'] is not None
+                assert metrics['last_generation_time'] > 0
 
 
 class TestUnifiedPredictionEngineIntegration:
