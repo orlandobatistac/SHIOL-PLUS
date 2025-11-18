@@ -208,8 +208,17 @@ class UnifiedPredictionEngine:
         
         This delegates directly to StrategyManager.generate_balanced_tickets()
         to maintain identical behavior.
+        
+        Note: This method can be called as a fallback from v2/hybrid modes,
+        so we need to ensure the backend has the correct method.
         """
-        if self._backend is None:
+        # Initialize or replace backend if it doesn't have generate_balanced_tickets method
+        if self._backend is None or not hasattr(self._backend, 'generate_balanced_tickets'):
+            logger.debug(
+                f"_generate_v1 called with backend type: "
+                f"{type(self._backend).__name__ if self._backend else 'None'}. "
+                f"Initializing StrategyManager for v1 generation."
+            )
             self._initialize_v1_backend()
         
         return self._backend.generate_balanced_tickets(count)
