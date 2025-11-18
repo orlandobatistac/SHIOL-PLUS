@@ -739,12 +739,12 @@ async def generate_tickets_multi_strategy(count: int = Query(5, ge=1, le=100)):
         Dict with tickets, metadata, and strategy distribution
     """
     try:
-        from src.strategy_generators import StrategyManager
+        from src.prediction_engine import UnifiedPredictionEngine
 
         logger.info(f"Generating {count} tickets using multi-strategy system")
 
-        manager = StrategyManager()
-        tickets = manager.generate_balanced_tickets(count)
+        engine = UnifiedPredictionEngine()
+        tickets = engine.generate_tickets(count)
 
         # Calculate metadata
         all_numbers = set()
@@ -799,9 +799,10 @@ async def get_strategy_performance():
         Dict with performance data for each strategy
     """
     try:
-        from src.strategy_generators import StrategyManager
+        from src.prediction_engine import UnifiedPredictionEngine
 
-        manager = StrategyManager()
+        engine = UnifiedPredictionEngine()
+        manager = engine.get_strategy_manager()  # Get StrategyManager for performance summary
         summary = manager.get_strategy_summary()
 
         # Sort by ROI
