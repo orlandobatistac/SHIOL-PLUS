@@ -2376,6 +2376,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not mount v3 analytics router: {e}")
 
+# Import and mount v3 prediction engine router
+try:
+    from src.api_v3_endpoints import router as v3_router
+    app.include_router(v3_router)  # Prediction engine v3 endpoints
+    logger.info("API v3 prediction engine router mounted at /api/v3")
+except Exception as e:
+    logger.warning(f"Could not mount v3 prediction router: {e}")
+
 # Serve default /favicon.ico from static assets to avoid 404 when not present at root
 from fastapi.responses import FileResponse
 
