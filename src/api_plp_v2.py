@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from loguru import logger
 
 from src.plp_api_key import verify_plp_api_key
-from src.strategy_generators import StrategyManager
+from src.prediction_engine import UnifiedPredictionEngine
 from src.database import save_prediction_log, calculate_next_drawing_date
 from src.ticket_processor import create_ticket_processor
 from src.ticket_verifier import create_ticket_verifier
@@ -286,7 +286,8 @@ async def plp_generate_multi_strategy(req: GenerateRequest) -> Dict[str, Any]:
     if req.draw_date:
         req.draw_date = _parse_date_str(req.draw_date)
 
-    manager = StrategyManager()
+    engine = UnifiedPredictionEngine()
+    manager = engine.get_strategy_manager()  # Get StrategyManager for direct strategy access
     allowed = _validate_and_normalize_strategies(req.strategies, manager)
 
     tickets: List[Dict[str, Any]] = []
@@ -315,7 +316,7 @@ async def plp_generate_multi_strategy(req: GenerateRequest) -> Dict[str, Any]:
                     logger.error(f"Strategy {name} failed on remainder: {e}")
         else:
             # Use adaptive weights across all strategies
-            tickets = manager.generate_balanced_tickets(req.count)
+            tickets = engine.generate_tickets(req.count)
     except Exception as e:
         logger.error(f"Generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Ticket generation failed: {str(e)}")

@@ -1266,10 +1266,10 @@ async def trigger_full_pipeline_automatically():
         
         try:
             import gc
-            from src.strategy_generators import StrategyManager
+            from src.prediction_engine import UnifiedPredictionEngine
             from src.date_utils import DateManager
 
-            manager = StrategyManager()
+            engine = UnifiedPredictionEngine()
 
             # Get next draw date early (before generation)
             next_draw = DateManager.calculate_next_drawing_date()
@@ -1296,7 +1296,7 @@ async def trigger_full_pipeline_automatically():
                 
                 # Generate 40 tickets per batch
                 for _ in range(8):  # 8 sets of 5 = 40 tickets
-                    tickets = manager.generate_balanced_tickets(5)
+                    tickets = engine.generate_tickets(5)
                     batch_tickets.extend(tickets)
                     
                     # Track strategy distribution
