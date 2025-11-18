@@ -17,8 +17,8 @@ class UnifiedPredictionEngine:
     
     Modes:
         - v1: Current StrategyManager implementation (default)
-        - v2: Future ML-based implementation (not implemented)
-        - hybrid: Combination of v1 and v2 (not implemented)
+        - v2: ML-based implementation using XGBoost predictor
+        - hybrid: Weighted combination of v1 and v2 (70% v2 + 30% v1 by default)
     
     Usage:
         engine = UnifiedPredictionEngine()
