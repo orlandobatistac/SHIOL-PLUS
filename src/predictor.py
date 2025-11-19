@@ -272,13 +272,40 @@ class ModelTrainer:
             return None
 
     def predict_probabilities(self, features_df):
-        """Predicts probabilities for white balls and powerball."""
+        """Predicts probabilities for white balls and powerball.
+        
+        Args:
+            features_df: Either a pandas DataFrame or a numpy array of features.
+                        If numpy array, it will be converted to DataFrame with standard feature names.
+        
+        Returns:
+            DataFrame of predicted probabilities or None on error.
+        """
         if self.model is None:
             logger.error("Model not loaded. Cannot predict probabilities.")
             return None
         if self.target_columns is None:
             logger.error("Target columns not loaded. Cannot predict probabilities.")
             return None
+
+        # Convert numpy array to DataFrame if needed
+        if isinstance(features_df, np.ndarray):
+            logger.debug("Converting numpy array input to DataFrame")
+            # Standard SHIOL+ features expected by the model, in order
+            standard_features = [
+                "even_count", "odd_count", "sum", "spread", "consecutive_count",
+                "avg_delay", "max_delay", "min_delay",
+                "dist_to_recent", "avg_dist_to_top_n", "dist_to_centroid",
+                "time_weight", "increasing_trend_count", "decreasing_trend_count",
+                "stable_trend_count"
+            ]
+            
+            # Handle both 1D and 2D numpy arrays
+            if features_df.ndim == 1:
+                features_df = features_df.reshape(1, -1)
+            
+            # Create DataFrame with standard feature names
+            features_df = pd.DataFrame(features_df, columns=standard_features[:features_df.shape[1]])
 
         X = self._validate_prediction_features(features_df)
         if X is None:
