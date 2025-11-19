@@ -2,8 +2,8 @@ on:
   workflow_call:
 
 jobs:
-  # This specific job name is required by GitHub Copilot to customize its environment
-  copilot_setup:
+  # ¡IMPORTANTE! El nombre del job DEBE ser exactamente este.
+  copilot-setup-steps:
     # Using a larger runner (8-cores) for faster dependency installation
     runs-on: ubuntu-latest-8-cores
     steps:
