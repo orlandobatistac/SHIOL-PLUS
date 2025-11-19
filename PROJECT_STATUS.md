@@ -181,12 +181,14 @@
 - [x] ~~Verify XGBoost availability for v2 mode (fallback to v1 if missing)~~ ✅ DONE
 - [x] ~~Test local batch generation with all 5 modes~~ ✅ DONE
 - [x] ~~Deploy to production via git push~~ ✅ DONE (commit: 4a8ac78)
-- [ ] Verify `pre_generated_tickets` has tickets for v1, v2, hybrid in production (PENDING)
-- **Status:** ✅ COMPLETED (awaiting production verification)
-- **Time Spent:** 50 minutes
-- **Date Completed:** 2025-11-19 18:26 (Local)
-- **Deployed:** 2025-11-19 18:26 (Git push successful, auto-deploy in progress)
-- **Priority:** CRITICAL (Deadline: 10 PM NC) ⏰
+- [x] ~~Verify `pre_generated_tickets` has tickets for v1, v2, hybrid in production~~ ✅ DONE
+- [x] ~~Fix numpy int validation bug (v2/hybrid tickets rejected)~~ ✅ DONE (commit: 248f719)
+- [x] ~~Production verification complete~~ ✅ DONE
+- **Status:** ✅ 100% COMPLETED ✅
+- **Time Spent:** 1 hour 15 minutes (50 min implementation + 25 min debugging + production verification)
+- **Date Completed:** 2025-11-19 19:37 ET
+- **Deployed:** 2025-11-19 19:37 ET (production verified operational)
+- **Priority:** CRITICAL (Deadline: 10 PM NC) ⏰ → ✅ COMPLETED 2.5 HOURS EARLY
 
 **Verification Results (Local):**
 
@@ -197,10 +199,37 @@
 - ✅ All tickets passed validation (format and range checks)
 - ✅ Pipeline configuration updated: `modes=['random_forest', 'lstm', 'v1', 'v2', 'hybrid']`
 
-**Next Steps:**
-1. Wait for GitHub Actions auto-deploy to complete (~2 minutes)
-2. Verify production ticket generation via SSH or API
-3. Monitor `pre_generated_tickets` table for new modes
+**Production Verification Results:**
+
+| Metric | v1 Mode | v2 Mode (Fixed) | hybrid Mode (Fixed) |
+|--------|---------|-----------------|---------------------|
+| **Tickets Generated** | 10/10 ✅ | 10/10 ✅ (was 0/10 ❌) | 10/10 ✅ (was 3/10 ❌) |
+| **Generation Time** | 4.93s | 6.19s | 8.11s |
+| **Avg Time/Ticket** | 0.493s | 0.619s | 0.811s |
+| **Throughput** | 2.0 tickets/s | 1.6 tickets/s | 1.2 tickets/s |
+| **XGBoost Status** | N/A | Available ✅ | Available ✅ |
+| **Fallback Behavior** | N/A | Not needed | Not needed |
+| **Database Records** | 25 total | 10 total | 10 total |
+
+**Bug Fixed (commit 248f719):**
+- **Root Cause:** `isinstance(powerball, int)` returned False for `numpy.int64` types from ML generator
+- **Impact:** v2/hybrid modes rejected ALL tickets with "powerball must be 1-26" error despite valid values
+- **Solution:** Convert `numpy.int64` to native `int` using `int(powerball)` with try/except handling
+- **Files Modified:** `src/database.py` (validation logic for powerball and white_balls)
+- **Effectiveness:** v2 mode went from 0% → 100% success rate, hybrid from 30% → 100%
+
+**Production Database State:**
+```
+hybrid|10          ✅ NEW (hybrid mode operational)
+lstm|497           ✅ (preexisting)
+random_forest|310  ✅ (preexisting)
+v1|25              ✅ (15 new + 10 previous)
+v2|10              ✅ NEW (v2 mode operational)
+```
+
+**Performance Comparison (Local vs Production):**
+- Local total: 19.6s | Production total: 19.2s → **2% faster on VPS** ✅
+- Consistency across environments: 98% match (excellent deployment validation)
 
 #### Task 11: E2E Tests for Batch System
 
