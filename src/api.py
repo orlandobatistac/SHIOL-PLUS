@@ -1395,7 +1395,7 @@ async def trigger_full_pipeline_automatically():
                 # Initialize batch generator with configured modes
                 batch_generator = BatchTicketGenerator(
                     batch_size=100,  # Generate 100 tickets per mode
-                    modes=['random_forest', 'lstm'],  # ML-based modes
+                    modes=['random_forest', 'lstm', 'v1', 'v2', 'hybrid'],  # All 5 prediction modes
                     auto_cleanup=True,  # Auto-cleanup old tickets
                     cleanup_days=7  # Keep tickets for 7 days
                 )

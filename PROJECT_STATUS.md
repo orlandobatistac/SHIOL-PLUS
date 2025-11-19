@@ -169,43 +169,244 @@
   - Bug fixed: Powerball range corrected from 2-27 to 1-26
   - Validation: 100% of LSTM tickets pass validation (before: 97%)
 
-### PHASE 3: OPTIMIZATIONS (NEXT 2 WEEKS)
+### PHASE 3: BATCH SYSTEM COMPLETION (TODAY - URGENT 🔥)
 
-#### Task 5: Performance Enhancements
+**Deadline:** 2025-11-19 10:00 PM NC Time  
+**Priority:** CRITICAL
+
+#### Task 10: v1/v2/hybrid Modes Integration (URGENT)
+
+- [ ] Add `'v1', 'v2', 'hybrid'` to modes array in `src/api.py:1398`
+- [ ] Configure hybrid weights in `.env` (`HYBRID_V2_WEIGHT=0.7`, `HYBRID_V1_WEIGHT=0.3`)
+- [ ] Verify XGBoost availability for v2 mode (fallback to v1 if missing)
+- [ ] Test local batch generation with all 5 modes
+- [ ] Deploy to production via git push
+- [ ] Verify `pre_generated_tickets` has tickets for v1, v2, hybrid
+- **Status:** 🔴 IN PROGRESS
+- **Time Estimate:** 1 hour
+- **Deadline:** 2025-11-19 22:00 (10 PM NC)
+- **Priority:** CRITICAL
+
+**Expected Results:**
+
+- v1 mode: ~15 tickets/sec (StrategyManager with 6 strategies)
+- v2 mode: ~10 tickets/sec (XGBoost ML, fallback to v1 if unavailable)
+- hybrid mode: ~12 tickets/sec (70% v2 + 30% v1 weighted combination)
+
+#### Task 11: E2E Tests for Batch System
+
+- [ ] Update `tests/conftest.py` with `pre_generated_tickets` schema
+- [ ] Create `test_e2e_pipeline_batch_api.py` (pipeline → batch → API flow)
+- [ ] Create `test_e2e_api_cached_tickets.py` (verify <50ms response time)
+- [ ] Create `test_e2e_batch_errors.py` (partial mode failure handling)
+- [ ] Create `test_e2e_batch_load.py` (concurrent generation test)
+- **Status:** PENDING
+- **Time Estimate:** 6 hours
+- **Priority:** MEDIUM
+
+#### Task 12: Technical Documentation Update
+
+- [ ] Add Mermaid diagram: Pipeline → Batch → API sequence flow
+- [ ] Add Mermaid diagram: Dual-table architecture graph
+- [ ] Create mode comparison table (performance, dependencies, status)
+- [ ] Write troubleshooting guide (4+ common scenarios)
+- [ ] Update `README.md` with batch system overview
+- [ ] Document monitoring endpoints in `copilot-instructions.md`
+- **Status:** PENDING
+- **Time Estimate:** 5 hours
+- **Priority:** LOW
+
+---
+
+### PHASE 4: MONITORING & OBSERVABILITY (NEXT WEEK)
+
+**Focus:** Production monitoring, health checks, alerting system  
+**Priority:** HIGH (after Phase 3)
+
+#### Task 13: Health Checks & Metrics Endpoints
+
+- [ ] Create `GET /api/v1/tickets/batch/health` endpoint
+  - Database connectivity check
+  - Generation status check (blocked/ok/error)
+  - Per-mode health status (ok/empty/error)
+- [ ] Extend `GET /api/v3/metrics` with batch generation metrics
+- [ ] Add batch metrics to existing `/api/v1/health` endpoint
+- **Status:** PENDING
+- **Time Estimate:** 4 hours
+- **Priority:** HIGH
+
+#### Task 14: Alerting System
+
+- [ ] Create `scripts/check_batch_health.py` monitoring script
+- [ ] Configure cron job execution (every 5 minutes)
+- [ ] Setup email alerts for unhealthy status
+- [ ] Alert when cached tickets < threshold per mode
+- [ ] Alert on 3+ consecutive batch generation failures
+- **Status:** PENDING
+- **Time Estimate:** 3 hours
+- **Priority:** MEDIUM
+
+#### Task 15: Dashboard & Visualization
+
+- [ ] Create batch generation stats dashboard UI
+- [ ] Track generation success rate by mode over time
+- [ ] Monitor API response times with SLA tracking (< 50ms)
+- [ ] Visualize ticket distribution by mode
+- [ ] Optional: Integrate Prometheus/Grafana metrics export
+- **Status:** PENDING
+- **Time Estimate:** 8 hours
+- **Priority:** LOW
+
+---
+
+### PHASE 5: PERFORMANCE OPTIMIZATION (BACKLOG)
+
+**Focus:** Speed improvements, dynamic scaling, parallelization  
+**Priority:** MEDIUM (future optimization)
+
+#### Task 16: Dynamic Batch Sizing
+
+- [ ] Analyze demand patterns for cached tickets
+- [ ] Implement dynamic `batch_size` adjustment (50-200 range)
+- [ ] Increase batch_size when cache depletes quickly
+- [ ] Decrease batch_size during low demand periods
+- [ ] Add metrics for batch_size adjustments
+- **Status:** PENDING
+- **Time Estimate:** 6 hours
+- **Priority:** MEDIUM
+
+#### Task 17: Adaptive Cleanup Strategy
+
+- [ ] Track ticket consumption rate per mode
+- [ ] Adjust `cleanup_days` based on usage patterns
+- [ ] Keep fast-consuming modes longer (extend from 7 days)
+- [ ] Clean slow-consuming modes faster (reduce from 7 days)
+- [ ] Implement configurable cleanup policies
+- **Status:** PENDING
+- **Time Estimate:** 4 hours
+- **Priority:** LOW
+
+#### Task 18: Multi-Mode Parallelization
+
+- [ ] Generate multiple modes in parallel (multiprocessing)
+- [ ] Optimize worker pool for 2 CPU cores (current VPS)
+- [ ] Implement task queue for batch generation
+- [ ] Benchmark parallel vs sequential performance
+- **Target:** 2-3x speed improvement for full batch run
+- **Status:** PENDING
+- **Time Estimate:** 8 hours
+- **Priority:** LOW
+
+#### Task 19: Feature Engineering Cache
 
 - [ ] Cache feature engineering results (avoid recomputation)
 - [ ] Parallel feature computation (multiprocessing)
-- [ ] Incremental feature updates (only new draws)
-- **Target:** Reduce 100-ticket generation from 2.3s → <1s
+- [ ] Incremental feature updates (only process new draws)
+- [ ] Implement cache invalidation strategy
+- **Target:** Reduce RandomForest 100-ticket generation from 2.3s → <1s
+- **Status:** PENDING
+- **Time Estimate:** 6 hours
 - **Priority:** LOW
 
-#### Task 6: Monitoring & Observability
+#### Task 20: Database Query Optimization
 
-- [ ] Add metrics dashboard for batch generation
-- [ ] Track generation success rate by mode
-- [ ] Alert on RandomForest failures >3 consecutive
-- [ ] Monitor API response times
+- [ ] Profile slow queries on `pre_generated_tickets`
+- [ ] Add composite indexes for common query patterns
+- [ ] Implement query result caching (Redis optional)
+- [ ] Verify auto-cleanup query performance
+- [ ] Benchmark query times before/after optimizations
+- **Status:** PENDING
+- **Time Estimate:** 4 hours
 - **Priority:** MEDIUM
 
-### PHASE 4: FUTURE IMPROVEMENTS (BACKLOG)
+---
 
-#### Task 7: Feature Importance Analysis
+### PHASE 6: CODE REFACTORING & CLEANUP (BACKLOG)
 
-- [ ] Analyze RandomForest feature importance
-- [ ] Further reduce features if possible (39 → 25?)
-- [ ] Maintain accuracy while improving speed
+**Focus:** Code quality, maintainability, technical debt reduction  
+**Priority:** LOW (ongoing maintenance)
 
-#### Task 8: Database Optimization
+#### Task 21: Remove Obsolete Pipeline Functions
 
-- [ ] Analyze query performance on `pre_generated_tickets`
-- [ ] Add composite indexes if needed
-- [ ] Implement auto-cleanup verification
+- [ ] Audit pipeline code for deprecated functions
+- [ ] Remove unused imports and dead code paths
+- [ ] Consolidate duplicate ticket generation logic
+- [ ] Update pipeline documentation to reflect current state
+- **Status:** PENDING
+- **Time Estimate:** 4 hours
+- **Priority:** LOW
 
-#### Task 9: Model Retraining Pipeline
+#### Task 22: Validation Functions Consolidation
 
-- [ ] Automate weekly model retraining
-- [ ] Version control for model artifacts
-- [ ] A/B testing framework for model comparison
+- [ ] Centralize ticket validation in one module (`validators.py`)
+- [ ] Remove duplicate validation code across codebase
+- [ ] Create unified validation interface
+- [ ] Update all imports to use centralized validators
+- **Status:** PENDING
+- **Time Estimate:** 3 hours
+- **Priority:** LOW
+
+#### Task 23: Code Quality Improvements
+
+- [ ] Run Ruff linter and fix all warnings
+- [ ] Improve type hints coverage (mypy strict mode)
+- [ ] Add comprehensive docstrings to undocumented functions
+- [ ] Refactor long functions (>100 lines) into smaller units
+- [ ] Increase test coverage to >80%
+- **Status:** PENDING
+- **Time Estimate:** 6 hours
+- **Priority:** LOW
+
+#### Task 24: Documentation Enhancement
+
+- [ ] Update all API endpoint documentation (OpenAPI specs)
+- [ ] Create architecture decision records (ADRs) for major decisions
+- [ ] Write comprehensive developer onboarding guide
+- [ ] Document production deployment procedures
+- [ ] Create operational troubleshooting runbook
+- **Status:** PENDING
+- **Time Estimate:** 8 hours
+- **Priority:** MEDIUM
+
+---
+
+### PHASE 7: ADVANCED FEATURES (FUTURE)
+
+**Focus:** ML improvements, automation, experimental features  
+**Priority:** LOW (R&D phase)
+
+#### Task 25: Feature Importance Analysis
+
+- [ ] Analyze RandomForest feature importance scores
+- [ ] Identify low-impact features for potential removal
+- [ ] Test prediction accuracy with reduced feature set (39 → 25?)
+- [ ] Maintain or improve prediction quality while increasing speed
+- [ ] Document feature selection methodology
+- **Status:** PENDING
+- **Time Estimate:** 6 hours
+- **Priority:** LOW
+
+#### Task 26: Model Retraining Automation
+
+- [ ] Create weekly automated retraining pipeline
+- [ ] Implement model versioning system (semantic versioning)
+- [ ] Build A/B testing framework for model comparison
+- [ ] Implement rollback mechanism for underperforming models
+- [ ] Add performance regression detection
+- **Status:** PENDING
+- **Time Estimate:** 12 hours
+- **Priority:** MEDIUM
+
+#### Task 27: Advanced ML Models Experimentation
+
+- [ ] Experiment with ensemble techniques (stacking, blending)
+- [ ] Test Transformer-based models for temporal patterns
+- [ ] Implement online learning for adaptive models
+- [ ] Benchmark against current production models
+- [ ] Document findings and recommendations
+- **Status:** PENDING
+- **Time Estimate:** 20+ hours
+- **Priority:** LOW
 
 ---
 
@@ -215,15 +416,26 @@
 **Version:** v7.0
 **Last 24 Hours:** 30+ commits, 7 PRs merged, 2 critical fixes
 **Critical Issues:** 0 (All resolved ✅)
-**PHASE 2 Status:** ✅ ALL TASKS COMPLETED (Tasks 2, 3, 4)
+**Active Phases:**
+
+- PHASE 1-2: ✅ COMPLETED (Tasks 1-4)
+- PHASE 3: 🔴 IN PROGRESS (Task 10 - URGENT, Deadline: 10 PM NC)
+- PHASE 4-7: ⏸️ PENDING (27 total tasks planned)
 
 **Batch Generation Status:**
 
-- RandomForest: ✅ PRODUCTION VERIFIED (10 tickets in 2.74s, 3.6/sec)
-- LSTM: ✅ PRODUCTION VERIFIED (10 tickets in 0.43s, 23.2/sec)
-- Pipeline v1 (6 strategies): ✅ Operational (200 tickets in ~60s)
-- **Production Config:** batch_size=100 per mode (confirmed in src/api.py:1397)
+- **Active Modes (Production):**
+
+  - RandomForest: ✅ VERIFIED (3.6 tickets/sec)
+  - LSTM: ✅ VERIFIED (23.2 tickets/sec)
+  - v1: 🔴 PENDING ACTIVATION (Target: ~15 tickets/sec)
+  - v2: 🔴 PENDING ACTIVATION (Target: ~10 tickets/sec, XGBoost)
+  - hybrid: 🔴 PENDING ACTIVATION (Target: ~12 tickets/sec, 70%v2+30%v1)
+
+- **Pipeline v1 (6 strategies):** ✅ Operational (200 tickets in ~60s)
+- **Production Config:** batch_size=100 per mode (src/api.py:1397)
 - **Production Models:** 350 MB total (39 optimized features, retrained 2025-11-19)
+- **Next Deployment:** v1/v2/hybrid activation (Deadline: 10 PM NC)
 
 **Architecture:**
 
