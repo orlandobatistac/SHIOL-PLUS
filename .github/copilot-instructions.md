@@ -52,9 +52,14 @@ SQLite (`data/shiolplus.db`, ~792 KB) with 20+ tables. Key tables:
 
 - `powerball_draws` (1,851 rows): Official results with `pb_era` classification via triggers
 - `cooccurrences` (2,346 rows): Statistical pair analysis for `CooccurrenceStrategy`
-- `generated_tickets`: Predictions with strategy attribution and confidence scores
+- `generated_tickets`: Pipeline v1 predictions (200 tickets/run) with strategy attribution, confidence scores, and draw_date
+- `pre_generated_tickets`: ML cache for high-speed retrieval (100 tickets/mode: random_forest, lstm) for API endpoints
 - `strategy_performance`: Tracks ROI, win_rate, current_weight for adaptive learning
 - `users`, `premium_passes`, `stripe_subscriptions`: Auth and billing state
+
+**Dual Table System for Tickets**:
+- **`generated_tickets`**: Predictions from Pipeline STEP 6, linked to specific `draw_date`, evaluable against official results
+- **`pre_generated_tickets`**: Background-generated ML cache (RandomForest, LSTM), no draw_date, optimized for <10ms retrieval
 
 **Era-Aware System**: Powerball range changed (1-35 → 1-26 in 2015). Database triggers (`set_pb_era_on_insert`) auto-classify `pb_era` and `pb_is_current`. Analytics code filters to `pb_is_current = 1` to avoid index errors.
 
@@ -467,6 +472,96 @@ cd /var/www/SHIOL-PLUS
 
 ---
 
-**Last Updated**: 2025-11-05  
-**Version**: 6.5  
+## 📋 Documentation Maintenance Protocol
+
+**CRITICAL**: After fixing bugs, implementing features, or making architectural changes, AI agents MUST update documentation:
+
+### 1. Update PROJECT_STATUS.md (REQUIRED)
+
+**When to update**: After every significant change (bug fix, feature implementation, optimization)
+
+**What to update**:
+- Move resolved issues from "ACTIVE TASKS" to "✅ RESOLVED ISSUES" section
+- Add performance metrics (before/after benchmarks)
+- Update "Last Updated" timestamp
+- Reference PR# and related documentation
+- Update PROJECT STATISTICS section if architecture changed
+
+**Example commit flow**:
+```bash
+# 1. Make your fix/feature
+git add src/your_changes.py
+
+# 2. Update PROJECT_STATUS.md
+# - Mark issue as resolved
+# - Add metrics
+# - Update timestamp
+
+git add PROJECT_STATUS.md
+
+# 3. Commit everything together
+git commit -m "fix: optimize RandomForest feature engineering
+
+- Reduced features from 354 to 39 (89% reduction)
+- Improved batch generation time from 30s+ to 2.3s
+- Updated PROJECT_STATUS.md to mark Issue #1 as resolved"
+
+git push origin main
+```
+
+### 2. Update Technical Documentation (AS NEEDED)
+
+**Files to consider**:
+- `docs/TECHNICAL.md` → Architecture changes
+- `docs/BATCH_GENERATION.md` → Batch system changes
+- `.github/copilot-instructions.md` → This file, for major architecture shifts
+- `README.md` → User-facing changes
+
+### 3. Standard Issue Resolution Template
+
+When marking an issue as RESOLVED in PROJECT_STATUS.md, use this format:
+
+```markdown
+### Issue #X: [Title] (RESOLVED)
+**Severity:** [CRITICAL/HIGH/MEDIUM/LOW] → ✅ FIXED
+**Status:** RESOLVED
+**Discovered:** [Date]
+**Resolved:** [Date]
+
+**Problem (Historical):**
+- [Brief description of the bug/issue]
+
+**Root Cause:**
+- Location: [File/function]
+- Issue: [Technical explanation]
+
+**Solution Implemented:**
+- ✅ [Change 1]
+- ✅ [Change 2]
+- ✅ [Change 3]
+
+**Performance Results:** (if applicable)
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| [Metric 1] | [Value] | [Value] | [%] ✅ |
+
+**Documentation:**
+- Technical details: [Link to doc]
+- Tests: [Link to test file] ([X/X] passing)
+```
+
+### 4. Quick Reference Checklist
+
+After implementing a fix:
+- [ ] Code changes committed
+- [ ] Tests added/updated (if applicable)
+- [ ] PROJECT_STATUS.md updated (issue moved to RESOLVED)
+- [ ] Related technical docs updated (if architecture changed)
+- [ ] Commit message follows conventional commits format
+- [ ] All changes pushed to remote
+
+---
+
+**Last Updated**: 2025-11-19  
+**Version**: 7.0  
 **Maintainer**: Orlando B. (orlandobatistac)
