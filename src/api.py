@@ -1384,6 +1384,42 @@ async def trigger_full_pipeline_automatically():
             logger.info(f"[{execution_id}] 📊 Generated {total_saved} tickets for draw {next_draw}")
             logger.info(f"[{execution_id}] 📡 Data source: {final_data_source}")
             logger.info(f"[{execution_id}] =====================================")
+            
+            # ========== BATCH TICKET PRE-GENERATION (BACKGROUND, NON-BLOCKING) ==========
+            # Trigger batch generation in background (doesn't block pipeline completion)
+            try:
+                from src.batch_generator import BatchTicketGenerator
+                
+                logger.info(f"[{execution_id}] 🔄 Triggering batch ticket pre-generation in background...")
+                
+                # Initialize batch generator with configured modes
+                batch_generator = BatchTicketGenerator(
+                    batch_size=100,  # Generate 100 tickets per mode
+                    modes=['random_forest', 'lstm'],  # ML-based modes
+                    auto_cleanup=True,  # Auto-cleanup old tickets
+                    cleanup_days=7  # Keep tickets for 7 days
+                )
+                
+                # Generate batch in background (async, non-blocking)
+                batch_result = batch_generator.generate_batch(
+                    pipeline_run_id=execution_id,
+                    async_mode=True  # Run in background thread
+                )
+                
+                if batch_result.get('started'):
+                    logger.info(
+                        f"[{execution_id}] ✓ Batch generation started in background: "
+                        f"modes={batch_result['modes']}, batch_size={batch_result['batch_size']}"
+                    )
+                else:
+                    logger.warning(
+                        f"[{execution_id}] ⚠ Batch generation skipped: "
+                        f"{batch_result.get('error', 'unknown error')}"
+                    )
+            except Exception as e:
+                # Log error but don't fail pipeline (batch generation is non-critical)
+                logger.warning(f"[{execution_id}] ⚠ Batch generation failed (non-critical): {e}")
+                logger.debug("Batch generation exception:", exc_info=True)
 
             active_pipeline_execution_id = None  # Clear tracking on completion
             return {
