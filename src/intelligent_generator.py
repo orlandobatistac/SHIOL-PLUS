@@ -195,6 +195,13 @@ class FeatureEngineer:
                 self._calculate_temporal_features()
             self._add_prize_tier()
             self.calculate_euclidean_distance_features()
+            
+            # Deduplicate columns after feature engineering
+            if self.data.columns.duplicated().any():
+                logger.warning(f"Duplicate columns detected: {self.data.columns[self.data.columns.duplicated()].tolist()}")
+                self.data = self.data.loc[:, ~self.data.columns.duplicated(keep='first')]
+                logger.info("Duplicate columns removed")
+            
             final_row_count = len(self.data)
             logger.info(
                 f"Feature engineering complete with {final_row_count} rows"

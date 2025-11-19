@@ -533,7 +533,11 @@ class Predictor:
             for i, feature_name in enumerate(shiol_standard_features):
                 if feature_name in latest_row.index:
                     value = latest_row[feature_name]
-                    if pd.notna(value) and np.isfinite(value):
+                    # Handle case where value might be a Series or list
+                    if isinstance(value, (pd.Series, list)):
+                        value = value.iloc[0] if isinstance(value, pd.Series) else value[0]
+                    # Check for valid numeric value
+                    if pd.notna(value) and (not isinstance(value, float) or np.isfinite(value)):
                         feature_values[i] = float(value)
                     else:
                         # Use reasonable defaults for missing/invalid features
