@@ -47,14 +47,17 @@ tickets = model.generate_tickets(draws_df, count=5)
 Ensemble method using multiple decision trees for robust predictions.
 
 **Features:**
-- Feature engineering from historical data:
+- **Optimized feature engineering** (v7.0 - Nov 2025):
+  - **39 features** (reduced from 354 for 89% improvement)
+  - Vectorized pandas operations (no O(n²) loops)
   - Frequency analysis (10/20/50 draw windows)
-  - Gap analysis (draws since last appearance)
+  - Simplified gap analysis (last 3 draws only)
   - Temporal features (day of week, month)
   - Statistical features (sum, mean, std, range)
 - Separate models for each white ball position + powerball
 - Feature scaling for improved performance
 - No external dependencies beyond scikit-learn
+- **Performance**: Generates 100 tickets in 2.3 seconds
 
 **Usage:**
 ```python
@@ -69,15 +72,17 @@ model = RandomForestModel(
 # Train on historical data
 metrics = model.train(draws_df, test_size=0.2)
 
-# Generate predictions
-tickets = model.generate_tickets(draws_df, count=5)
+# Generate predictions (with timeout)
+tickets = model.generate_tickets(draws_df, count=5, timeout=120)
 ```
 
 **Architecture:**
-- Feature engineering: 200+ features from historical patterns
+- Feature engineering: **39 optimized features** (v7.0)
 - 5 Random Forest classifiers for white ball positions
 - 1 Random Forest classifier for powerball
 - 200 trees per forest with max depth 20
+
+**Optimization Details**: See `docs/RANDOM_FOREST_OPTIMIZATION.md` for complete performance analysis.
 
 ## Model Registry
 
