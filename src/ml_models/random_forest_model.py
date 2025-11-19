@@ -401,6 +401,7 @@ class RandomForestModel:
         Returns:
             List of ticket dictionaries
         """
+        logger.info(f"Generating {count} tickets using Random Forest model")
         wb_probs, pb_probs = self.predict_probabilities(recent_draws)
         
         tickets = []
@@ -423,7 +424,7 @@ class RandomForestModel:
                 'confidence': float(np.mean([wb_probs[n-1] for n in white_balls]))
             })
         
-        logger.info(f"Generated {count} tickets using Random Forest model")
+        logger.info(f"Actually generated {len(tickets)} tickets using Random Forest model")
         return tickets
     
     def get_model_info(self) -> Dict:

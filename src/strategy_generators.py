@@ -507,6 +507,7 @@ class StrategyManager:
         Returns:
             List of ticket dictionaries
         """
+        logger.info(f"StrategyManager.generate_balanced_tickets called with total={total}")
         weights = self.get_strategy_weights()
 
         # Normalize weights to sum to 1.0
@@ -544,7 +545,7 @@ class StrategyManager:
         # Ensure 5 different Powerballs
         all_tickets = self._ensure_different_powerballs(all_tickets[:total])
 
-        logger.info(f"Generated {len(all_tickets)} tickets with balanced strategies")
+        logger.info(f"StrategyManager generated {len(all_tickets)} tickets (requested: {total})")
         return all_tickets
 
     def _ensure_different_powerballs(self, tickets: List[Dict]) -> List[Dict]:

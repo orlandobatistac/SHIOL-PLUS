@@ -746,9 +746,17 @@ class Predictor:
             self.deterministic_generator = DeterministicGenerator(self.historical_data)
 
         # Generate diverse predictions using the deterministic generator
+        # Scale num_candidates based on num_plays to ensure sufficient diversity
+        # For large batches (>10), use at least 50x num_plays candidates
+        # to ensure the diversity algorithm can find enough distinct combinations
+        num_candidates = max(2000, num_plays * 50) if num_plays > 10 else 2000
+        
+        logger.info(f"Generating {num_plays} diverse predictions with {num_candidates} candidates")
         diverse_predictions = self.deterministic_generator.generate_diverse_predictions(
-            wb_probs, pb_probs, num_plays=num_plays
+            wb_probs, pb_probs, num_plays=num_plays, num_candidates=num_candidates
         )
+        
+        logger.info(f"Actually generated {len(diverse_predictions)} diverse predictions")
 
         # Save predictions to log if requested
         if save_to_log:

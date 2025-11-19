@@ -404,6 +404,7 @@ class LSTMModel:
         Returns:
             List of ticket dictionaries
         """
+        logger.info(f"Generating {count} tickets using LSTM model")
         wb_probs, pb_probs = self.predict_probabilities(recent_draws)
         
         tickets = []
@@ -426,7 +427,7 @@ class LSTMModel:
                 'confidence': float(np.mean([wb_probs[n-1] for n in white_balls]))
             })
         
-        logger.info(f"Generated {count} tickets using LSTM model")
+        logger.info(f"Actually generated {len(tickets)} tickets using LSTM model")
         return tickets
     
     def get_model_info(self) -> Dict:
