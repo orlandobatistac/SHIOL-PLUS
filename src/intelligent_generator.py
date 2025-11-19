@@ -1279,7 +1279,12 @@ class DeterministicGenerator:
                 remaining_candidates.pop(best_candidate_idx)
                 logger.info(f"Selected play {play_num} with score {best_candidate['total_score']:.4f} "
                            f"(diversity: {best_diversity_score:.4f}): {best_candidate['white_balls']} + {best_candidate['powerball']}")
+            else:
+                logger.warning(f"Could not find suitable candidate for play {play_num}/{num_plays}. "
+                              f"Remaining candidates: {len(remaining_candidates)}, "
+                              f"Best diversity score found: {best_diversity_score:.4f}")
 
+        logger.info(f"Selection complete: {len(selected_plays)}/{num_plays} plays selected")
         return selected_plays
 
     def _calculate_diversity_from_selected(self, candidate: Dict, selected_plays: List[Dict]) -> float:
