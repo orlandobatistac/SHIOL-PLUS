@@ -3434,6 +3434,11 @@ def insert_batch_tickets(tickets: List[Dict[str, Any]], mode: str, pipeline_run_
                 white_balls = ticket['white_balls']
                 powerball = ticket['powerball']
                 
+                # Convert numpy types to native Python types
+                if hasattr(white_balls, 'tolist'):  # numpy array
+                    white_balls = white_balls.tolist()
+                white_balls = [int(n) for n in white_balls]  # Convert numpy.int64 to int
+                
                 # Validate white balls
                 if not isinstance(white_balls, list) or len(white_balls) != 5:
                     logger.warning(f"Skipping invalid ticket (white_balls must be list of 5): {ticket}")
@@ -3445,9 +3450,15 @@ def insert_batch_tickets(tickets: List[Dict[str, Any]], mode: str, pipeline_run_
                     logger.warning(f"Skipping invalid ticket (white_balls must be sorted, unique, 1-69): {ticket}")
                     continue
                 
-                # Validate powerball
-                if not isinstance(powerball, int) or not (1 <= powerball <= 26):
-                    logger.warning(f"Skipping invalid ticket (powerball must be 1-26): {ticket}")
+                # Validate powerball (accept int and numpy int types)
+                try:
+                    pb_value = int(powerball)  # Convert numpy.int64 to int
+                    if not (1 <= pb_value <= 26):
+                        logger.warning(f"Skipping invalid ticket (powerball out of range 1-26): {ticket}")
+                        continue
+                    powerball = pb_value  # Use converted value
+                except (TypeError, ValueError):
+                    logger.warning(f"Skipping invalid ticket (powerball must be integer 1-26): {ticket}")
                     continue
                 
                 # Extract optional fields
