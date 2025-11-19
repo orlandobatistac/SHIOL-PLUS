@@ -172,9 +172,14 @@ htmlcov/
 # ============================================
 # Machine Learning
 # ============================================
+# Trained models (too large for git, deploy separately)
+models/random_forest/*.pkl
+models/lstm/*.keras
+models/lstm/*.h5
+
+# Backup models
 models/*backup*.pkl
 models/*_old.pkl
-*.h5
 *.onnx
 
 # ============================================

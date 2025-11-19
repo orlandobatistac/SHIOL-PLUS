@@ -417,8 +417,8 @@ class LSTMModel:
                 p=wb_probs
             ).tolist())
             
-            # Sample powerball using predicted probabilities
-            powerball = int(np.random.choice(range(1, 27), p=pb_probs)) + 1
+            # Sample powerball using predicted probabilities (1-26, no +1 needed)
+            powerball = int(np.random.choice(range(1, 27), p=pb_probs))
             
             tickets.append({
                 'white_balls': white_balls,
