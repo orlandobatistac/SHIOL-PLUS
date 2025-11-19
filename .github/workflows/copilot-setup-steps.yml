@@ -4,8 +4,8 @@ on:
 jobs:
   # ¡IMPORTANTE! El nombre del job DEBE ser exactamente este.
   copilot-setup-steps:
-    # Using a larger runner (8-cores) for faster dependency installation
-    runs-on: ubuntu-latest-8-cores
+    # Usamos el runner predeterminado para evitar colas de espera
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         # Required to access files like requirements-prod.txt
