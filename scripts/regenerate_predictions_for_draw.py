@@ -92,7 +92,7 @@ def generate_predictions(draw_date: str, total_tickets: int = 500) -> int:
                 skipped += 1
                 continue
             
-            try
+            try:
                 
             try:
                 cursor.execute("""
