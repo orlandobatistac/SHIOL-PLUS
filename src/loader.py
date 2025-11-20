@@ -815,21 +815,24 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
     start_time = datetime.now()
     attempts = 0
     
-    # Calculate timeout: 6 hours for adaptive polling
-    # Rationale: Draw numbers may take hours to publish (multiple sources, variable delays)
-    # Polling adapts intervals: 30s (0-30min), 5min (30min-2h), 15min (2h+)
-    # Daily Full Sync at 6 AM ET is absolute safety net
+    # Calculate timeout: 2.5 minutes per polling attempt
+    # Rationale: Short timeout prevents systemd SIGKILL (TimeoutStopSec=180s)
+    # Strategy: Fail fast, let scheduler retry every 5 minutes until 6 AM
+    # - Each attempt: 150s max (< 180s systemd timeout)
+    # - Scheduler retries: Automatic via misfire_grace_time (7 hours window)
+    # - Final safety net: Daily Full Sync at 6 AM ET
     current_et = DateManager.get_current_et_time()
-    timeout_seconds = 6 * 3600  # 6 hours = 21600 seconds
+    timeout_seconds = 150  # 2.5 minutes (well under 180s systemd timeout)
     timeout_timestamp = start_time.timestamp() + timeout_seconds
-    timeout_et = current_et.replace(hour=(current_et.hour + 6) % 24)
+    timeout_minutes = timeout_seconds / 60
     
     logger.info("=" * 80)
     logger.info("🚀 [unified_polling] STARTING UNIFIED ADAPTIVE POLLING")
     logger.info(f"🚀 [unified_polling] Target draw date: {expected_draw_date}")
     logger.info(f"🚀 [unified_polling] Started at: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-    logger.info(f"🚀 [unified_polling] Timeout at: {timeout_et.strftime('%Y-%m-%d %H:%M:%S %Z')} (6 hours)")
-    logger.info("🚀 [unified_polling] Adaptive intervals: 30s (0-30min) → 5min (30min-2h) → 15min (2h+)")
+    logger.info(f"🚀 [unified_polling] Timeout: {timeout_minutes:.1f} minutes (prevents systemd SIGKILL)")
+    logger.info("🚀 [unified_polling] Strategy: Fast timeout + scheduler retries every 5 min until 6 AM")
+    logger.info("🚀 [unified_polling] Intervals: 30s (fast attempts during first 2.5 min)")
     logger.info("=" * 80)
     
     # ========== PRE-CHECK: HEALTH CHECK ALL SOURCES ==========
@@ -872,10 +875,11 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
         # Check timeout BEFORE attempting
         if datetime.now().timestamp() >= timeout_timestamp:
             logger.warning("=" * 80)
-            logger.warning("⏱ [unified_polling] TIMEOUT REACHED after 6 hours")
+            logger.warning(f"⏱ [unified_polling] TIMEOUT REACHED after {timeout_minutes:.1f} minutes")
             logger.warning(f"⏱ [unified_polling] Total attempts: {attempts}")
             logger.warning(f"⏱ [unified_polling] Elapsed time: {elapsed_minutes:.1f} minutes")
-            logger.warning("⏱ [unified_polling] Draw still not available from any source - daily sync will catch it at 6 AM")
+            logger.warning("⏱ [unified_polling] Draw not available yet - scheduler will retry in 5 minutes")
+            logger.warning("⏱ [unified_polling] Automatic retries continue until draw found or 6 AM Daily Sync")
             logger.warning("=" * 80)
             return {
                 'success': False,
@@ -887,18 +891,10 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
             }
         
         # Determine interval based on elapsed time (adaptive)
-        # Phase 1 (0-30 min): Check every 30 seconds (frequent during ceremony)
-        # Phase 2 (30 min-2 hours): Check every 5 minutes (less frequent)
-        # Phase 3 (2+ hours): Check every 15 minutes (very spacious)
-        if elapsed_minutes < 30:
-            interval_seconds = 30   # 30 seconds
-            phase = "Phase 1 (0-30min): frequent polling"
-        elif elapsed_minutes < 120:
-            interval_seconds = 300  # 5 minutes
-            phase = "Phase 2 (30min-2h): normal polling"
-        else:
-            interval_seconds = 900  # 15 minutes
-            phase = "Phase 3 (2h+): sparse polling"
+        # With 150s timeout, only Phase 1 is active (0-2.5 min)
+        # Intervals: 30 seconds (allows 5 attempts within 2.5 min window)
+        interval_seconds = 30   # 30 seconds
+        phase = "Fast polling (30s intervals, max 2.5 min)"
         
         logger.info("-" * 80)
         logger.info(

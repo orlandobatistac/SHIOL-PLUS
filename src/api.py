@@ -1642,8 +1642,8 @@ async def lifespan(app: FastAPI):
     # Purpose: Fetch new draw via 3-layer fallback and execute full pipeline
     # - 11:05 PM = 6 minutes after 10:59 PM draw
     # - Unified adaptive polling (NC Scraping → MUSL → NC CSV)
-    # - Adaptive intervals: 2min → 5min → 10min
-    # - Timeout at 6:00 AM (Daily Full Sync takes over)
+    # - Short timeout (2.5 min) prevents systemd SIGKILL
+    # - Retries every 5 minutes via misfire_grace_time until 6 AM Daily Sync
     scheduler.add_job(
         func=trigger_full_pipeline_automatically,
         trigger="cron",
@@ -1652,9 +1652,10 @@ async def lifespan(app: FastAPI):
         minute=5,
         timezone="America/New_York",  # EXPLICIT TIMEZONE
         id="post_drawing_pipeline",
-        name="Real-time Unified Polling 11:05 PM ET",
+        name="Real-time Unified Polling 11:05 PM ET (auto-retry)",
         max_instances=1,              # Prevent overlapping executions
-        coalesce=True,                # Merge multiple pending executions into one
+        coalesce=False,               # DON'T merge - we want retries!
+        misfire_grace_time=25200,     # 7 hours (11:05 PM → 6:05 AM) - allows retries
         replace_existing=True         # Update job on restart instead of duplicating
     )
 
