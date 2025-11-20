@@ -10,11 +10,13 @@
 ## 🎯 PROJECT VISION & PRIORITIES
 
 ### Core Mission
+
 SHIOL+ es un **motor de predicciones con aprendizaje adaptativo** que evalúa continuamente el rendimiento de múltiples estrategias de generación de tickets de lotería, ajustando automáticamente sus pesos según ROI real.
 
 ### Strategic Priorities (Orden de Importancia)
 
 1. **🧠 Pipeline como Cerebro del Sistema (PRIORIDAD #1)**
+
    - Generar 200 predicciones evaluables por sorteo (3x semana)
    - Expandir de 6 a 11 estrategias (añadir modelos ML del batch)
    - Adaptive learning automático basado en performance real
@@ -22,6 +24,7 @@ SHIOL+ es un **motor de predicciones con aprendizaje adaptativo** que evalúa co
    - Frontend sirve ESTAS predicciones a usuarios internos
 
 2. **🌐 API para Proyecto Externo (PRIORIDAD #2)**
+
    - Endpoint simple que sirve las predicciones del pipeline
    - NO generar predicciones adicionales (reutilizar pipeline)
    - Filtros por estrategia, confianza, cantidad
@@ -29,6 +32,7 @@ SHIOL+ es un **motor de predicciones con aprendizaje adaptativo** que evalúa co
    - Propósito: Servir a otro proyecto con usuarios premium
 
 3. **🔬 Evaluación y Mejora Continua (PRIORIDAD #3)**
+
    - Sistema de evaluación post-sorteo (STEP 4 del pipeline)
    - Adaptive learning ajusta pesos automáticamente (STEP 5)
    - Estrategias con bajo ROI → reducen peso → eventualmente eliminadas
@@ -43,6 +47,7 @@ SHIOL+ es un **motor de predicciones con aprendizaje adaptativo** que evalúa co
 ### What This Means
 
 ✅ **SÍ hacer:**
+
 - Añadir nuevas estrategias al Pipeline para evaluación
 - Mejorar algoritmos de predicción existentes
 - Optimizar sistema de adaptive learning
@@ -50,6 +55,7 @@ SHIOL+ es un **motor de predicciones con aprendizaje adaptativo** que evalúa co
 - Refactorizar código para mantenibilidad
 
 ❌ **NO hacer:**
+
 - Crear sistemas paralelos separados del pipeline
 - Generar predicciones duplicadas sin evaluación
 - Complicar arquitectura con tablas/servicios innecesarios
@@ -62,6 +68,7 @@ SHIOL+ es un **motor de predicciones con aprendizaje adaptativo** que evalúa co
 ### Pipeline v5.0 (Cerebro del Sistema)
 
 **Flujo Completo:**
+
 ```
 STEP 1: update_database_from_source()      → Fetch nuevo draw MUSL/NY API
 STEP 2: update_analytics()                 → Calcular co-occurrences, patterns
@@ -72,6 +79,7 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 ```
 
 **Estrategias Actuales (6):**
+
 1. `frequency_weighted` - Basada en frecuencia histórica de números
 2. `cooccurrence` - Análisis de co-ocurrencia de pares de números
 3. `ai_guided` - XGBoost ML con IntelligentGenerator
@@ -80,6 +88,7 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 6. `coverage_optimizer` - Maximiza cobertura de rangos
 
 **Datos Clave:**
+
 - Base de datos: 1,864 draws históricos (2009-2025)
 - Tabla principal: `generated_tickets` (predicciones evaluables)
 - Scheduler: APScheduler (3 jobs: post_drawing_pipeline, maintenance, daily_full_sync)
@@ -88,6 +97,7 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 ### Sistema Batch (A ELIMINAR/REFACTORIZAR)
 
 **Estado Actual:**
+
 - Tabla: `pre_generated_tickets` (cache de ML)
 - Modos: random_forest, lstm, v1, v2, hybrid (5 modos × 100 tickets = 500 total)
 - Propósito original: Cache de alta velocidad para API pública
@@ -101,6 +111,7 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 ### Recent Achievements (Nov 2025)
 
 #### ✅ RandomForest Optimization (Critical Fix)
+
 - **Issue:** Batch generation stuck indefinitely (30+ seconds timeout)
 - **Root Cause:** O(n²) complexity in feature engineering (354 features)
 - **Solution:** Optimized to 39 features (89% reduction)
@@ -108,6 +119,7 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 - **Documentation:** `docs/RANDOM_FOREST_OPTIMIZATION.md`
 
 #### ✅ v1/v2/hybrid Modes Activation
+
 - **Added:** 3 new modes to batch system (v1, v2, hybrid)
 - **Bug Fixed:** numpy.int64 validation issue (v2 went from 0% → 100% success)
 - **Production:** All 5 modes operational in VPS
@@ -115,12 +127,14 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 - **Commits:** 4a8ac78, 248f719, 052894d
 
 #### ✅ Production Deployment Verification
+
 - **Models Retrained:** RandomForest (348MB), LSTM (1.9MB)
 - **Service Status:** systemd active, API responding <50ms
 - **Database:** 852 pre-generated tickets across 5 modes
 - **Health Check:** All systems operational ✅
 
 #### ✅ Documentation Consolidation
+
 - Archived 7 redundant implementation summaries
 - Updated TECHNICAL.md with dual-table architecture
 - Updated copilot-instructions.md with current state
@@ -130,13 +144,103 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 
 ## 🚀 ACTIVE ROADMAP
 
-### PHASE 1: PIPELINE STRATEGY EXPANSION (THIS WEEK - CRITICAL 🔥)
+### ⚡ STRATEGY: "Clean Before You Build"
+
+**Decision:** Eliminar sistema Batch PRIMERO antes de expandir Pipeline
+
+**Razón:** 
+- Evitar duplicar esfuerzo en código que será eliminado
+- Base de código más limpia facilita agregar nuevas estrategias
+- Reduce riesgo de errores al trabajar en código enfocado
+- Previene confusión entre sistemas batch (deprecated) y pipeline (activo)
+
+**Secuencia:**
+1. 🧹 PHASE 1: Eliminar Batch + Código muerto (THIS WEEK - CRITICAL 🔥)
+2. 🚀 PHASE 2: Expandir Pipeline a 11 estrategias (AFTER CLEANUP)
+3. 🌐 PHASE 3: API para proyecto externo (AFTER EXPANSION)
+
+---
+
+### PHASE 1: ELIMINACIÓN BATCH + CODE CLEANUP (THIS WEEK - CRITICAL 🔥)
+
+**Goal:** Limpiar código legacy antes de expandir pipeline
+- [ ] Identificar endpoints que consumen batch (`/batch/*`)
+- [ ] Verificar si frontend usa batch (unlikely)
+- [ ] Listar archivos a eliminar completos
+- [ ] Crear backup de DB antes de DROP table
+
+**Commands:**
+```bash
+grep -r "pre_generated_tickets" src/ frontend/
+grep -r "batch_generator" src/
+grep -r "/batch" src/api*.py
+sqlite3 data/shiolplus.db ".backup data/backups/before_batch_removal.db"
+```
+
+**Time Estimate:** 30 minutos  
+**Priority:** CRITICAL  
+**Status:** PENDING
+
+#### Task 1.2: Eliminación de Código Batch
+
+- [ ] Eliminar archivo `src/batch_generator.py` completo
+- [ ] Eliminar archivo `src/api_batch_endpoints.py` (si existe)
+- [ ] Remover imports de batch_generator en `src/api.py`
+- [ ] Eliminar STEP 6 del pipeline (batch generation)
+- [ ] DROP tabla `pre_generated_tickets` (después de backup)
+- [ ] Remover router batch de FastAPI app
+
+**SQL:**
+```sql
+DROP TABLE IF EXISTS pre_generated_tickets;
+```
+
+**Time Estimate:** 2 horas  
+**Priority:** CRITICAL  
+**Status:** PENDING
+
+#### Task 1.3: Limpieza de Código Muerto (PHASE 6 Task 6.4 adelantado)
+
+- [ ] Ejecutar `ruff check src/ --fix` (auto-fix imports)
+- [ ] Buscar funciones no usadas manualmente
+- [ ] Eliminar comentarios obsoletos (`# TODO:` completados, `# DEPRECATED:`)
+- [ ] Remover código comentado (dead code)
+- [ ] Limpiar imports innecesarios que ruff no detectó
+
+**Commands:**
+```bash
+ruff check src/ --fix
+grep -r "# TODO" src/ | grep -i "done\|completed\|fixed"
+grep -r "# DEPRECATED" src/
+```
+
+**Time Estimate:** 2-3 horas  
+**Priority:** HIGH  
+**Status:** PENDING
+
+#### Task 1.4: Validación Post-Limpieza
+
+- [ ] Ejecutar pipeline completo manualmente (5 steps)
+- [ ] Verificar que genera 200 tickets correctamente
+- [ ] Confirmar adaptive learning funciona
+- [ ] Tests: `pytest tests/ -v`
+- [ ] Verificar scheduler sigue funcionando
+- [ ] Commit y push cambios
+
+**Time Estimate:** 1 hora  
+**Priority:** CRITICAL  
+**Status:** PENDING
+
+---
+
+### PHASE 2: PIPELINE STRATEGY EXPANSION (AFTER CLEANUP)
 
 **Goal:** Integrar estrategias ML del batch al pipeline como estrategias evaluables
 
-#### Task 1.1: Añadir 5 Estrategias ML al Pipeline ⭐ URGENT
+#### Task 2.1: Añadir 5 Estrategias ML al Pipeline ⭐
 
 **Estrategias a Añadir:**
+
 1. `xgboost_ml` - XGBoost predictor con DeterministicGenerator
 2. `random_forest_ml` - Random Forest (39 features optimizadas)
 3. `lstm_neural` - LSTM neural networks
@@ -144,32 +248,24 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 5. `intelligent_scoring` - Multi-criteria scoring system
 
 **Implementación:**
-- [ ] Crear clases `XGBoostMLStrategy`, `RandomForestMLStrategy`, `LSTMNeuralStrategy`, `HybridEnsembleStrategy` en `src/strategy_generators.py`
+
+- [ ] Crear clases `XGBoostMLStrategy`, `RandomForestMLStrategy`, `LSTMNeuralStrategy`, `HybridEnsembleStrategy`, `IntelligentScoringStrategy` en `src/strategy_generators.py`
 - [ ] Registrar en `StrategyManager.__init__()`
-- [ ] Inicializar pesos en DB (`strategy_performance` table)
-- [ ] Verificar distribución de 200 tickets entre 11 estrategias
+- [ ] Inicializar 5 filas en `strategy_performance` table (peso inicial: 0.10)
+- [ ] Verificar distribución de 200 tickets entre 11 estrategias (~18/estrategia)
 - [ ] Test local con todas las estrategias
 
 **Resultado Esperado:**
-- Pipeline genera 200 tickets con 11 estrategias (~18 tickets/estrategia)
-- Todas evaluables con `draw_date` específico
-- Adaptive learning comienza a ajustar pesos según ROI real
 
-**Time Estimate:** 4-6 horas  
+- Pipeline genera 200 tickets con 11 estrategias
+- Todas evaluables con `draw_date` específico
+- Adaptive learning ajusta pesos según ROI real
+
+**Time Estimate:** 6-7 horas (reducido por código limpio)  
 **Priority:** CRITICAL  
 **Status:** PENDING
 
-#### Task 1.2: Inicializar Pesos de Nuevas Estrategias
-
-- [ ] Añadir 5 filas a `strategy_performance` table
-- [ ] Peso inicial: 0.10 (10% igual para todas)
-- [ ] Verificar que StrategyManager carga los 11 pesos correctamente
-- [ ] Documentar en copilot-instructions.md
-
-**Time Estimate:** 1 hora  
-**Status:** PENDING
-
-#### Task 1.3: Testing de Integración
+#### Task 2.2: Testing de Integración
 
 - [ ] Ejecutar pipeline completo con 11 estrategias
 - [ ] Verificar distribución de tickets (~18/estrategia)
@@ -182,13 +278,14 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 
 ---
 
-### PHASE 2: API SIMPLIFICADA PARA PROYECTO EXTERNO (THIS WEEK)
+### PHASE 3: API SIMPLIFICADA PARA PROYECTO EXTERNO (AFTER EXPANSION)
 
 **Goal:** Crear endpoint ligero que sirve predicciones del pipeline (NO genera nada nuevo)
 
-#### Task 2.1: Endpoint `/api/v1/predictions/latest`
+#### Task 3.1: Endpoint `/api/v1/predictions/latest`
 
 **Funcionalidad:**
+
 - Sirve las últimas 200 predicciones del pipeline
 - Filtros: `limit` (default: 50), `strategy`, `min_confidence`
 - Ordenado por confidence DESC
@@ -196,6 +293,7 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 - Autenticación: JWT token (para proyecto externo)
 
 **Implementación:**
+
 - [ ] Crear endpoint en `src/api_prediction_endpoints.py`
 - [ ] Query optimizado a `generated_tickets` (último pipeline_run_id)
 - [ ] Añadir índice a DB si es necesario
@@ -206,57 +304,22 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 **Priority:** HIGH  
 **Status:** PENDING
 
-#### Task 2.2: Endpoint `/api/v1/predictions/by-strategy`
+#### Task 3.2: Endpoint `/api/v1/predictions/by-strategy`
 
 **Funcionalidad:**
+
 - Agrupa predicciones por estrategia
 - Retorna métricas: avg_confidence, total_tickets, recent_roi
 - Útil para que proyecto externo vea qué estrategias están funcionando mejor
 
 **Implementación:**
+
 - [ ] Query con GROUP BY strategy
 - [ ] Incluir datos de `strategy_performance` (win_rate, roi)
 - [ ] Cache de 5 minutos (FastAPI @lru_cache)
 - [ ] Tests
 
 **Time Estimate:** 1 hora  
-**Status:** PENDING
-
----
-
-### PHASE 3: ELIMINACIÓN SISTEMA BATCH (NEXT WEEK)
-
-**Goal:** Limpiar código y DB de sistema batch ya que pipeline hace todo
-
-#### Task 3.1: Análisis de Dependencias
-
-- [ ] Identificar todos los usos de `pre_generated_tickets` table
-- [ ] Listar endpoints que dependen de batch system
-- [ ] Evaluar si algún frontend depende de batch
-- [ ] Crear plan de migración para mantener funcionalidad
-
-**Time Estimate:** 2 horas  
-**Status:** PENDING
-
-#### Task 3.2: Migración de Funcionalidad
-
-- [ ] Si hay endpoints públicos usando batch → migrar a pipeline
-- [ ] Actualizar frontend para consumir de `generated_tickets`
-- [ ] Crear vista SQL o endpoint compatible si necesario
-- [ ] Tests de regresión
-
-**Time Estimate:** 4 horas  
-**Status:** PENDING
-
-#### Task 3.3: Eliminación de Código Batch
-
-- [ ] Eliminar `src/batch_generator.py`
-- [ ] Eliminar tabla `pre_generated_tickets`
-- [ ] Remover de scheduler (STEP 6 del pipeline)
-- [ ] Limpiar imports relacionados
-- [ ] Actualizar documentación
-
-**Time Estimate:** 2 horas  
 **Status:** PENDING
 
 ---
@@ -285,15 +348,16 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 def rl_weight_update(strategy_name, draw_result):
     predictions = get_strategy_predictions(strategy_name)
     reward = calculate_reward(predictions, draw_result)
-    
+
     # Gradient-based update (REINFORCE algorithm)
     current_weight = get_weight(strategy_name)
     new_weight = current_weight + learning_rate * reward
-    
+
     update_weight(strategy_name, new_weight)
 ```
 
 **Implementación:**
+
 - [ ] Crear función `calculate_reward()` (aciertos → +1, fallos → -0.1)
 - [ ] Implementar REINFORCE simple (policy gradient)
 - [ ] Testing A/B vs sistema actual
@@ -463,6 +527,7 @@ def rl_weight_update(strategy_name, draw_result):
 ### Current System State
 
 **Pipeline:**
+
 - Estrategias Activas: 6/11 (expansión pendiente)
 - Tickets por Run: 200
 - Frecuencia: 3x semana (Lun/Mié/Sáb post-sorteo)
@@ -470,12 +535,14 @@ def rl_weight_update(strategy_name, draw_result):
 - Última Ejecución: 2025-11-19 02:54:12 UTC ✅
 
 **Database:**
+
 - Draws Históricos: 1,864 (2009-2025)
 - Generated Tickets: ~10,000+ evaluables
 - Strategy Performance: 6 filas (pronto 11)
 - Pipeline Execution Logs: 150+ runs tracked
 
 **Production Environment:**
+
 - Hosting: Contabo VPS ($2/month)
 - OS: Ubuntu Server
 - Web Server: Nginx + Gunicorn
@@ -485,6 +552,7 @@ def rl_weight_update(strategy_name, draw_result):
 - Memory Usage: ~300MB
 
 **Tech Stack:**
+
 - Backend: FastAPI (Python 3.10+)
 - ML: XGBoost, Random Forest, LSTM (Keras/TensorFlow)
 - Database: SQLite (simple, sufficient para escala actual)
@@ -499,46 +567,58 @@ def rl_weight_update(strategy_name, draw_result):
 
 ### Week of Nov 19-26, 2025
 
-**Day 1-2 (Nov 19-20): Pipeline Expansion**
-1. ✅ Crear 5 clases de estrategia ML (Task 1.1)
-2. ✅ Inicializar pesos en DB (Task 1.2)
-3. ✅ Testing de integración (Task 1.3)
+**STRATEGY: Clean Before You Build**
 
-**Day 3-4 (Nov 21-22): API Externa**
-4. ✅ Endpoint `/predictions/latest` (Task 2.1)
-5. ✅ Endpoint `/predictions/by-strategy` (Task 2.2)
-6. ✅ Tests de performance (<10ms)
+**Day 1 (Nov 19): Batch Elimination & Code Cleanup**
 
-**Day 5 (Nov 23): Testing E2E**
-7. ✅ Pipeline completo con 11 estrategias
-8. ✅ Verificar adaptive learning funciona
-9. ✅ API retorna datos correctos
+1. ✅ Análisis de dependencias batch (Task 1.1) - 30 min
+2. ✅ Backup DB antes de cambios - 5 min
+3. ✅ Eliminar código batch (Task 1.2) - 2 horas
+4. ✅ Limpieza código muerto con ruff (Task 1.3) - 2-3 horas
+5. ✅ Validación post-limpieza (Task 1.4) - 1 hora
 
-**Day 6-7 (Nov 24-25): Deployment**
-10. ✅ Deploy a producción (git push)
-11. ✅ Verificar 200 tickets con 11 estrategias
-12. ✅ Monitorear logs primeras 24h
-13. ✅ Documentar en PROJECT_STATUS.md
+**Day 2-3 (Nov 20-21): Pipeline Expansion**
+
+6. ✅ Crear 5 clases de estrategia ML (Task 2.1) - 6-7 horas
+7. ✅ Testing de integración (Task 2.2) - 2 horas
+
+**Day 4-5 (Nov 22-23): API Externa**
+
+8. ✅ Endpoint `/predictions/latest` (Task 3.1) - 2 horas
+9. ✅ Endpoint `/predictions/by-strategy` (Task 3.2) - 1 hora
+10. ✅ Tests de performance (<10ms) - 30 min
+
+**Day 6-7 (Nov 24-25): Testing & Deployment**
+
+11. ✅ Pipeline completo con 11 estrategias E2E
+12. ✅ Deploy a producción (GitHub Actions auto-deploy)
+13. ✅ Verificar 200 tickets con 11 estrategias
+14. ✅ Monitorear logs primeras 24h
+15. ✅ Documentar en PROJECT_ROADMAP_V8.md
 
 ---
 
 ## 📚 DOCUMENTATION INDEX
 
 ### Core Documentation
+
 - **PROJECT_ROADMAP_V8.md** (este archivo) - Roadmap y estado del proyecto
 - **docs/TECHNICAL.md** - Arquitectura técnica detallada
 - **.github/copilot-instructions.md** - Guía para AI agents
 
 ### Implementation Guides
+
 - **docs/BATCH_GENERATION.md** - Sistema batch (deprecado, a eliminar)
 - **docs/RANDOM_FOREST_OPTIMIZATION.md** - Optimización 354→39 features
 - **docs/DEPLOYMENT_NGINX.md** - Setup de producción
 
 ### API Documentation
+
 - **docs/api/** - OpenAPI specs para todos los endpoints
 - **frontend/static/openapi.json** - Auto-generated API schema
 
 ### Archived Documentation
+
 - **docs/archive/** - Documentos históricos (no críticos)
 
 ---
@@ -546,6 +626,7 @@ def rl_weight_update(strategy_name, draw_result):
 ## 🔧 MAINTENANCE NOTES
 
 ### Weekly Tasks
+
 - [ ] Review pipeline execution logs (errores, timeouts)
 - [ ] Verificar estrategias con ROI <0.3 (candidatas a eliminar)
 - [ ] Backup de database (`shiolplus.db` → S3/local)
@@ -553,6 +634,7 @@ def rl_weight_update(strategy_name, draw_result):
 - [ ] Monitor VPS disk space (<80%)
 
 ### Monthly Tasks
+
 - [ ] Retrain models con nuevos draws (si hay cambios significativos)
 - [ ] Review strategy weights distribution (evitar monopolio)
 - [ ] Update dependencies (security patches)
@@ -560,6 +642,7 @@ def rl_weight_update(strategy_name, draw_result):
 - [ ] Performance analysis (optimización si necesario)
 
 ### Quarterly Tasks
+
 - [ ] Full system audit (security, performance, architecture)
 - [ ] Review roadmap y adjust priorities
 - [ ] Backup strategy review
@@ -573,12 +656,14 @@ def rl_weight_update(strategy_name, draw_result):
 ### Why Pipeline-Centric Architecture?
 
 **Problema con Sistema Dual (Pipeline + Batch):**
+
 - ❌ Redundancia: v1 se generaba 2 veces (pipeline + batch)
 - ❌ Inconsistencia: Usuarios veían predicciones no evaluadas
 - ❌ Pérdida de adaptive learning: Batch no mejoraba con tiempo
 - ❌ Complejidad innecesaria: 2 sistemas haciendo trabajo similar
 
 **Solución: Pipeline Unificado con 11 Estrategias:**
+
 - ✅ Single source of truth: Pipeline genera TODO
 - ✅ Evaluación universal: Todas las estrategias son medibles
 - ✅ Adaptive learning completo: Sistema mejora continuamente
@@ -609,11 +694,13 @@ def rl_weight_update(strategy_name, draw_result):
 **API Docs:** https://shiolplus.com/api/docs
 
 **External APIs Used:**
+
 - MUSL Powerball API (primary data source)
 - NY State Lottery API (fallback)
 - Stripe API (payments, inactive)
 
 **Development Environment:**
+
 - Local: Windows 11 + Python 3.10+
 - Production: Ubuntu Server 22.04 LTS
 - IDE: VS Code + GitHub Copilot
@@ -622,15 +709,17 @@ def rl_weight_update(strategy_name, draw_result):
 
 ## 🚨 CRITICAL REMINDERS FOR AI AGENTS
 
-1. **NEVER** crear sistemas paralelos sin evaluación
-2. **ALWAYS** actualizar PROJECT_ROADMAP_V8.md después de cambios importantes
-3. **TEST** en local antes de deployment a producción
-4. **DOCUMENT** decisiones arquitectónicas en este archivo
-5. **BACKUP** database antes de migraciones
-6. **VERIFY** que adaptive learning sigue funcionando después de cambios
+1. **READ PROJECT_ROADMAP_V8.md FIRST** before any coding task
+2. **NEVER** crear sistemas paralelos sin evaluación
+3. **ALWAYS** actualizar PROJECT_ROADMAP_V8.md después de cambios importantes
+4. **TEST** en local antes de deployment a producción
+5. **DOCUMENT** decisiones arquitectónicas en este archivo
+6. **BACKUP** database antes de migraciones
+7. **VERIFY** que adaptive learning sigue funcionando después de cambios
 
 ---
 
-_Last Updated: 2025-11-19 20:00 ET_  
-_Next Review: 2025-11-26 (Post-Phase 1 completion)_  
-_Status: 🔄 Active Development - Phase 1 Starting This Week_
+_Last Updated: 2025-11-19 21:30 ET_  
+_Next Review: 2025-11-20 (Post-Phase 1 Task 1.1-1.2 completion)_  
+_Status: 🧹 Active Development - Phase 1 (Clean Before You Build) Starting NOW_
+
