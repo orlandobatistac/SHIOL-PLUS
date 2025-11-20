@@ -24,42 +24,47 @@
 
 ## Project Overview
 
-SHIOL+ is a production ML-powered lottery analytics platform running on a $2/month VPS. It demonstrates full-stack engineering: automated prediction pipelines, adaptive learning, Stripe billing, JWT authentication, and AI-powered ticket verification.
+SHIOL+ is a production ML-powered lottery analytics platform with **pipeline-centric architecture**. The core mission is adaptive learning: continuously evaluate multiple prediction strategies and automatically adjust their weights based on real-world performance (ROI, win_rate).
 
-**Stack**: Python 3.10+ | FastAPI | SQLite | APScheduler | Stripe | Gemini Vision | XGBoost
+**Current Goal (Phase 1)**: Expand from 6 to 11 strategies, integrating ML models (XGBoost, RandomForest, LSTM) as evaluable strategies within the pipeline.
+
+**Stack**: Python 3.10+ | FastAPI | SQLite | APScheduler | XGBoost | RandomForest | LSTM (Keras)
 
 ## Architecture Mental Model
 
-### Core Pipeline (5-Step Process)
+### Core Pipeline (5-Step Process) - BRAIN OF THE SYSTEM
 The system runs an automated 5-step pipeline orchestrated by `trigger_full_pipeline_automatically()` in `src/api.py`:
 
 1. **DATA**: `update_database_from_source()` fetches draws from MUSL API (primary) or NY State API (fallback)
 2. **ANALYTICS**: `update_analytics()` computes co-occurrence matrices and pattern statistics
 3. **EVALUATE**: `evaluate_predictions_for_draw()` scores predictions against official results
 4. **ADAPTIVE LEARNING**: `adaptive_learning_update()` adjusts strategy weights via Bayesian-like update
-5. **PREDICT**: `StrategyManager.generate_balanced_tickets()` generates 200 tickets using 6 weighted strategies
+5. **PREDICT**: `StrategyManager.generate_balanced_tickets()` generates 200 tickets using weighted strategies (currently 6, expanding to 11)
 
-### Strategy System (NOT Ensemble ML)
-**Critical**: Despite "AI" terminology, the production system uses **competing strategies with adaptive weights**, NOT a traditional ML ensemble:
+**Key Point**: ALL predictions from pipeline are evaluable (have `draw_date`), enabling continuous improvement through feedback loop.
 
-- 6 strategies in `src/strategy_generators.py`: `FrequencyWeightedStrategy`, `CooccurrenceStrategy`, `CoverageOptimizerStrategy`, `RangeBalancedStrategy`, `AIGuidedStrategy`, `RandomBaselineStrategy`
+### Strategy System (Adaptive Learning, NOT Static Ensemble)
+**Critical**: The production system uses **competing strategies with adaptive weights**, NOT a traditional ML ensemble:
+
+- **Current (6 strategies)** in `src/strategy_generators.py`: `FrequencyWeightedStrategy`, `CooccurrenceStrategy`, `CoverageOptimizerStrategy`, `RangeBalancedStrategy`, `AIGuidedStrategy`, `RandomBaselineStrategy`
+- **Expansion (5 new strategies)** to be added: `XGBoostMLStrategy`, `RandomForestMLStrategy`, `LSTMNeuralStrategy`, `HybridEnsembleStrategy`, `IntelligentScoringStrategy`
 - `StrategyManager` selects strategies proportionally to their `current_weight` (stored in `strategy_performance` table)
-- `AIGuidedStrategy` wraps `IntelligentGenerator` which uses frequency analysis + deterministic scoring (NOT XGBoost inference despite imports)
-- XGBoost model exists in `models/shiolplus.pkl` but is **NOT integrated** into generation pipeline (legacy artifact)
+- Adaptive learning increases weights of high-performing strategies, decreases weights of poor performers
+- `AIGuidedStrategy` wraps `IntelligentGenerator` which uses frequency analysis + deterministic scoring
 
 ### Database Schema
 SQLite (`data/shiolplus.db`, ~792 KB) with 20+ tables. Key tables:
 
-- `powerball_draws` (1,851 rows): Official results with `pb_era` classification via triggers
+- `powerball_draws` (1,864 rows): Official results with `pb_era` classification via triggers
 - `cooccurrences` (2,346 rows): Statistical pair analysis for `CooccurrenceStrategy`
-- `generated_tickets`: Pipeline v1 predictions (200 tickets/run) with strategy attribution, confidence scores, and draw_date
-- `pre_generated_tickets`: ML cache for high-speed retrieval (100 tickets/mode: random_forest, lstm) for API endpoints
-- `strategy_performance`: Tracks ROI, win_rate, current_weight for adaptive learning
+- `generated_tickets`: **PRIMARY TABLE** - Pipeline predictions (200 tickets/run) with strategy attribution, confidence scores, and draw_date (evaluable)
+- `strategy_performance`: Tracks ROI, win_rate, current_weight for adaptive learning (currently 6 rows, will expand to 11)
+- `pre_generated_tickets`: **DEPRECATED** - ML cache for batch system (to be phased out in Phase 3)
 - `users`, `premium_passes`, `stripe_subscriptions`: Auth and billing state
 
-**Dual Table System for Tickets**:
-- **`generated_tickets`**: Predictions from Pipeline STEP 6, linked to specific `draw_date`, evaluable against official results
-- **`pre_generated_tickets`**: Background-generated ML cache (RandomForest, LSTM), no draw_date, optimized for <10ms retrieval
+**Pipeline-Centric Design**:
+- **`generated_tickets`**: Core predictions from Pipeline STEP 5, linked to specific `draw_date`, evaluable against official results
+- **`pre_generated_tickets`**: Legacy batch cache (random_forest, lstm, v1, v2, hybrid), will be eliminated once ML strategies are integrated into pipeline
 
 **Era-Aware System**: Powerball range changed (1-35 → 1-26 in 2015). Database triggers (`set_pb_era_on_insert`) auto-classify `pb_era` and `pb_is_current`. Analytics code filters to `pb_is_current = 1` to avoid index errors.
 
@@ -476,35 +481,38 @@ cd /var/www/SHIOL-PLUS
 
 **CRITICAL**: After fixing bugs, implementing features, or making architectural changes, AI agents MUST update documentation:
 
-### 1. Update PROJECT_STATUS.md (REQUIRED)
+### 1. Update PROJECT_ROADMAP_V8.md (REQUIRED)
 
-**When to update**: After every significant change (bug fix, feature implementation, optimization)
+**When to update**: After every significant change (bug fix, feature implementation, optimization, completing roadmap tasks)
 
 **What to update**:
-- Move resolved issues from "ACTIVE TASKS" to "✅ RESOLVED ISSUES" section
-- Add performance metrics (before/after benchmarks)
-- Update "Last Updated" timestamp
-- Reference PR# and related documentation
-- Update PROJECT STATISTICS section if architecture changed
+- Mark completed tasks: Change `[ ]` to `[x]` and update status from PENDING to COMPLETED
+- Add performance metrics (before/after benchmarks) if applicable
+- Update "Last Updated" timestamp at bottom of document
+- Reference commit hash and related documentation
+- Update "PROJECT STATISTICS" section if architecture changed
+- Move completed phases from "ACTIVE ROADMAP" to "✅ COMPLETED MILESTONES" section
 
 **Example commit flow**:
 ```bash
 # 1. Make your fix/feature
 git add src/your_changes.py
 
-# 2. Update PROJECT_STATUS.md
-# - Mark issue as resolved
-# - Add metrics
+# 2. Update PROJECT_ROADMAP_V8.md
+# - Mark task as completed: [ ] → [x]
+# - Update status: PENDING → COMPLETED
+# - Add metrics if applicable
 # - Update timestamp
 
-git add PROJECT_STATUS.md
+git add PROJECT_ROADMAP_V8.md
 
 # 3. Commit everything together
-git commit -m "fix: optimize RandomForest feature engineering
+git commit -m "feat: add 5 ML strategies to pipeline
 
-- Reduced features from 354 to 39 (89% reduction)
-- Improved batch generation time from 30s+ to 2.3s
-- Updated PROJECT_STATUS.md to mark Issue #1 as resolved"
+- Added XGBoostML, RandomForestML, LSTMNeural, HybridEnsemble, IntelligentScoring
+- Pipeline now generates 200 tickets with 11 strategies (~18/strategy)
+- All strategies evaluable with draw_date for adaptive learning
+- Updated PROJECT_ROADMAP_V8.md to mark Task 1.1 as completed"
 
 git push origin main
 ```
@@ -513,55 +521,61 @@ git push origin main
 
 **Files to consider**:
 - `docs/TECHNICAL.md` → Architecture changes
-- `docs/BATCH_GENERATION.md` → Batch system changes
 - `.github/copilot-instructions.md` → This file, for major architecture shifts
 - `README.md` → User-facing changes
+- `docs/RANDOM_FOREST_OPTIMIZATION.md` → ML model changes
+- Strategy-specific docs if adding new strategies
 
-### 3. Standard Issue Resolution Template
+### 3. Standard Task Completion Template
 
-When marking an issue as RESOLVED in PROJECT_STATUS.md, use this format:
+When marking a roadmap task as COMPLETED in PROJECT_ROADMAP_V8.md, use this format:
 
 ```markdown
-### Issue #X: [Title] (RESOLVED)
-**Severity:** [CRITICAL/HIGH/MEDIUM/LOW] → ✅ FIXED
-**Status:** RESOLVED
-**Discovered:** [Date]
-**Resolved:** [Date]
+#### Task X.Y: [Task Name] ✅ COMPLETED
 
-**Problem (Historical):**
-- [Brief description of the bug/issue]
+- [x] Subtask 1
+- [x] Subtask 2
+- [x] Subtask 3
 
-**Root Cause:**
-- Location: [File/function]
-- Issue: [Technical explanation]
-
-**Solution Implemented:**
-- ✅ [Change 1]
-- ✅ [Change 2]
-- ✅ [Change 3]
+**Implementation Summary:**
+- ✅ [What was built/changed]
+- ✅ [Files modified]
+- ✅ [Tests added]
 
 **Performance Results:** (if applicable)
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
 | [Metric 1] | [Value] | [Value] | [%] ✅ |
 
-**Documentation:**
-- Technical details: [Link to doc]
-- Tests: [Link to test file] ([X/X] passing)
+**Commits:**
+- [commit hash]: [commit message]
+
+**Time Estimate:** X hours  
+**Actual Time:** Y hours  
+**Priority:** [CRITICAL/HIGH/MEDIUM/LOW]  
+**Status:** ✅ COMPLETED  
+**Date Completed:** YYYY-MM-DD
 ```
 
 ### 4. Quick Reference Checklist
 
-After implementing a fix:
+After completing a roadmap task:
 - [ ] Code changes committed
 - [ ] Tests added/updated (if applicable)
-- [ ] PROJECT_STATUS.md updated (issue moved to RESOLVED)
+- [ ] PROJECT_ROADMAP_V8.md updated:
+  - [ ] Task marked as completed: `[ ]` → `[x]`
+  - [ ] Status updated: `PENDING` → `✅ COMPLETED`
+  - [ ] Date completed added
+  - [ ] Performance metrics added (if applicable)
+  - [ ] "Last Updated" timestamp updated
 - [ ] Related technical docs updated (if architecture changed)
-- [ ] Commit message follows conventional commits format
+- [ ] Commit message follows conventional commits format (feat:/fix:/docs:/refactor:)
 - [ ] All changes pushed to remote
+- [ ] Production deployment verified (if applicable)
 
 ---
 
 **Last Updated**: 2025-11-19  
-**Version**: 7.0  
-**Maintainer**: Orlando B. (orlandobatistac)
+**Version**: 8.0 (Strategic Realignment - Pipeline-Centric Architecture)  
+**Maintainer**: Orlando B. (orlandobatistac)  
+**Roadmap Document**: PROJECT_ROADMAP_V8.md
