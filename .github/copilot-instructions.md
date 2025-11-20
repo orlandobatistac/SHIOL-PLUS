@@ -2,17 +2,62 @@
 
 ## 🚨 CRITICAL RULES (ALWAYS FOLLOW)
 
-1. **Code Language**: ALL code, methods, functions, classes, variables, comments, and docstrings MUST be written in **English**
+### 0. **READ PROJECT_ROADMAP_V8.md FIRST** (MANDATORY BEFORE ANY WORK)
+
+**BEFORE implementing any feature, fixing any bug, or writing any code:**
+
+1. **READ** `PROJECT_ROADMAP_V8.md` completely to understand:
+   - Current project vision and priorities
+   - Active roadmap phases (PHASE 1-7)
+   - Which tasks are PENDING, IN PROGRESS, or COMPLETED
+   - Architectural decisions and why they were made
+   - What NOT to do (deprecated systems, anti-patterns)
+
+2. **VERIFY** your task aligns with roadmap priorities:
+   - Is this task in the current active phase?
+   - Does it conflict with planned deprecations? (e.g., batch system elimination)
+   - Are there dependencies on other incomplete tasks?
+
+3. **CONSULT** roadmap sections relevant to your work:
+   - **PHASE 1** (THIS WEEK): Pipeline expansion with 11 strategies
+   - **PHASE 2** (THIS WEEK): API for external project
+   - **PHASE 3** (NEXT WEEK): Batch system elimination
+   - **Architectural Decisions**: Why pipeline-centric, why SQLite, etc.
+
+**Example workflow:**
+```bash
+# WRONG ❌ - Start coding immediately
+git checkout -b feature/add-batch-optimization
+
+# CORRECT ✅ - Read roadmap first
+cat PROJECT_ROADMAP_V8.md  # Read completely
+# Realize: Batch system is being ELIMINATED (Phase 3)
+# Don't waste time optimizing deprecated code!
+# Check roadmap: Current priority is PHASE 1 (expand pipeline to 11 strategies)
+git checkout -b feature/add-ml-strategies-to-pipeline
+```
+
+**Why this matters:**
+- Prevents working on deprecated features (e.g., optimizing batch system that will be deleted)
+- Ensures alignment with project vision (pipeline-centric, not dual-system)
+- Avoids conflicts with ongoing architectural changes
+- Saves time by understanding context before coding
+
+---
+
+### 1. **Code Language**: ALL code, methods, functions, classes, variables, comments, and docstrings MUST be written in **English**
+
    - ✅ `def calculate_next_draw()` → Good
    - ❌ `def calcular_siguiente_sorteo()` → Never do this
    - ✅ `# Calculate frequency distribution` → Good
    - ❌ `# Calcular distribución de frecuencia` → Never do this
 
-2. **Chat Communication**: Respond to the user (Orlando) in **Spanish (Latin American)**
+### 2. **Chat Communication**: Respond to the user (Orlando) in **Spanish (Latin American)**
+
    - When explaining changes, debugging, or discussing architecture → use Spanish
    - When writing code or documentation → use English
 
-3. **Version Control**: After completing any significant improvement or fix:
+### 3. **Version Control**: After completing any significant improvement or fix:
    - Always create a descriptive commit message (in English)
    - Push changes immediately to remote repository
    - Example workflow:
@@ -33,6 +78,7 @@ SHIOL+ is a production ML-powered lottery analytics platform with **pipeline-cen
 ## Architecture Mental Model
 
 ### Core Pipeline (5-Step Process) - BRAIN OF THE SYSTEM
+
 The system runs an automated 5-step pipeline orchestrated by `trigger_full_pipeline_automatically()` in `src/api.py`:
 
 1. **DATA**: `update_database_from_source()` fetches draws from MUSL API (primary) or NY State API (fallback)
@@ -44,6 +90,7 @@ The system runs an automated 5-step pipeline orchestrated by `trigger_full_pipel
 **Key Point**: ALL predictions from pipeline are evaluable (have `draw_date`), enabling continuous improvement through feedback loop.
 
 ### Strategy System (Adaptive Learning, NOT Static Ensemble)
+
 **Critical**: The production system uses **competing strategies with adaptive weights**, NOT a traditional ML ensemble:
 
 - **Current (6 strategies)** in `src/strategy_generators.py`: `FrequencyWeightedStrategy`, `CooccurrenceStrategy`, `CoverageOptimizerStrategy`, `RangeBalancedStrategy`, `AIGuidedStrategy`, `RandomBaselineStrategy`
@@ -53,6 +100,7 @@ The system runs an automated 5-step pipeline orchestrated by `trigger_full_pipel
 - `AIGuidedStrategy` wraps `IntelligentGenerator` which uses frequency analysis + deterministic scoring
 
 ### Database Schema
+
 SQLite (`data/shiolplus.db`, ~792 KB) with 20+ tables. Key tables:
 
 - `powerball_draws` (1,864 rows): Official results with `pb_era` classification via triggers
@@ -63,12 +111,14 @@ SQLite (`data/shiolplus.db`, ~792 KB) with 20+ tables. Key tables:
 - `users`, `premium_passes`, `stripe_subscriptions`: Auth and billing state
 
 **Pipeline-Centric Design**:
+
 - **`generated_tickets`**: Core predictions from Pipeline STEP 5, linked to specific `draw_date`, evaluable against official results
 - **`pre_generated_tickets`**: Legacy batch cache (random_forest, lstm, v1, v2, hybrid), will be eliminated once ML strategies are integrated into pipeline
 
 **Era-Aware System**: Powerball range changed (1-35 → 1-26 in 2015). Database triggers (`set_pb_era_on_insert`) auto-classify `pb_era` and `pb_is_current`. Analytics code filters to `pb_is_current = 1` to avoid index errors.
 
 ### API Architecture
+
 FastAPI app in `src/api.py` with modular routers:
 
 - `api_prediction_endpoints.py`: Prediction generation and draw data
@@ -79,6 +129,7 @@ FastAPI app in `src/api.py` with modular routers:
 - `api_plp_v2.py`: Feature-flagged PLP v2 API (set `PLP_API_ENABLED=true`)
 
 ### Scheduler Configuration
+
 APScheduler with persistent SQLite jobstore (`data/scheduler.db`):
 
 - `post_drawing_pipeline`: Tue/Thu/Sun 1:00 AM ET (full 5-step pipeline after draws)
@@ -88,6 +139,7 @@ APScheduler with persistent SQLite jobstore (`data/scheduler.db`):
 ## Development Workflows
 
 ### Running the Application
+
 ```bash
 # Local development
 python main.py  # Starts Uvicorn on 0.0.0.0:8000
@@ -100,6 +152,7 @@ MUSL_API_KEY=<required for MUSL API>
 ```
 
 ### Database Initialization
+
 ```bash
 # Initialize schema (idempotent)
 python -c "from src.database import initialize_database; initialize_database()"
@@ -112,6 +165,7 @@ python -c "from src.analytics_engine import update_analytics; update_analytics()
 ```
 
 ### Testing
+
 ```bash
 # Run all tests
 pytest tests/
@@ -126,11 +180,13 @@ pytest --cov=src tests/
 **Test Structure**: `tests/conftest.py` provides fixtures with test DB at `/tmp/shiol_plus_test.db`. Tests use `pytest` fixtures and mock external dependencies (Stripe API, Gemini API).
 
 ### Manual Pipeline Execution
+
 ```bash
 python scripts/run_pipeline.py  # Runs full 5-step pipeline synchronously
 ```
 
 ### Code Quality
+
 ```bash
 # Linting (relaxed for legacy code)
 ruff check src/ tests/
@@ -144,6 +200,7 @@ mypy src/
 ## Critical Patterns and Conventions
 
 ### 1. Database Connection Management
+
 **Always use `get_db_connection()` context manager**:
 
 ```python
@@ -159,6 +216,7 @@ with get_db_connection() as conn:
 **Why**: SQLite is single-writer. Context manager ensures connections close promptly. Set `timeout=30` and `busy_timeout=5000` PRAGMA for write contention.
 
 ### 2. Date Handling (Critical for Scheduler)
+
 **Always use `DateManager` for date calculations**:
 
 ```python
@@ -176,6 +234,7 @@ next_draw = DateManager.calculate_next_drawing_date()
 **Why**: Powerball draws are scheduled in ET. Naive datetime leads to off-by-one errors across timezones.
 
 ### 3. Strategy Implementation Pattern
+
 When adding new strategies, subclass `BaseStrategy`:
 
 ```python
@@ -186,16 +245,16 @@ class MyStrategy(BaseStrategy):
     def __init__(self):
         super().__init__("my_strategy_name")
         # Load data/state if needed
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         tickets = []
         for _ in range(count):
             # Generate white balls (1-69, sorted, unique)
             white_balls = sorted(random.sample(range(1, 70), 5))
-            
+
             # Generate powerball (1-26)
             powerball = random.randint(1, 26)
-            
+
             tickets.append({
                 'white_balls': white_balls,
                 'powerball': powerball,
@@ -208,6 +267,7 @@ class MyStrategy(BaseStrategy):
 Register in `StrategyManager.__init__()` and initialize row in `strategy_performance` table.
 
 ### 4. Stripe Payment Flow
+
 **Two-step verification** (resilient to webhook delays):
 
 1. **Client-side**: `payment-success.html` polls `/api/v1/billing/status?session_id=...`
@@ -218,12 +278,14 @@ Register in `StrategyManager.__init__()` and initialize row in `strategy_perform
 **Why**: Webhooks can't set browser cookies. Direct session verification provides immediate UX.
 
 ### 5. Authentication System
+
 - **JWT tokens**: 15-day access tokens, 30-day refresh tokens (httpOnly cookies)
 - **Premium Pass**: Separate token system for subscription-based access (jti stored in `premium_passes`)
 - **Device tracking**: `device_fingerprint` in `premium_pass_devices` (max 3 devices per pass)
 - **Admin access**: Check `users.is_admin` flag, NOT role-based system
 
 ### 6. Async Pipeline Safety
+
 Pipeline steps are wrapped in try/except to continue on partial failures:
 
 ```python
@@ -240,6 +302,7 @@ except Exception as e:
 **Why**: Data fetch failures shouldn't abort prediction generation. Log failures and proceed.
 
 ### 7. Era-Aware Data Access
+
 When computing Powerball frequencies, **always filter to current era**:
 
 ```python
@@ -256,12 +319,14 @@ pb_freq = draws['pb'].value_counts()  # Includes PB > 26
 ## Common Tasks
 
 ### Add New API Endpoint
+
 1. Create function in appropriate `src/api_*_endpoints.py` file
 2. Use `@router.get("/path")` or `@router.post("/path")`
 3. Import router in `src/api.py` and call `app.include_router(router)`
 4. Add authentication decorator if needed: `Depends(get_current_user_from_cookie)`
 
 Example:
+
 ```python
 # src/api_admin_endpoints.py
 @router.get("/stats")
@@ -271,18 +336,21 @@ async def get_admin_stats(user: dict = Depends(require_admin)):
 ```
 
 ### Add New Database Table
+
 1. Define schema in `src/database.py` in appropriate `_create_*_tables()` helper
 2. Add indexes in `_create_indexes()`
 3. Call `initialize_database()` (idempotent - uses CREATE TABLE IF NOT EXISTS)
 4. For migrations, use ALTER TABLE with column existence checks via PRAGMA table_info
 
 ### Modify Pipeline Behavior
+
 1. Edit `trigger_full_pipeline_automatically()` in `src/api.py`
 2. Update step logging via `db.update_pipeline_execution_log(execution_id, current_step="...")`
 3. Test with `python scripts/run_pipeline.py`
 4. Check `pipeline_execution_logs` table for execution trace
 
 ### Debug Strategy Generation
+
 ```python
 # Test single strategy
 from src.strategy_generators import CooccurrenceStrategy
@@ -298,6 +366,7 @@ print([t['strategy'] for t in tickets])  # See distribution
 ```
 
 ### Add Gemini Vision OCR Feature
+
 OCR implementation in `src/ticket_processor.py`:
 
 1. `process_ticket()`: Main entry point accepting PIL Image
@@ -310,6 +379,7 @@ OCR implementation in `src/ticket_processor.py`:
 ## Deployment Notes
 
 ### Production Environment
+
 - Runs on Contabo VPS ($2/month, 1 GB RAM)
 - Gunicorn/Uvicorn workers: 2-3 workers max (memory constraint)
 - Nginx reverse proxy with Let's Encrypt SSL
@@ -317,12 +387,14 @@ OCR implementation in `src/ticket_processor.py`:
 - Logs: `/var/log/shiolplus/` or `logs/` in repo (configure LOG_LEVEL env var)
 
 ### Database Backup
+
 ```bash
 # Automated backup (add to cron)
 cp data/shiolplus.db data/backups/shiolplus_$(date +%Y%m%d_%H%M%S).db
 ```
 
 ### Monitoring
+
 - Health check: `GET /api/v1/health`
 - Scheduler status: `GET /api/v1/scheduler/health`
 - System metrics: `GET /api/v1/system/stats` (admin only)
@@ -339,22 +411,27 @@ cp data/shiolplus.db data/backups/shiolplus_$(date +%Y%m%d_%H%M%S).db
 ## Troubleshooting Quick Reference
 
 ### "IndexError: index out of bounds" in FrequencyWeightedStrategy
+
 - **Cause**: PB frequency array includes historical ranges (> 26)
 - **Fix**: Filter draws to `pb_is_current == 1` in `_calculate_pb_frequencies()`
 
 ### Pipeline stuck or jobs not running
+
 - **Cause**: Scheduler timezone mismatch or missed jobs accumulation
 - **Fix**: Check `GET /scheduler/health`, verify `timezone="America/New_York"` in job definitions
 
 ### Stripe webhook signature failures
+
 - **Cause**: Wrong `STRIPE_WEBHOOK_SECRET` or endpoint URL mismatch
 - **Fix**: Verify secret in Stripe Dashboard → Webhooks, ensure endpoint matches deployment URL
 
 ### "No official draw results found for date"
+
 - **Cause**: OCR date format not normalized
 - **Fix**: Add pattern to `normalize_date()` in `src/ticket_processor.py`
 
 ### Database locked errors
+
 - **Cause**: Long-running transaction or missing `conn.close()`
 - **Fix**: Always use `with get_db_connection()` context manager, reduce transaction scope
 
@@ -381,12 +458,14 @@ cp data/shiolplus.db data/backups/shiolplus_$(date +%Y%m%d_%H%M%S).db
 **IMPORTANT**: No manual `git pull` needed on production server.
 
 Orlando has configured a GitHub Actions workflow that:
+
 1. Detects push to `main` branch
 2. Automatically pulls latest code
 3. Restarts services (systemd/gunicorn/uvicorn)
 4. Syncs changes to production immediately
 
 **Workflow for code changes:**
+
 ```bash
 # 1. Make changes locally (already done)
 # 2. Commit with descriptive message
@@ -400,6 +479,7 @@ git push origin main
 ```
 
 **No need to:**
+
 - SSH into production server for code updates
 - Manually restart services
 - Run database migrations manually (unless specified)
@@ -409,6 +489,7 @@ The GitHub Actions will handle deployment within seconds of push.
 ## Production Server Configuration
 
 ### Server Details
+
 - **Location**: `/var/www/SHIOL-PLUS`
 - **Python Virtual Environment**: `/root/.venv_shiolplus/`
 - **Service Name**: `shiolplus.service`
@@ -417,16 +498,19 @@ The GitHub Actions will handle deployment within seconds of push.
 ### Virtual Environment Usage
 
 **To activate venv:**
+
 ```bash
 source /root/.venv_shiolplus/bin/activate
 ```
 
 **To run scripts without activating:**
+
 ```bash
 /root/.venv_shiolplus/bin/python scripts/script_name.py
 ```
 
 **Example: Create demo user in production:**
+
 ```bash
 # Option 1: With activation
 ssh root@server
@@ -441,6 +525,7 @@ ssh root@server "cd /var/www/SHIOL-PLUS && /root/.venv_shiolplus/bin/python scri
 ### Finding the Virtual Environment
 
 If you need to locate the venv in production:
+
 ```bash
 # Check systemd service configuration
 cat /etc/systemd/system/shiolplus.service | grep ExecStart
@@ -458,6 +543,7 @@ ps aux | grep python | grep SHIOL
 ### Demo User Management
 
 **Create demo user in production:**
+
 ```bash
 ssh root@server
 cd /var/www/SHIOL-PLUS
@@ -465,11 +551,13 @@ cd /var/www/SHIOL-PLUS
 ```
 
 **Verify demo user:**
+
 ```bash
 /root/.venv_shiolplus/bin/python scripts/test_demo_user.py
 ```
 
 **Demo credentials:**
+
 - Email: `demo@shiolplus.com`
 - Username: `demo`
 - Password: `Demo2025!`
@@ -486,6 +574,7 @@ cd /var/www/SHIOL-PLUS
 **When to update**: After every significant change (bug fix, feature implementation, optimization, completing roadmap tasks)
 
 **What to update**:
+
 - Mark completed tasks: Change `[ ]` to `[x]` and update status from PENDING to COMPLETED
 - Add performance metrics (before/after benchmarks) if applicable
 - Update "Last Updated" timestamp at bottom of document
@@ -494,6 +583,7 @@ cd /var/www/SHIOL-PLUS
 - Move completed phases from "ACTIVE ROADMAP" to "✅ COMPLETED MILESTONES" section
 
 **Example commit flow**:
+
 ```bash
 # 1. Make your fix/feature
 git add src/your_changes.py
@@ -520,6 +610,7 @@ git push origin main
 ### 2. Update Technical Documentation (AS NEEDED)
 
 **Files to consider**:
+
 - `docs/TECHNICAL.md` → Architecture changes
 - `.github/copilot-instructions.md` → This file, for major architecture shifts
 - `README.md` → User-facing changes
@@ -538,6 +629,7 @@ When marking a roadmap task as COMPLETED in PROJECT_ROADMAP_V8.md, use this form
 - [x] Subtask 3
 
 **Implementation Summary:**
+
 - ✅ [What was built/changed]
 - ✅ [Files modified]
 - ✅ [Tests added]
@@ -548,6 +640,7 @@ When marking a roadmap task as COMPLETED in PROJECT_ROADMAP_V8.md, use this form
 | [Metric 1] | [Value] | [Value] | [%] ✅ |
 
 **Commits:**
+
 - [commit hash]: [commit message]
 
 **Time Estimate:** X hours  
@@ -560,6 +653,7 @@ When marking a roadmap task as COMPLETED in PROJECT_ROADMAP_V8.md, use this form
 ### 4. Quick Reference Checklist
 
 After completing a roadmap task:
+
 - [ ] Code changes committed
 - [ ] Tests added/updated (if applicable)
 - [ ] PROJECT_ROADMAP_V8.md updated:
