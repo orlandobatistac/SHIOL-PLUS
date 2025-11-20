@@ -50,7 +50,7 @@ def test_premium_pass_creation():
     try:
         pass_data = create_premium_pass(test_email, test_subscription)
         
-        print(f"✅ Premium Pass created successfully!")
+        print("✅ Premium Pass created successfully!")
         print(f"   Pass ID: {pass_data['pass_id']}")
         print(f"   Email: {pass_data['email']}")
         print(f"   Subscription: {pass_data['stripe_subscription_id']}")
@@ -74,12 +74,12 @@ def test_premium_pass_retrieval(email):
         pass_data = get_premium_pass_by_email(email)
         
         if pass_data:
-            print(f"✅ Premium Pass found!")
+            print("✅ Premium Pass found!")
             print(f"   Pass ID: {pass_data['pass_id']}")
             print(f"   Created: {pass_data['created_at']}")
             return True
         else:
-            print(f"❌ Premium Pass not found")
+            print("❌ Premium Pass not found")
             return False
             
     except Exception as e:
@@ -109,7 +109,7 @@ def test_status_endpoint_logic():
     
     if retrieved_pass:
         print("✅ Premium Pass retrieved successfully")
-        print(f"   Status endpoint would return: is_premium=True")
+        print("   Status endpoint would return: is_premium=True")
         return True
     else:
         print("❌ Premium Pass retrieval failed")

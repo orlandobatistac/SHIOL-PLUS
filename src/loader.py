@@ -291,7 +291,7 @@ def scrape_powerball_website(expected_draw_date: str) -> Optional[Dict]:
         # Extract draw date directly (it's in a unique ID)
         drawdate_elem = soup.find('span', id='ctl00_MainContent_lblDrawdate')
         if not drawdate_elem:
-            logger.warning(f"🌐 [web_scraping] Could not find drawdate span with ID")
+            logger.warning("🌐 [web_scraping] Could not find drawdate span with ID")
             return None
         
         # Parse date (format: "Saturday, Nov 8, 2025" or "Sat, Nov 8")
@@ -330,7 +330,7 @@ def scrape_powerball_website(expected_draw_date: str) -> Optional[Dict]:
         # Extract powerball
         pb_elem = soup.find('span', id='ctl00_MainContent_lblPowerball')
         if not pb_elem:
-            logger.warning(f"🌐 [web_scraping] Could not find powerball element")
+            logger.warning("🌐 [web_scraping] Could not find powerball element")
             return None
         powerball = int(pb_elem.get_text(strip=True))
         
@@ -497,7 +497,7 @@ def fetch_single_draw_musl(expected_draw_date: str) -> Optional[Dict]:
         
         # Validate response structure
         if not data or 'drawDate' not in data:
-            logger.warning(f"🎯 [musl_api] Invalid response structure")
+            logger.warning("🎯 [musl_api] Invalid response structure")
             return None
         
         draw_date = data.get('drawDate', '')
@@ -525,7 +525,7 @@ def fetch_single_draw_musl(expected_draw_date: str) -> Optional[Dict]:
         # ]
         numbers_data = data.get('numbers', [])
         if not numbers_data:
-            logger.warning(f"🎯 [musl_api] No numbers array in response")
+            logger.warning("🎯 [musl_api] No numbers array in response")
             return None
         
         # Extract white balls (ruleCode='white-balls')
@@ -751,7 +751,7 @@ def quick_health_check_sources() -> Dict[str, bool]:
     try:
         api_key = os.getenv("MUSL_API_KEY")
         if not api_key:
-            logger.info(f"   ⚠️  MUSL API: SKIPPED (no API key configured)")
+            logger.info("   ⚠️  MUSL API: SKIPPED (no API key configured)")
         else:
             url = "https://api.musl.com/v3/numbers"
             headers = {
@@ -825,22 +825,22 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
     timeout_et = current_et.replace(hour=(current_et.hour + 6) % 24)
     
     logger.info("=" * 80)
-    logger.info(f"🚀 [unified_polling] STARTING UNIFIED ADAPTIVE POLLING")
+    logger.info("🚀 [unified_polling] STARTING UNIFIED ADAPTIVE POLLING")
     logger.info(f"🚀 [unified_polling] Target draw date: {expected_draw_date}")
     logger.info(f"🚀 [unified_polling] Started at: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     logger.info(f"🚀 [unified_polling] Timeout at: {timeout_et.strftime('%Y-%m-%d %H:%M:%S %Z')} (6 hours)")
-    logger.info(f"🚀 [unified_polling] Adaptive intervals: 30s (0-30min) → 5min (30min-2h) → 15min (2h+)")
+    logger.info("🚀 [unified_polling] Adaptive intervals: 30s (0-30min) → 5min (30min-2h) → 15min (2h+)")
     logger.info("=" * 80)
     
     # ========== PRE-CHECK: HEALTH CHECK ALL SOURCES ==========
-    logger.info(f"🏥 [unified_polling] Running pre-check health test...")
+    logger.info("🏥 [unified_polling] Running pre-check health test...")
     healthy_sources = quick_health_check_sources()
     
     # Abort if ALL sources are down
     if not any(healthy_sources.values()):
         logger.error("=" * 80)
-        logger.error(f"🚨 [unified_polling] CRITICAL: ALL DATA SOURCES UNAVAILABLE!")
-        logger.error(f"🚨 [unified_polling] Cannot proceed with polling - check connectivity")
+        logger.error("🚨 [unified_polling] CRITICAL: ALL DATA SOURCES UNAVAILABLE!")
+        logger.error("🚨 [unified_polling] Cannot proceed with polling - check connectivity")
         logger.error("=" * 80)
         return {
             'success': False,
@@ -861,7 +861,7 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
         active_sources.append(('MUSL API', 'musl_api', fetch_single_draw_musl))
     
     logger.info(f"🚀 [unified_polling] Strategy: {' → '.join([s[0] for s in active_sources])} ({len(active_sources)}/{3} sources active)")
-    logger.info(f"🚀 [unified_polling] Intervals: 30s (0-30min) → 5min (30min-2h) → 15min (2h+)")
+    logger.info("🚀 [unified_polling] Intervals: 30s (0-30min) → 5min (30min-2h) → 15min (2h+)")
     logger.info("=" * 80)
     
     while True:
@@ -872,10 +872,10 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
         # Check timeout BEFORE attempting
         if datetime.now().timestamp() >= timeout_timestamp:
             logger.warning("=" * 80)
-            logger.warning(f"⏱ [unified_polling] TIMEOUT REACHED after 6 hours")
+            logger.warning("⏱ [unified_polling] TIMEOUT REACHED after 6 hours")
             logger.warning(f"⏱ [unified_polling] Total attempts: {attempts}")
             logger.warning(f"⏱ [unified_polling] Elapsed time: {elapsed_minutes:.1f} minutes")
-            logger.warning(f"⏱ [unified_polling] Draw still not available from any source - daily sync will catch it at 6 AM")
+            logger.warning("⏱ [unified_polling] Draw still not available from any source - daily sync will catch it at 6 AM")
             logger.warning("=" * 80)
             return {
                 'success': False,
@@ -945,7 +945,7 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
                 logger.info(f"   ⏸ No data from any source. Sleeping {remaining_sleep:.0f}s (until timeout)...")
                 time.sleep(remaining_sleep)
             else:
-                logger.info(f"   ⏸ Timeout reached, exiting polling loop")
+                logger.info("   ⏸ Timeout reached, exiting polling loop")
                 break
         else:
             logger.info(f"   ⏸ No data from any source. Sleeping {interval_seconds}s before retry (Attempt #{attempts+1})...")
@@ -998,9 +998,9 @@ def daily_full_sync_job() -> Dict:
     current_et = DateManager.get_current_et_time()
     
     logger.info("=" * 80)
-    logger.info(f"🔄 [daily_sync] STARTING DAILY FULL SYNC")
+    logger.info("🔄 [daily_sync] STARTING DAILY FULL SYNC")
     logger.info(f"🔄 [daily_sync] Execution time: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-    logger.info(f"🔄 [daily_sync] Source: NC Lottery CSV (complete historical data)")
+    logger.info("🔄 [daily_sync] Source: NC Lottery CSV (complete historical data)")
     logger.info("=" * 80)
     
     try:
@@ -1009,7 +1009,7 @@ def daily_full_sync_job() -> Dict:
         logger.info(f"🔄 [daily_sync] Latest draw in database: {latest_db_date or 'EMPTY'}")
         
         # Step 2: Download and parse NC Lottery CSV
-        logger.info(f"🔄 [daily_sync] Downloading NC Lottery CSV...")
+        logger.info("🔄 [daily_sync] Downloading NC Lottery CSV...")
         
         csv_url = "https://nclottery.com/powerball-download"
         headers = {
@@ -1102,7 +1102,7 @@ def daily_full_sync_job() -> Dict:
             inserted = bulk_insert_draws(missing_df)
             
             logger.info("=" * 80)
-            logger.info(f"✅ [daily_sync] SYNC COMPLETE!")
+            logger.info("✅ [daily_sync] SYNC COMPLETE!")
             logger.info(f"✅ [daily_sync] Total draws in CSV: {len(main_draws)}")
             logger.info(f"✅ [daily_sync] Draws processed: {len(parsed_draws)}")
             logger.info(f"✅ [daily_sync] Draws inserted: {inserted}")
@@ -1111,7 +1111,7 @@ def daily_full_sync_job() -> Dict:
             logger.info("=" * 80)
         else:
             logger.info("=" * 80)
-            logger.info(f"✅ [daily_sync] DATABASE IS COMPLETE - No missing draws found")
+            logger.info("✅ [daily_sync] DATABASE IS COMPLETE - No missing draws found")
             logger.info(f"✅ [daily_sync] Latest draw: {parsed_draws[0]['draw_date']}")
             logger.info(f"✅ [daily_sync] Execution time: {time.time() - start_time:.2f}s")
             logger.info("=" * 80)
@@ -1127,11 +1127,11 @@ def daily_full_sync_job() -> Dict:
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error("=" * 80)
-        logger.error(f"❌ [daily_sync] SYNC FAILED!")
+        logger.error("❌ [daily_sync] SYNC FAILED!")
         logger.error(f"❌ [daily_sync] Error: {e}")
         logger.error(f"❌ [daily_sync] Execution time: {elapsed:.2f}s")
         logger.error("=" * 80)
-        logger.error(f"Full traceback:", exc_info=True)
+        logger.error("Full traceback:", exc_info=True)
         
         return {
             'success': False,
