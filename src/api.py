@@ -18,7 +18,6 @@ from src.predictor import Predictor
 from src.intelligent_generator import IntelligentGenerator, DeterministicGenerator
 from src.loader import realtime_draw_polling_unified, daily_full_sync_job
 import src.database as db
-# from src.adaptive_feedback import initialize_adaptive_system  # REMOVED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
@@ -38,8 +37,6 @@ import shutil
 import platform
 
 # --- Pipeline Monitoring Global Variables ---
-# Global variables for pipeline monitoring
-# Pipeline orchestrator deprecated and removed
 pipeline_executions = {}  # Track running pipeline executions
 pipeline_logs = []  # Store recent pipeline logs
 active_pipeline_execution_id = None  # Track currently running pipeline for graceful shutdown
@@ -75,8 +72,6 @@ scheduler = AsyncIOScheduler(
 
 # Track scheduler start time for uptime reporting
 SCHEDULER_START_TIME_UTC = None
-
-# REMOVED: update_data_automatically() - replaced by daily_full_sync_job in scheduler
 
 def recover_stale_pipelines():
     """Recovery function to clean up pipelines stuck in 'running' state on startup.
