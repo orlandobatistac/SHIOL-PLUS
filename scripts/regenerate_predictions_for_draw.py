@@ -71,28 +71,30 @@ def generate_predictions(draw_date: str, total_tickets: int = 500) -> int:
         skipped = 0
         
         for ticket in tickets:
+            wb = ticket['white_balls']
+            pb = ticket['powerball']
+            
+            # Validate white balls range (1-69)
+            if not all(1 <= n <= 69 for n in wb):
+                logger.warning(f"Skipping ticket with invalid white balls: {wb} (strategy: {ticket.get('strategy', 'unknown')})")
+                skipped += 1
+                continue
+            
+            # Validate powerball range (1-26)
+            if not (1 <= pb <= 26):
+                logger.warning(f"Skipping ticket with invalid powerball: {pb} (strategy: {ticket.get('strategy', 'unknown')})")
+                skipped += 1
+                continue
+            
+            # Validate sorted order
+            if wb != sorted(wb):
+                logger.warning(f"Skipping ticket with unsorted white balls: {wb} (strategy: {ticket.get('strategy', 'unknown')})")
+                skipped += 1
+                continue
+            
+            try
+                
             try:
-                wb = ticket['white_balls']
-                pb = ticket['powerball']
-                
-                # Validate white balls range (1-69)
-                if not all(1 <= n <= 69 for n in wb):
-                    logger.warning(f"Skipping ticket with invalid white balls: {wb}")
-                    skipped += 1
-                    continue
-                
-                # Validate powerball range (1-26)
-                if not (1 <= pb <= 26):
-                    logger.warning(f"Skipping ticket with invalid powerball: {pb}")
-                    skipped += 1
-                    continue
-                
-                # Validate sorted order
-                if wb != sorted(wb):
-                    logger.warning(f"Skipping ticket with unsorted white balls: {wb}")
-                    skipped += 1
-                    continue
-                
                 cursor.execute("""
                     INSERT INTO generated_tickets (
                         draw_date, strategy_used, n1, n2, n3, n4, n5, powerball, confidence_score
@@ -106,7 +108,7 @@ def generate_predictions(draw_date: str, total_tickets: int = 500) -> int:
                 ))
                 inserted += 1
             except Exception as e:
-                logger.error(f"Error inserting ticket: {e}")
+                logger.error(f"Error inserting ticket {wb} + PB {pb} (strategy: {ticket.get('strategy', 'unknown')}): {e}")
                 skipped += 1
                 continue
         
