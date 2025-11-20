@@ -5,8 +5,9 @@ Advanced statistical analysis for Powerball historical data.
 """
 
 import numpy as np
+import pandas as pd
 from loguru import logger
-from typing import Dict
+from typing import Dict, Any
 from src.database import get_db_connection, get_all_draws
 
 
@@ -246,6 +247,292 @@ class AnalyticsEngine:
         conn.commit()
         conn.close()
         logger.info(f"Saved {len(records)} pattern statistics to database")
+
+
+def compute_gap_analysis(df: pd.DataFrame) -> Dict[str, Dict[int, int]]:
+    """
+    Calculate days since last appearance for each number.
+    
+    Args:
+        df: DataFrame with draw_date, n1-n5 (white balls), and pb (powerball) columns
+        
+    Returns:
+        Dict with 'white_balls' and 'powerball' keys, each mapping number to gap in days
+        Example: {'white_balls': {1: 14, 2: 7, ...}, 'powerball': {1: 21, 2: 3, ...}}
+    """
+    if df.empty:
+        logger.warning("Empty dataframe provided to compute_gap_analysis")
+        # Return default gaps (all numbers equally overdue)
+        return {
+            'white_balls': {i: 0 for i in range(1, 70)},
+            'powerball': {i: 0 for i in range(1, 27)}
+        }
+    
+    # Ensure draw_date is datetime
+    if not pd.api.types.is_datetime64_any_dtype(df['draw_date']):
+        df = df.copy()
+        df['draw_date'] = pd.to_datetime(df['draw_date'])
+    
+    # Get the most recent draw date
+    most_recent_date = df['draw_date'].max()
+    
+    # Initialize gap tracking (last seen date for each number)
+    white_ball_last_seen = {}
+    powerball_last_seen = {}
+    
+    # Process draws in chronological order
+    for _, draw in df.iterrows():
+        draw_date = draw['draw_date']
+        
+        # Track white balls
+        for num in [draw['n1'], draw['n2'], draw['n3'], draw['n4'], draw['n5']]:
+            white_ball_last_seen[int(num)] = draw_date
+        
+        # Track powerball (only current era: 1-26)
+        pb = int(draw['pb'])
+        if 1 <= pb <= 26:
+            powerball_last_seen[pb] = draw_date
+    
+    # Calculate gaps in days
+    white_ball_gaps = {}
+    for num in range(1, 70):
+        if num in white_ball_last_seen:
+            gap = (most_recent_date - white_ball_last_seen[num]).days
+            white_ball_gaps[num] = gap
+        else:
+            # Never appeared in dataset
+            white_ball_gaps[num] = 999  # Large number to indicate very overdue
+    
+    powerball_gaps = {}
+    for num in range(1, 27):
+        if num in powerball_last_seen:
+            gap = (most_recent_date - powerball_last_seen[num]).days
+            powerball_gaps[num] = gap
+        else:
+            powerball_gaps[num] = 999
+    
+    logger.debug(f"Gap analysis complete: {len(white_ball_gaps)} white balls, {len(powerball_gaps)} powerballs")
+    return {
+        'white_balls': white_ball_gaps,
+        'powerball': powerball_gaps
+    }
+
+
+def compute_temporal_frequencies(df: pd.DataFrame, decay_rate: float = 0.05) -> Dict[str, np.ndarray]:
+    """
+    Calculate weighted frequency where recent draws matter more.
+    
+    Uses exponential decay: weight = exp(-decay_rate * days_ago)
+    
+    Args:
+        df: DataFrame with draw_date, n1-n5, and pb columns
+        decay_rate: Decay rate for exponential weighting (default 0.05)
+        
+    Returns:
+        Dict with 'white_balls' (69-element array) and 'powerball' (26-element array)
+        containing normalized probability distributions
+    """
+    if df.empty:
+        logger.warning("Empty dataframe provided to compute_temporal_frequencies")
+        return {
+            'white_balls': np.ones(69) / 69,  # Uniform distribution
+            'powerball': np.ones(26) / 26
+        }
+    
+    # Ensure draw_date is datetime
+    if not pd.api.types.is_datetime64_any_dtype(df['draw_date']):
+        df = df.copy()
+        df['draw_date'] = pd.to_datetime(df['draw_date'])
+    
+    # Get the most recent draw date
+    most_recent_date = df['draw_date'].max()
+    
+    # Initialize weighted frequency counters
+    white_ball_freq = np.zeros(69)
+    powerball_freq = np.zeros(26)
+    
+    # Process each draw with exponential decay weight
+    for _, draw in df.iterrows():
+        days_ago = (most_recent_date - draw['draw_date']).days
+        weight = np.exp(-decay_rate * days_ago)
+        
+        # Weight white balls
+        for num in [draw['n1'], draw['n2'], draw['n3'], draw['n4'], draw['n5']]:
+            if 1 <= num <= 69:
+                white_ball_freq[int(num) - 1] += weight
+        
+        # Weight powerball (current era only)
+        pb = int(draw['pb'])
+        if 1 <= pb <= 26:
+            powerball_freq[pb - 1] += weight
+    
+    # Normalize to probabilities
+    wb_total = white_ball_freq.sum()
+    if wb_total > 0:
+        white_ball_freq = white_ball_freq / wb_total
+    else:
+        white_ball_freq = np.ones(69) / 69
+    
+    pb_total = powerball_freq.sum()
+    if pb_total > 0:
+        powerball_freq = powerball_freq / pb_total
+    else:
+        powerball_freq = np.ones(26) / 26
+    
+    logger.debug(f"Temporal frequencies computed with decay_rate={decay_rate}")
+    return {
+        'white_balls': white_ball_freq,
+        'powerball': powerball_freq
+    }
+
+
+def compute_momentum_scores(df: pd.DataFrame, window: int = 20) -> Dict[str, Dict[int, float]]:
+    """
+    Compare frequency in recent draws vs previous draws to identify rising/falling numbers.
+    
+    Momentum score ranges from -1.0 (falling) to +1.0 (rising).
+    
+    Args:
+        df: DataFrame with draw_date, n1-n5, and pb columns
+        window: Total window size (default 20). Compares last window/2 vs previous window/2 draws
+        
+    Returns:
+        Dict with 'white_balls' and 'powerball' keys, each mapping number to momentum score
+        Example: {'white_balls': {1: 0.5, 2: -0.3, ...}, 'powerball': {1: 0.8, ...}}
+    """
+    if df.empty or len(df) < window:
+        logger.warning(f"Insufficient data for momentum analysis (need {window} draws, have {len(df)})")
+        # Return neutral momentum (0.0) for all numbers
+        return {
+            'white_balls': {i: 0.0 for i in range(1, 70)},
+            'powerball': {i: 0.0 for i in range(1, 27)}
+        }
+    
+    # Ensure chronological order
+    df = df.sort_values('draw_date').reset_index(drop=True)
+    
+    half_window = window // 2
+    
+    # Get recent and previous windows
+    recent_draws = df.tail(half_window)
+    previous_draws = df.tail(window).head(half_window)
+    
+    # Count frequencies in each window
+    def count_frequencies(draws_subset):
+        wb_counts = np.zeros(69)
+        pb_counts = np.zeros(26)
+        
+        for _, draw in draws_subset.iterrows():
+            for num in [draw['n1'], draw['n2'], draw['n3'], draw['n4'], draw['n5']]:
+                if 1 <= num <= 69:
+                    wb_counts[int(num) - 1] += 1
+            
+            pb = int(draw['pb'])
+            if 1 <= pb <= 26:
+                pb_counts[pb - 1] += 1
+        
+        return wb_counts, pb_counts
+    
+    recent_wb, recent_pb = count_frequencies(recent_draws)
+    previous_wb, previous_pb = count_frequencies(previous_draws)
+    
+    # Calculate momentum scores
+    # Momentum = (recent_freq - previous_freq) / (recent_freq + previous_freq + epsilon)
+    # This gives a score between -1 and +1
+    epsilon = 0.1  # Small constant to avoid division by zero
+    
+    white_ball_momentum = {}
+    for num in range(1, 70):
+        idx = num - 1
+        momentum = (recent_wb[idx] - previous_wb[idx]) / (recent_wb[idx] + previous_wb[idx] + epsilon)
+        white_ball_momentum[num] = float(momentum)
+    
+    powerball_momentum = {}
+    for num in range(1, 27):
+        idx = num - 1
+        momentum = (recent_pb[idx] - previous_pb[idx]) / (recent_pb[idx] + previous_pb[idx] + epsilon)
+        powerball_momentum[num] = float(momentum)
+    
+    logger.debug(f"Momentum scores computed with window={window}")
+    return {
+        'white_balls': white_ball_momentum,
+        'powerball': powerball_momentum
+    }
+
+
+def get_analytics_overview() -> Dict[str, Any]:
+    """
+    Facade function that consolidates all analytics for dashboard display.
+    
+    Returns:
+        Dict containing gap_analysis, temporal_frequencies, momentum_scores,
+        and traditional pattern statistics
+    """
+    logger.info("Computing analytics overview...")
+    
+    try:
+        # Fetch historical data
+        df = get_all_draws()
+        
+        if df.empty:
+            logger.warning("No historical data available for analytics overview")
+            return {
+                'gap_analysis': {'white_balls': {}, 'powerball': {}},
+                'temporal_frequencies': {'white_balls': [], 'powerball': []},
+                'momentum_scores': {'white_balls': {}, 'powerball': {}},
+                'pattern_statistics': {},
+                'data_summary': {
+                    'total_draws': 0,
+                    'most_recent_date': None,
+                    'current_era_draws': 0
+                }
+            }
+        
+        # Compute new analytics
+        gap_analysis = compute_gap_analysis(df)
+        temporal_frequencies = compute_temporal_frequencies(df, decay_rate=0.05)
+        momentum_scores = compute_momentum_scores(df, window=20)
+        
+        # Get traditional pattern statistics
+        engine = AnalyticsEngine()
+        pattern_statistics = engine.calculate_pattern_statistics()
+        
+        # Data summary
+        current_era_count = len(df[(df['pb'] >= 1) & (df['pb'] <= 26)])
+        most_recent_date = df['draw_date'].max() if not df.empty else None
+        
+        overview = {
+            'gap_analysis': gap_analysis,
+            'temporal_frequencies': {
+                'white_balls': temporal_frequencies['white_balls'].tolist(),
+                'powerball': temporal_frequencies['powerball'].tolist()
+            },
+            'momentum_scores': momentum_scores,
+            'pattern_statistics': pattern_statistics,
+            'data_summary': {
+                'total_draws': len(df),
+                'most_recent_date': str(most_recent_date) if most_recent_date else None,
+                'current_era_draws': current_era_count
+            }
+        }
+        
+        logger.info("Analytics overview computed successfully")
+        return overview
+        
+    except Exception as e:
+        logger.error(f"Error computing analytics overview: {e}")
+        return {
+            'gap_analysis': {'white_balls': {}, 'powerball': {}},
+            'temporal_frequencies': {'white_balls': [], 'powerball': []},
+            'momentum_scores': {'white_balls': {}, 'powerball': {}},
+            'pattern_statistics': {},
+            'data_summary': {
+                'total_draws': 0,
+                'most_recent_date': None,
+                'current_era_draws': 0
+            },
+            'error': str(e)
+        }
 
 
 def update_analytics():

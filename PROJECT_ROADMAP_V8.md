@@ -680,239 +680,92 @@ Statistics:
 
 ---
 
-### PHASE 4.5: TICKET ANALYZER & SCORING ENGINE (NOV 20-26) 🚀 IN PROGRESS
+### PHASE 4.5: PLP V2 INTEGRATION (GAMIFICATION & ANALYTICS) 🚀 IN PROGRESS
 
-**Goal:** Analizar tickets del USUARIO y darle feedback de calidad (no analizar predicciones del pipeline)
+**Goal:** Potenciar la experiencia "Premium/Gamificada" de PredictLottoPro (PLP) mediante endpoints exclusivos en `api_plp_v2.py` que consumen motores de análisis avanzados.
 
 **Status:** 🚀 IN PROGRESS (Nov 20, 2025)
 
-**Objetivo Correcto:**
-- Usuario envía SUS tickets elegidos (white_balls + powerball)
-- Sistema analiza calidad multi-dimensional
-- Retorna scores, insights, recommendations
-- Similar a: "¿Qué tan buenos son mis números?"
+**Architectural Decision:**
 
-**Use Case del Proyecto Externo (PredictLottoPro):**
-1. Usuario elige números en UI del proyecto externo
-2. Antes de confirmar jugada, presiona "Analyze My Ticket"
-3. Endpoint `POST /api/v3/analytics/analyze-tickets` recibe tickets
-4. Sistema retorna:
-   - Scores (diversity, balance, pattern, hot/cold, gap, momentum)
-   - Insights (números hot/cold en su ticket, si está balanceado)
-   - Recommendation (EXCELLENT/GOOD/FAIR/POOR)
-5. Usuario decide si jugar ese ticket o modificarlo
+- **Aislamiento:** Lógica de PLP separada en `src/api_plp_v2.py` para no contaminar API core.
+- **Reutilización:** Motores de cálculo (`ticket_scorer.py`, `analytics_engine.py`) compartidos pero expuestos vía router específico.
+- **Features:** Context Analytics, Ticket Validator, Interactive Generator.
 
-**Computational Impact Analysis:**
-
-| Feature | CPU | RAM | Latency | VPS Compatible? |
-|---------|-----|-----|---------|-----------------|
-| Temporal Decay Model | ⚡ Muy Bajo | <5 MB | <50ms | ✅ YES |
-| Gap/Drought Analyzer | ⚡ Muy Bajo | <5 MB | <100ms | ✅ YES |
-| Momentum Analyzer (window=20) | ⚡ Bajo | <10 MB | <200ms | ✅ YES |
-| Scoring Engine 6D | ⚡ Bajo | <2 MB | ~5ms per ticket | ✅ YES |
-| Ticket Analysis Endpoint | ⚡ Bajo | <20 MB | <100ms for 5 tickets | ✅ YES |
-| **TOTAL IMPACT** | +5-10% CPU | +42 MB RAM | No impact on pipeline | ✅ **ACCEPTABLE** |
-
-**What NOT to Implement (Too Expensive for VPS):**
-
-| Feature                           | Why NOT                             | CPU Cost                 | RAM Cost   |
-| --------------------------------- | ----------------------------------- | ------------------------ | ---------- |
-| ❌ Correlation Network (PageRank) | O(V²) graph algorithms              | 🔥 ALTO (+2-5 min)       | 50-100 MB  |
-| ❌ Pattern Mining (Apriori)       | O(2^n) exponential                  | 🔥 MUY ALTO (+10-30 min) | 100-500 MB |
-| ❌ Isolation Forest               | Redundant with XGBoost              | 🔥 ALTO (+5-10 min)      | 100-200 MB |
-| ❌ Fourier Periodicity            | Pseudociencia (no cycles in random) | 🔥 ALTO (+3-5 min)       | 50-100 MB  |
-| ❌ New MomentumStrategy           | Validate analytics first            | ⚡ Medium (+10-15s)      | <15 MB     |
-| ❌ New GapTheoryStrategy          | Validate analytics first            | ⚡ Medium (+10-15s)      | <10 MB     |
-
-**Decision:** Implementar solo analytics LIGEROS (items 1-5), posponer nuevas estrategias hasta validar correlaciones.
+**Time Estimate:** 4-5 horas
+**Priority:** CRITICAL
 
 ---
 
-#### Task 4.5.1: Gap/Drought Analyzer ✅ PENDING
+#### Task 4.5.1: Core Analytics Engines Implementation ✅ COMPLETED
 
-**Objective:** Compute "days since last appearance" for each number (1-69 white, 1-26 powerball)
+**Objective:** Implementar la lógica de negocio para análisis y scoring de tickets (Gap, Temporal, Momentum, Scoring).
 
-**Implementation:**
+**Implementation Checklist:**
 
-- [x] Función `compute_gap_analysis()` en `src/analytics_engine.py`
-- [x] Input: DataFrame de draws históricos
-- [x] Output: Dict con gap scores por número
-- [x] Algoritmo: Simple subtraction (current_date - max(draw_date WHERE number appeared))
-- [x] Cache en tabla `number_gap_analysis` (actualizar en STEP 2 del pipeline)
+- [x] **Analytics Engine Updates (`src/analytics_engine.py`):**
+  - [x] Implementar `compute_gap_analysis()` (Days since last appearance).
+  - [x] Implementar `compute_temporal_frequencies()` (Exponential decay).
+  - [x] Implementar `compute_momentum_scores()` (Rising/Falling trends).
+  - [x] Exponer función `get_analytics_overview()` que agrupe todo esto.
+- [x] **Ticket Scorer (`src/ticket_scorer.py`):**
+  - [x] Crear clase `TicketScorer`.
+  - [x] Implementar `score_ticket(ticket, context)` con dimensiones: Diversity, Balance, Pattern.
+- [x] **Interactive Generator (`src/strategy_generators.py`):**
+  - [x] Crear clase `CustomInteractiveGenerator` para generación on-demand con parámetros (risk, exclude).
 
-**Expected Output:**
+**Implementation Summary:**
 
-```python
-{
-    'white_balls': {
-        1: 5,   # Apareció hace 5 draws
-        2: 12,  # Apareció hace 12 draws
-        ...
-        69: 3
-    },
-    'powerball': {
-        1: 8,
-        2: 2,
-        ...
-        26: 15
-    }
-}
-```
+- ✅ `src/analytics_engine.py`: Added gap analysis, temporal decay (exp), and momentum (windowed comparison).
+- ✅ `src/ticket_scorer.py`: Created comprehensive scoring engine (0-100 scale) with detailed feedback.
+- ✅ `src/strategy_generators.py`: Added `CustomInteractiveGenerator` supporting hot/cold temperature and risk profiles.
+- ✅ Verified with `scripts/verify_task_4_5_1.py`: All components working correctly.
 
-**Time Estimate:** 2 horas  
-**Priority:** HIGH  
+**Time Estimate:** 2 horas
+**Actual Time:** ~1 hora
+**Priority:** HIGH
+**Status:** ✅ COMPLETED
+**Date Completed:** 2025-11-20
+
+---
+
+#### Task 4.5.2: PLP V2 API Implementation (api_plp_v2.py)
+
+**Objective:** Exponer los nuevos features a través de endpoints seguros y específicos para PLP.
+
+**Implementation Checklist:**
+
+- [ ] Modificar `src/api_plp_v2.py` para importar nuevos motores.
+- [ ] Implementar `GET /api/plp/v2/analytics/context`: Dashboard data (Hot/Cold, Momentum).
+- [ ] Implementar `POST /api/plp/v2/analytics/analyze-ticket`: Validador de tickets de usuario.
+- [ ] Implementar `POST /api/plp/v2/generator/interactive`: Generador con sliders/parámetros.
+- [ ] Asegurar que todos los endpoints usen el prefijo `/api/plp/v2`.
+
+**Endpoint Specifications:**
+
+1. **Context:** Retorna métricas globales para el dashboard antes de jugar.
+2. **Validator:** Recibe números del usuario -> Retorna Score + Insights.
+3. **Interactive:** Recibe `{ temperature: 'hot', risk: 'high' }` -> Retorna tickets generados.
+
+**Time Estimate:** 2 horas
+**Priority:** HIGH
 **Status:** PENDING
 
 ---
 
-#### Task 4.5.2: Temporal Decay Model ✅ PENDING
+#### Task 4.5.3: Validation & Testing
 
-**Objective:** Compute frequency distributions with exponential decay weighting (recent draws matter more)
+**Objective:** Verificar que la integración funciona correctamente y no afecta el pipeline principal.
 
-**Implementation:**
+**Implementation Checklist:**
 
-- [x] Función `compute_temporal_frequencies()` en `src/analytics_engine.py`
-- [x] Input: DataFrame de draws, decay_rate (default: 0.05)
-- [x] Output: Weighted frequency distributions
-- [x] Algoritmo: `weights = exp(-decay_rate * age)`
-- [x] Integrar en `update_analytics()` (STEP 2 del pipeline)
+- [ ] Test unitarios para `TicketScorer` y `CustomInteractiveGenerator`.
+- [ ] Test de integración para endpoints de `api_plp_v2.py`.
+- [ ] Verificar performance (<100ms para análisis, <200ms para generación).
+- [ ] Validar aislamiento (errores en PLP no tumban SHIOL+).
 
-**Expected Output:**
-
-```python
-{
-    'white_balls_temporal': array([0.012, 0.018, ...]),  # 69 elements
-    'powerball_temporal': array([0.035, 0.041, ...]),     # 26 elements
-    'decay_rate': 0.05
-}
-```
-
-**Time Estimate:** 2 horas  
-**Priority:** HIGH  
-**Status:** PENDING
-
----
-
-#### Task 4.5.3: Momentum Analyzer (Short Window) ✅ PENDING
-
-**Objective:** Detect rising/falling trends in last 20 draws (NOT full 1864)
-
-**Implementation:**
-
-- [x] Función `compute_momentum_scores()` en `src/analytics_engine.py`
-- [x] Input: DataFrame de últimos 20 draws
-- [x] Output: Momentum scores (-1.0 to +1.0) por número
-- [x] Algoritmo: Frequency derivative (recent 10 draws vs previous 10 draws)
-- [x] Clasificación: rising (>0.2), stable (-0.2 to 0.2), falling (<-0.2)
-
-**Expected Output:**
-
-```python
-{
-    'white_balls_momentum': {
-        1: 0.35,   # Rising (hot momentum)
-        2: -0.18,  # Stable
-        ...
-        69: -0.45  # Falling (cold momentum)
-    },
-    'powerball_momentum': {...},
-    'rising_numbers': [1, 10, 23],
-    'falling_numbers': [45, 60, 69]
-}
-```
-
-**Time Estimate:** 3 horas  
-**Priority:** HIGH  
-**Status:** PENDING
-
----
-
-#### Task 4.5.4: Scoring Engine (6 Dimensions) ✅ PENDING
-
-**Objective:** Score each ticket on 6 quality dimensions (not just confidence)
-
-**Implementation:**
-
-- [x] Crear módulo `src/ticket_scorer.py`
-- [x] Función `score_ticket(ticket: Dict) -> Dict[str, float]`
-- [x] Dimensiones:
-  1. **Diversity (Entropy)**: Shannon entropy of white balls distribution
-  2. **Balance**: Range distribution (low/mid/high)
-  3. **Pattern Conformity**: Odd/even ratio, sum range, decade clustering
-  4. **Historical Alignment**: Cosine similarity to recent winners
-  5. **Naturalness**: Distance from uniform distribution
-  6. **Innovation**: Distance from recently generated tickets
-- [x] Integrar en pipeline STEP 5 (score cada ticket generado)
-- [x] Almacenar scores en `generated_tickets` table (añadir columnas)
-
-**Expected Output:**
-
-```python
-{
-    'diversity_score': 0.82,
-    'balance_score': 0.75,
-    'pattern_score': 0.90,
-    'historical_score': 0.65,
-    'naturalness_score': 0.70,
-    'innovation_score': 0.80,
-    'composite_score': 0.77  # Weighted average
-}
-```
-
-**Time Estimate:** 6 horas  
-**Priority:** MEDIUM  
-**Status:** PENDING
-
----
-
-#### Task 4.5.5: Analytics Dashboard Endpoint ✅ PENDING
-
-**Objective:** Endpoint `/api/v3/analytics/overview` con analytics completos
-
-**Implementation:**
-
-- [x] Crear en `src/api_prediction_endpoints.py`
-- [x] Incluir datos de:
-  - Gap analysis (hot/cold by recency)
-  - Temporal frequencies (weighted by decay)
-  - Momentum indicators (rising/falling trends)
-  - Pattern statistics (odd/even, sum ranges, decades)
-  - Co-occurrence top pairs (ya existe en DB)
-  - Strategy contribution map (tickets by strategy)
-  - Ticket quality averages (composite scores)
-- [x] Performance target: <100ms (read pre-computed analytics)
-- [x] Response format: JSON con visualizaciones ASCII opcionales
-
-**Expected Response:**
-
-```json
-{
-  "hot_numbers": {
-    "white_balls": [12, 23, 34],
-    "powerball": [10, 15]
-  },
-  "cold_numbers": {
-    "white_balls": [5, 15, 65],
-    "powerball": [3, 22]
-  },
-  "momentum": {
-    "rising": [10, 20, 30],
-    "falling": [50, 60, 69]
-  },
-  "gaps": {
-    "overdue": [8, 18],
-    "recent": [1, 2]
-  },
-  "patterns": {
-    "odd_even_ratio": 0.6,
-    "sum_range": [120, 180],
-    "decades": { "0-9": 1, "10-19": 2 }
-  }
-}
-```
-
-**Time Estimate:** 2 horas  
-**Priority:** MEDIUM  
+**Time Estimate:** 1 hora
+**Priority:** MEDIUM
 **Status:** PENDING
 
 ---
@@ -1210,6 +1063,7 @@ def rl_weight_update(strategy_name, draw_result):
 **Goal:** Analizar tickets que el USUARIO va a jugar y darle feedback de calidad
 
 **Context Correcto:**
+
 - NO es dashboard de predicciones del pipeline
 - ES un **validador/analizador de tickets del usuario**
 - Usuario envía SUS tickets elegidos → Sistema analiza calidad
@@ -1222,8 +1076,8 @@ def rl_weight_update(strategy_name, draw_result):
   ```json
   {
     "tickets": [
-      {"white_balls": [5, 12, 23, 45, 67], "powerball": 10},
-      {"white_balls": [1, 2, 3, 4, 5], "powerball": 6}
+      { "white_balls": [5, 12, 23, 45, 67], "powerball": 10 },
+      { "white_balls": [1, 2, 3, 4, 5], "powerball": 6 }
     ]
   }
   ```
@@ -1234,22 +1088,22 @@ def rl_weight_update(strategy_name, draw_result):
       {
         "ticket_id": 0,
         "scores": {
-          "diversity_score": 0.82,        // Entropy analysis
-          "balance_score": 0.75,           // Range distribution
-          "pattern_score": 0.90,           // Odd/even, sum, decades
-          "hot_cold_score": 0.65,          // Temporal frequency
-          "gap_score": 0.70,               // Overdue numbers
-          "momentum_score": 0.80,          // Rising/falling trends
-          "composite_score": 0.77          // Weighted average
+          "diversity_score": 0.82, // Entropy analysis
+          "balance_score": 0.75, // Range distribution
+          "pattern_score": 0.9, // Odd/even, sum, decades
+          "hot_cold_score": 0.65, // Temporal frequency
+          "gap_score": 0.7, // Overdue numbers
+          "momentum_score": 0.8, // Rising/falling trends
+          "composite_score": 0.77 // Weighted average
         },
         "insights": {
-          "hot_numbers": [12, 23],         // En tu ticket
-          "cold_numbers": [67],            // En tu ticket
-          "overdue_numbers": [45],         // Buenos candidatos
-          "balanced": true,                // Buena distribución
-          "odd_even_ratio": "3:2",         // Óptimo 3:2 o 2:3
-          "sum": 152,                      // En rango típico [100-250]
-          "recommendation": "GOOD"         // EXCELLENT/GOOD/FAIR/POOR
+          "hot_numbers": [12, 23], // En tu ticket
+          "cold_numbers": [67], // En tu ticket
+          "overdue_numbers": [45], // Buenos candidatos
+          "balanced": true, // Buena distribución
+          "odd_even_ratio": "3:2", // Óptimo 3:2 o 2:3
+          "sum": 152, // En rango típico [100-250]
+          "recommendation": "GOOD" // EXCELLENT/GOOD/FAIR/POOR
         }
       }
     ],
