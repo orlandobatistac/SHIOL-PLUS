@@ -201,17 +201,18 @@
 
 **Production Verification Results:**
 
-| Metric | v1 Mode | v2 Mode (Fixed) | hybrid Mode (Fixed) |
-|--------|---------|-----------------|---------------------|
-| **Tickets Generated** | 10/10 ✅ | 10/10 ✅ (was 0/10 ❌) | 10/10 ✅ (was 3/10 ❌) |
-| **Generation Time** | 4.93s | 6.19s | 8.11s |
-| **Avg Time/Ticket** | 0.493s | 0.619s | 0.811s |
-| **Throughput** | 2.0 tickets/s | 1.6 tickets/s | 1.2 tickets/s |
-| **XGBoost Status** | N/A | Available ✅ | Available ✅ |
-| **Fallback Behavior** | N/A | Not needed | Not needed |
-| **Database Records** | 25 total | 10 total | 10 total |
+| Metric                | v1 Mode       | v2 Mode (Fixed)        | hybrid Mode (Fixed)    |
+| --------------------- | ------------- | ---------------------- | ---------------------- |
+| **Tickets Generated** | 10/10 ✅      | 10/10 ✅ (was 0/10 ❌) | 10/10 ✅ (was 3/10 ❌) |
+| **Generation Time**   | 4.93s         | 6.19s                  | 8.11s                  |
+| **Avg Time/Ticket**   | 0.493s        | 0.619s                 | 0.811s                 |
+| **Throughput**        | 2.0 tickets/s | 1.6 tickets/s          | 1.2 tickets/s          |
+| **XGBoost Status**    | N/A           | Available ✅           | Available ✅           |
+| **Fallback Behavior** | N/A           | Not needed             | Not needed             |
+| **Database Records**  | 25 total      | 10 total               | 10 total               |
 
 **Bug Fixed (commit 248f719):**
+
 - **Root Cause:** `isinstance(powerball, int)` returned False for `numpy.int64` types from ML generator
 - **Impact:** v2/hybrid modes rejected ALL tickets with "powerball must be 1-26" error despite valid values
 - **Solution:** Convert `numpy.int64` to native `int` using `int(powerball)` with try/except handling
@@ -219,6 +220,7 @@
 - **Effectiveness:** v2 mode went from 0% → 100% success rate, hybrid from 30% → 100%
 
 **Production Database State:**
+
 ```
 hybrid|10          ✅ NEW (hybrid mode operational)
 lstm|497           ✅ (preexisting)
@@ -228,6 +230,7 @@ v2|10              ✅ NEW (v2 mode operational)
 ```
 
 **Performance Comparison (Local vs Production):**
+
 - Local total: 19.6s | Production total: 19.2s → **2% faster on VPS** ✅
 - Consistency across environments: 98% match (excellent deployment validation)
 
