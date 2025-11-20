@@ -762,7 +762,7 @@ class IntelligentGenerator:
                     candidate_wb = list(range(1, 70))
 
                 # Select 5 unique numbers
-                np.random.seed(42)  # For reproducibility
+                # NOTE: Removed fixed seed to allow variation across tickets
                 selected_wb = sorted(np.random.choice(candidate_wb, size=5, replace=False))
 
                 # Select powerball from medium range
@@ -777,7 +777,7 @@ class IntelligentGenerator:
                 score = self._calculate_basic_score(selected_wb, selected_pb)
 
                 return {
-                    'numbers': selected_wb,
+                    'numbers': [int(x) for x in selected_wb],  # Convert numpy.int64 to Python int
                     'powerball': int(selected_pb),
                     'score': score,
                     'method': 'intelligent_generator',
@@ -786,7 +786,7 @@ class IntelligentGenerator:
 
             else:
                 # Fallback if there's no historical data
-                np.random.seed(42)
+                # NOTE: Removed fixed seed to allow variation across tickets
                 numbers = sorted(np.random.choice(range(1, 70), size=5, replace=False))
                 powerball = np.random.choice(range(1, 27))
 
