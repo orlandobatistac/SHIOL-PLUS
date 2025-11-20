@@ -72,6 +72,306 @@ git checkout -b feature/add-ml-strategies-to-pipeline
   git push origin main
   ```
 
+---
+
+## 🤖 TASK DELEGATION STRATEGY (Recommended Workflow)
+
+### When to Use "Delegate to Agent" (runSubagent)
+
+Delegate tasks to a specialized coding agent when:
+
+- ✅ **Time estimate >2 hours** (e.g., PHASE 2 Task 2.1: Add 5 ML strategies - 6-7 hours)
+- ✅ **Multi-file implementations** (>3 files to modify)
+- ✅ **Complete feature implementations** requiring research + code + tests
+- ✅ **Extensive refactoring** or code cleanup tasks
+- ✅ **Need deep code search** before implementation (grep/semantic search intensive)
+
+**Benefits:**
+- 🎯 Focused execution on single objective
+- 📋 Clear acceptance criteria from roadmap
+- 🔄 Agent handles search → implement → test cycle autonomously
+- 📊 Better tracking (agent returns detailed summary)
+
+### How to Prepare Delegation Prompt (Step-by-Step)
+
+#### STEP 1: Read Roadmap Context
+
+```bash
+# Always start here
+cat PROJECT_ROADMAP_V8.md
+# Find: Current PHASE, Task number, dependencies, acceptance criteria
+```
+
+#### STEP 2: Build Delegation Prompt
+
+Use this template:
+
+```markdown
+TASK: [PHASE X Task Y.Z] - [Task Name from Roadmap]
+
+OBJECTIVE:
+[One-sentence clear goal from roadmap]
+
+CONTEXT FROM ROADMAP:
+- Current PHASE: [PHASE number and name]
+- Task Priority: [CRITICAL/HIGH/MEDIUM/LOW]
+- Time Estimate: [hours from roadmap]
+- Dependencies: [what must exist before starting]
+- Related Files: [from roadmap or project knowledge]
+
+IMPLEMENTATION CHECKLIST (from roadmap):
+- [ ] [Item 1 from roadmap task]
+- [ ] [Item 2 from roadmap task]
+- [ ] [Item 3 from roadmap task]
+
+ACCEPTANCE CRITERIA:
+- [ ] Code changes committed and pushed
+- [ ] All tests passing (pytest tests/ -v)
+- [ ] PROJECT_ROADMAP_V8.md updated (task marked [x], status: COMPLETED)
+- [ ] No breaking changes to existing pipeline
+- [ ] Performance validated (if applicable)
+
+SPECIFIC REQUIREMENTS:
+[Any additional constraints, performance targets, or architectural decisions from roadmap]
+
+WHAT NOT TO DO (from roadmap):
+- ❌ [Check roadmap "What NOT to do" section]
+- ❌ Work on deprecated batch system
+- ❌ Skip adaptive learning validation
+
+EXPECTED DELIVERABLES:
+1. Summary of files modified with line counts
+2. Key architectural decisions made
+3. Test results (pytest output)
+4. Updated PROJECT_ROADMAP_V8.md with task marked complete
+5. Any blockers or issues encountered
+```
+
+#### STEP 3: Invoke Agent
+
+```python
+# Example invocation
+runSubagent(
+    description="PHASE 1 Task 1.2 - Eliminate Batch System",
+    prompt="[Full prompt from STEP 2]"
+)
+```
+
+#### STEP 4: Validate Agent Output
+
+After agent completes:
+
+- ✅ Verify PROJECT_ROADMAP_V8.md updated correctly
+- ✅ Review code changes (git diff)
+- ✅ Run tests manually if needed
+- ✅ Check that pipeline still works
+
+### Delegation Templates by Task Type
+
+#### Template 1: Feature Implementation
+
+```markdown
+TASK: [PHASE 2 Task 2.1] - Add 5 ML Strategies to Pipeline
+
+OBJECTIVE:
+Integrate XGBoost, RandomForest, LSTM, Hybrid, and IntelligentScoring as evaluable strategies in the pipeline.
+
+CONTEXT FROM ROADMAP:
+- Current PHASE: PHASE 2 - Pipeline Strategy Expansion
+- Task Priority: CRITICAL
+- Time Estimate: 6-7 hours
+- Dependencies: PHASE 1 completed (batch eliminated, code clean)
+- Related Files: src/strategy_generators.py, src/database.py, src/api.py
+
+IMPLEMENTATION CHECKLIST:
+- [ ] Create XGBoostMLStrategy class in src/strategy_generators.py
+- [ ] Create RandomForestMLStrategy class
+- [ ] Create LSTMNeuralStrategy class
+- [ ] Create HybridEnsembleStrategy class
+- [ ] Create IntelligentScoringStrategy class
+- [ ] Register all 5 in StrategyManager.__init__()
+- [ ] Add 5 rows to strategy_performance table (weight=0.10 each)
+- [ ] Test locally: pipeline generates 500 tickets with 11 strategies
+
+ACCEPTANCE CRITERIA:
+- [ ] Pipeline generates 500 tickets (~45 per strategy)
+- [ ] All strategies return tickets with draw_date (evaluable)
+- [ ] Adaptive learning can adjust weights for all 11 strategies
+- [ ] Tests pass: pytest tests/test_strategy_generators.py -v
+- [ ] PROJECT_ROADMAP_V8.md Task 2.1 marked [x] COMPLETED
+
+SPECIFIC REQUIREMENTS:
+- Each strategy must inherit from BaseStrategy
+- Must implement generate(count: int) method
+- Return format: [{'white_balls': [1,2,3,4,5], 'powerball': 6, 'strategy': 'name', 'confidence': 0.5}]
+- Use existing ML models from src/ml_models/ and src/predictor.py
+- No hardcoded paths, use relative imports
+
+WHAT NOT TO DO:
+- ❌ Don't recreate batch system
+- ❌ Don't generate predictions without draw_date
+- ❌ Don't skip era-aware filtering (pb_is_current == 1)
+
+EXPECTED DELIVERABLES:
+1. 5 new strategy classes in src/strategy_generators.py
+2. StrategyManager updated with 11 strategies
+3. Database has 11 rows in strategy_performance
+4. Test output showing 500 tickets distributed correctly
+5. Updated roadmap with task marked complete
+```
+
+#### Template 2: Code Cleanup/Refactoring
+
+```markdown
+TASK: [PHASE 1 Task 1.3] - Code Cleanup with Ruff + Dead Code Removal
+
+OBJECTIVE:
+Clean legacy code, remove unused functions, fix linting errors, eliminate dead code.
+
+CONTEXT FROM ROADMAP:
+- Current PHASE: PHASE 1 - Elimination Batch + Code Cleanup
+- Task Priority: HIGH
+- Time Estimate: 2-3 hours
+- Dependencies: Task 1.2 completed (batch code eliminated)
+
+IMPLEMENTATION CHECKLIST:
+- [ ] Run ruff check src/ --fix (auto-fix imports and formatting)
+- [ ] Identify unused functions (manual review + grep)
+- [ ] Remove TODO comments that are completed
+- [ ] Remove DEPRECATED comments and associated code
+- [ ] Remove commented-out code blocks
+- [ ] Clean up unused imports not caught by ruff
+
+ACCEPTANCE CRITERIA:
+- [ ] ruff check src/ returns 0 errors (or only acceptable warnings)
+- [ ] No commented code blocks in src/
+- [ ] All TODO/DEPRECATED comments resolved or documented
+- [ ] Tests still pass: pytest tests/ -v
+- [ ] PROJECT_ROADMAP_V8.md Task 1.3 marked [x] COMPLETED
+
+COMMANDS TO RUN:
+grep -r "# TODO" src/ | grep -i "done\|completed\|fixed"
+grep -r "# DEPRECATED" src/
+grep -r "^[\s]*#.*def \|^[\s]*#.*class " src/  # Find commented code
+
+EXPECTED DELIVERABLES:
+1. List of files modified with cleanup summary
+2. Ruff output showing improvements
+3. List of removed functions/code blocks
+4. Test results confirming no regressions
+```
+
+#### Template 3: Testing Task
+
+```markdown
+TASK: [PHASE 2 Task 2.2] - Integration Testing for 11 Strategies
+
+OBJECTIVE:
+Validate that pipeline works correctly with all 11 strategies, generates 500 tickets, and adaptive learning functions.
+
+CONTEXT FROM ROADMAP:
+- Current PHASE: PHASE 2 - Pipeline Strategy Expansion
+- Task Priority: CRITICAL
+- Time Estimate: 2 hours
+- Dependencies: Task 2.1 completed (5 strategies added)
+
+IMPLEMENTATION CHECKLIST:
+- [ ] Run full pipeline locally (5 steps)
+- [ ] Verify 500 tickets generated
+- [ ] Check distribution: ~45 tickets per strategy
+- [ ] Simulate post-sorteo evaluation (STEP 4)
+- [ ] Verify adaptive learning adjusts weights (STEP 5)
+- [ ] Confirm tickets saved to generated_tickets table
+
+ACCEPTANCE CRITERIA:
+- [ ] Pipeline completes without errors
+- [ ] generated_tickets table has 500 new rows
+- [ ] Each strategy has ~40-50 tickets (distribution acceptable)
+- [ ] strategy_performance table updated with new metrics
+- [ ] All tests pass: pytest tests/ -v
+
+VALIDATION COMMANDS:
+python scripts/run_pipeline.py
+sqlite3 data/shiolplus.db "SELECT strategy, COUNT(*) FROM generated_tickets WHERE pipeline_run_id = (SELECT MAX(id) FROM pipeline_execution_logs) GROUP BY strategy;"
+
+EXPECTED DELIVERABLES:
+1. Pipeline execution log (success/failure)
+2. Ticket distribution by strategy (SQL query result)
+3. Screenshot or output of adaptive learning weight adjustments
+4. Test results
+```
+
+### Best Practices for Delegation
+
+1. **Always read PROJECT_ROADMAP_V8.md first** - Get context before delegating
+2. **Be specific with file paths** - Agent works better with exact locations
+3. **Include acceptance criteria** - Clear definition of "done"
+4. **Reference roadmap task number** - Enables agent to update roadmap automatically
+5. **Specify what NOT to do** - Prevent working on deprecated code
+6. **Request structured output** - Ask for file list, test results, summary
+7. **One task per agent** - Don't combine PHASE 1 + PHASE 2 tasks in single delegation
+
+### Example: Delegating PHASE 1 Task 1.2 RIGHT NOW
+
+```python
+runSubagent(
+    description="Eliminate Batch System",
+    prompt="""
+TASK: [PHASE 1 Task 1.2] - Eliminación de Código Batch
+
+OBJECTIVE:
+Remove all batch system code completely: files, database table, pipeline step, API endpoints.
+
+CONTEXT FROM ROADMAP:
+- Current PHASE: PHASE 1 - Elimination Batch + Code Cleanup (THIS WEEK - CRITICAL)
+- Task Priority: CRITICAL
+- Time Estimate: 2 hours
+- Dependencies: Task 1.1 completed (dependency analysis done)
+- Backup created: data/backups/before_batch_removal.db
+
+IMPLEMENTATION CHECKLIST (from roadmap):
+- [ ] Eliminar archivo src/batch_generator.py completo
+- [ ] Eliminar archivo src/api_batch_endpoints.py (if exists)
+- [ ] Remover imports de batch_generator en src/api.py
+- [ ] Eliminar STEP 6 del pipeline (batch generation step)
+- [ ] DROP tabla pre_generated_tickets (after backup confirmed)
+- [ ] Remover router batch de FastAPI app (if registered)
+
+ACCEPTANCE CRITERIA:
+- [ ] grep -r "batch_generator" src/ returns 0 results
+- [ ] grep -r "pre_generated_tickets" src/ returns 0 results
+- [ ] Pipeline runs successfully (5 steps only, no STEP 6)
+- [ ] Tests pass: pytest tests/ -v
+- [ ] PROJECT_ROADMAP_V8.md Task 1.2 marked [x] COMPLETED
+
+SQL TO EXECUTE:
+DROP TABLE IF EXISTS pre_generated_tickets;
+
+FILES TO DELETE:
+- src/batch_generator.py
+- src/api_batch_endpoints.py
+
+FILES TO MODIFY:
+- src/api.py (remove batch imports, remove STEP 6, remove batch router)
+- src/database.py (remove pre_generated_tickets table creation if present)
+
+WHAT NOT TO DO:
+- ❌ Don't delete generated_tickets table (this is pipeline table, keep it!)
+- ❌ Don't modify strategy_generators.py (strategies are fine)
+- ❌ Don't touch ML models (they will be integrated into pipeline in PHASE 2)
+
+EXPECTED DELIVERABLES:
+1. List of deleted files
+2. Summary of modified files with change descriptions
+3. grep output showing batch references removed
+4. Pipeline execution success log
+5. Updated PROJECT_ROADMAP_V8.md with Task 1.2 marked [x] COMPLETED
+"""
+)
+```
+
+---
+
 ## Project Overview
 
 SHIOL+ is a production ML-powered lottery analytics platform with **pipeline-centric architecture**. The core mission is adaptive learning: continuously evaluate multiple prediction strategies and automatically adjust their weights based on real-world performance (ROI, win_rate).
