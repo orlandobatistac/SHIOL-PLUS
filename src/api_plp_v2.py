@@ -27,6 +27,11 @@ from src.api_prediction_endpoints import (
     get_public_predictions_by_draw_date as v1_get_public_predictions_by_draw_date,
 )
 
+# Import new analytics engines for PLP v2 (Task 4.5.2)
+from src.analytics_engine import get_analytics_overview
+from src.ticket_scorer import TicketScorer
+from src.strategy_generators import CustomInteractiveGenerator, StrategyManager
+
 
 router = APIRouter(
     prefix="/api/v2",
@@ -558,3 +563,254 @@ async def plp_ticket_verify_manual(req: PlpManualVerifyRequest) -> Dict[str, Any
             "source": "shiol+",
         },
     }
+
+
+# ==== PLP V2 Analytics Endpoints (Task 4.5.2) ====
+
+@router.get("/analytics/context")
+async def plp_analytics_context() -> Dict[str, Any]:
+    """
+    Get analytics context for PLP dashboard (hot/cold numbers, momentum, gaps).
+    
+    This endpoint provides pre-computed analytics data for the gamified experience,
+    including hot numbers, cold numbers, momentum trends, and gap analysis.
+    
+    Returns:
+        Dict with success, data (hot_numbers, cold_numbers, momentum, gaps), timestamp
+    """
+    try:
+        # Get comprehensive analytics overview
+        overview = get_analytics_overview()
+        
+        # Extract gap analysis for hot/cold numbers
+        gap_analysis = overview.get('gap_analysis', {})
+        white_balls_gaps = gap_analysis.get('white_balls', {})
+        powerball_gaps = gap_analysis.get('powerball', {})
+        
+        # Extract momentum scores
+        momentum_scores = overview.get('momentum_scores', {})
+        white_balls_momentum = momentum_scores.get('white_balls', {})
+        powerball_momentum = momentum_scores.get('powerball', {})
+        
+        # Identify hot numbers (low gap = recently drawn)
+        white_balls_gaps_sorted = sorted(white_balls_gaps.items(), key=lambda x: x[1])
+        hot_numbers = [int(num) for num, gap in white_balls_gaps_sorted[:10]]
+        
+        # Identify cold numbers (high gap = overdue)
+        cold_numbers = [int(num) for num, gap in white_balls_gaps_sorted[-10:]]
+        
+        # Identify rising momentum numbers (positive momentum)
+        rising_numbers = sorted(
+            [(int(num), score) for num, score in white_balls_momentum.items()],
+            key=lambda x: x[1],
+            reverse=True
+        )[:10]
+        
+        # Identify falling momentum numbers (negative momentum)
+        falling_numbers = sorted(
+            [(int(num), score) for num, score in white_balls_momentum.items()],
+            key=lambda x: x[1]
+        )[:10]
+        
+        # Build response
+        data = {
+            'hot_numbers': hot_numbers,
+            'cold_numbers': cold_numbers,
+            'momentum': {
+                'rising_numbers': [{'number': num, 'score': round(score, 2)} for num, score in rising_numbers],
+                'falling_numbers': [{'number': num, 'score': round(score, 2)} for num, score in falling_numbers],
+            },
+            'gaps': {
+                'white_balls': {int(k): int(v) for k, v in white_balls_gaps.items()},
+                'powerball': {int(k): int(v) for k, v in powerball_gaps.items()},
+            },
+            'data_summary': overview.get('data_summary', {}),
+        }
+        
+        return {
+            'success': True,
+            'data': data,
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'error': None,
+        }
+        
+    except Exception as e:
+        logger.error(f"Analytics context endpoint failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve analytics context: {str(e)}"
+        )
+
+
+# ==== Ticket Analyzer (Task 4.5.2) ====
+
+class AnalyzeTicketRequest(BaseModel):
+    """Request model for ticket analysis"""
+    white_balls: List[int] = Field(..., min_length=5, max_length=5, description="5 white ball numbers (1-69)")
+    powerball: int = Field(..., ge=1, le=26, description="Powerball number (1-26)")
+
+
+@router.post("/analytics/analyze-ticket")
+async def plp_analyze_ticket(req: AnalyzeTicketRequest) -> Dict[str, Any]:
+    """
+    Score a user's ticket based on statistical quality (0-100 scale).
+    
+    Analyzes tickets based on:
+    - Diversity: Spread across number ranges
+    - Balance: Sum range and odd/even ratio
+    - Potential: Alignment with hot numbers and rising momentum
+    
+    Args:
+        req: Request with white_balls (5 numbers) and powerball
+        
+    Returns:
+        Dict with success, data (total_score, details, recommendation), timestamp
+    """
+    try:
+        # Validate white balls
+        if len(req.white_balls) != 5:
+            raise HTTPException(status_code=400, detail="Must provide exactly 5 white ball numbers")
+        
+        if len(set(req.white_balls)) != 5:
+            raise HTTPException(status_code=400, detail="White ball numbers must be unique")
+        
+        if not all(1 <= n <= 69 for n in req.white_balls):
+            raise HTTPException(status_code=400, detail="White ball numbers must be between 1 and 69")
+        
+        # Get analytics context
+        context = get_analytics_overview()
+        
+        # Initialize scorer and score the ticket
+        scorer = TicketScorer()
+        score_result = scorer.score_ticket(req.white_balls, req.powerball, context)
+        
+        return {
+            'success': True,
+            'data': score_result,
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'error': None,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ticket analyzer endpoint failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to analyze ticket: {str(e)}"
+        )
+
+
+# ==== Interactive Generator (Task 4.5.2) ====
+
+class InteractiveGeneratorRequest(BaseModel):
+    """Request model for interactive ticket generation"""
+    risk: str = Field("med", description="Risk level: 'low', 'med', or 'high'")
+    temperature: str = Field("neutral", description="Temperature preference: 'hot', 'cold', or 'neutral'")
+    exclude: List[int] = Field(default_factory=list, description="Numbers to exclude from generation")
+    count: int = Field(5, ge=1, le=50, description="Number of tickets to generate (1-50)")
+
+
+@router.post("/generator/interactive")
+async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[str, Any]:
+    """
+    Generate tickets based on user's risk and temperature preferences.
+    
+    This endpoint provides an interactive generation experience where users can
+    control the strategy through sliders:
+    - Risk: How much to deviate from statistical norms
+    - Temperature: Favor hot (recent) or cold (overdue) numbers
+    - Exclusions: Numbers to avoid in generation
+    
+    Args:
+        req: Request with risk, temperature, exclude list, and count
+        
+    Returns:
+        Dict with success, data (generated tickets), timestamp
+    """
+    try:
+        # Validate risk level
+        risk = req.risk.lower()
+        if risk not in ['low', 'med', 'high']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid risk level '{req.risk}'. Must be 'low', 'med', or 'high'"
+            )
+        
+        # Validate temperature
+        temperature = req.temperature.lower()
+        if temperature not in ['hot', 'cold', 'neutral']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid temperature '{req.temperature}'. Must be 'hot', 'cold', or 'neutral'"
+            )
+        
+        # Validate exclusions
+        if req.exclude:
+            invalid_exclusions = [n for n in req.exclude if not (1 <= n <= 69)]
+            if invalid_exclusions:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid exclusion numbers: {invalid_exclusions}. Must be between 1 and 69"
+                )
+        
+        # Get analytics context
+        context = get_analytics_overview()
+        
+        # Initialize generator
+        generator = CustomInteractiveGenerator()
+        
+        # Build parameters
+        params = {
+            'count': req.count,
+            'risk': risk,
+            'temperature': temperature,
+            'exclude': req.exclude,
+        }
+        
+        # Generate tickets
+        tickets = generator.generate_custom(params, context)
+        
+        # Format response tickets
+        formatted_tickets = []
+        for idx, ticket in enumerate(tickets, start=1):
+            # Convert numpy types to native Python types for JSON serialization
+            white_balls = ticket.get('white_balls') or ticket.get('numbers') or []
+            white_balls = [int(n) for n in white_balls]
+            
+            powerball = ticket.get('powerball')
+            if powerball is not None:
+                powerball = int(powerball)
+            
+            formatted_tickets.append({
+                'rank': idx,
+                'white_balls': white_balls,
+                'powerball': powerball,
+                'strategy': ticket.get('strategy', 'custom_interactive'),
+                'confidence': float(ticket.get('confidence', 0.5)),
+            })
+        
+        return {
+            'success': True,
+            'data': {
+                'tickets': formatted_tickets,
+                'parameters': {
+                    'risk': risk,
+                    'temperature': temperature,
+                    'excluded_count': len(req.exclude),
+                    'requested_count': req.count,
+                    'generated_count': len(formatted_tickets),
+                },
+            },
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'error': None,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Interactive generator endpoint failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate tickets: {str(e)}"
+        )
