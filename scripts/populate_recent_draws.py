@@ -165,6 +165,7 @@ def get_all_recent_draws(limit: int = 50) -> list[str]:
 def run_regenerate_script(draw_date: str, tickets: int = 500) -> bool:
     """
     Execute regenerate_predictions_for_draw.py for a specific date.
+    Shows real-time output for progress monitoring.
     
     Args:
         draw_date: Draw date in YYYY-MM-DD format
@@ -186,28 +187,34 @@ def run_regenerate_script(draw_date: str, tickets: int = 500) -> bool:
         
         logger.info(f"Executing: {' '.join(cmd)}")
         
-        result = subprocess.run(
+        # Stream output in real-time for visibility
+        process = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            check=True
+            bufsize=1,  # Line buffered
+            universal_newlines=True
         )
         
-        # Log output
-        if result.stdout:
-            for line in result.stdout.strip().split('\n'):
-                logger.info(f"  {line}")
+        # Read and log output line by line in real-time
+        output_lines = []
+        for line in process.stdout:
+            line = line.rstrip()
+            if line:  # Skip empty lines
+                logger.info(f"  │ {line}")
+                output_lines.append(line)
         
-        return True
+        # Wait for process to complete
+        return_code = process.wait()
         
-    except subprocess.CalledProcessError as e:
-        logger.error(f"❌ Failed to generate predictions for {draw_date}")
-        logger.error(f"Exit code: {e.returncode}")
-        if e.stdout:
-            logger.error(f"STDOUT: {e.stdout}")
-        if e.stderr:
-            logger.error(f"STDERR: {e.stderr}")
-        return False
+        if return_code == 0:
+            logger.info(f"  └─ ✅ Completed successfully")
+            return True
+        else:
+            logger.error(f"  └─ ❌ Failed with exit code {return_code}")
+            return False
+        
     except Exception as e:
         logger.error(f"❌ Unexpected error for {draw_date}: {e}")
         return False
@@ -295,19 +302,34 @@ def main():
     success_count = 0
     failed_draws = []
     
+    import time
+    start_time = time.time()
+    
     for i, draw_date in enumerate(draws_to_process, 1):
-        logger.info("\n" + "-" * 80)
-        logger.info(f"Processing draw {i}/{len(draws_to_process)}: {draw_date}")
-        logger.info("-" * 80)
+        draw_start = time.time()
+        
+        logger.info("\n" + "┌" + "─" * 78 + "┐")
+        logger.info(f"│ 📅 DRAW {i}/{len(draws_to_process)}: {draw_date} {' ' * (78 - len(f'DRAW {i}/{len(draws_to_process)}: {draw_date}') - 4)}│")
+        logger.info("├" + "─" * 78 + "┤")
         
         success = run_regenerate_script(draw_date, args.tickets)
         
+        draw_elapsed = time.time() - draw_start
+        total_elapsed = time.time() - start_time
+        
         if success:
             success_count += 1
-            logger.info(f"✅ [{i}/{len(draws_to_process)}] Completed {draw_date}")
+            # Calculate ETA
+            avg_time_per_draw = total_elapsed / i
+            remaining_draws = len(draws_to_process) - i
+            eta_seconds = avg_time_per_draw * remaining_draws
+            eta_minutes = int(eta_seconds / 60)
+            eta_seconds = int(eta_seconds % 60)
+            
+            logger.info(f"└─ ✅ Draw {i}/{len(draws_to_process)} completed in {draw_elapsed:.1f}s | ETA: {eta_minutes}m {eta_seconds}s")
         else:
             failed_draws.append(draw_date)
-            logger.error(f"❌ [{i}/{len(draws_to_process)}] Failed {draw_date}")
+            logger.error(f"└─ ❌ Draw {i}/{len(draws_to_process)} FAILED after {draw_elapsed:.1f}s")
     
     # Summary
     logger.info("\n" + "=" * 80)
