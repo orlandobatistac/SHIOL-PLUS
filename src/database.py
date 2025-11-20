@@ -1107,16 +1107,31 @@ def _upsert_draws(df: pd.DataFrame) -> int:
         return 0
 
 
-def get_all_draws() -> pd.DataFrame:
-    """Retrieve all historical draw data from the database."""
+def get_all_draws(max_date: str = None) -> pd.DataFrame:
+    """Retrieve all historical draw data from the database.
+    
+    Args:
+        max_date: Optional date limit (YYYY-MM-DD). Only returns draws before this date.
+                  Used to prevent data leakage when generating historical predictions.
+    """
     try:
         with get_db_connection() as conn:
-            df = pd.read_sql_query(
-                "SELECT * FROM powerball_draws ORDER BY draw_date ASC",
-                conn,
-                parse_dates=['draw_date']
-            )
-            logger.info(f"Successfully loaded {len(df)} rows from the database.")
+            if max_date:
+                query = "SELECT * FROM powerball_draws WHERE draw_date < ? ORDER BY draw_date ASC"
+                df = pd.read_sql_query(
+                    query,
+                    conn,
+                    params=(max_date,),
+                    parse_dates=['draw_date']
+                )
+                logger.info(f"Successfully loaded {len(df)} rows from the database (filtered to before {max_date}).")
+            else:
+                df = pd.read_sql_query(
+                    "SELECT * FROM powerball_draws ORDER BY draw_date ASC",
+                    conn,
+                    parse_dates=['draw_date']
+                )
+                logger.info(f"Successfully loaded {len(df)} rows from the database.")
             return df
     except sqlite3.Error as e:
         logger.error(f"SQLite error retrieving draws data: {e}")

@@ -57,10 +57,13 @@ def verify_draw_exists(draw_date: str) -> bool:
 
 
 def generate_predictions(draw_date: str, total_tickets: int = 500) -> int:
-    """Generate predictions for a specific draw date."""
+    """Generate predictions for a specific draw date using only historical data before that date."""
     logger.info(f"🎲 Generating {total_tickets} predictions for {draw_date}")
+    logger.info(f"   Using historical data BEFORE {draw_date} to prevent data leakage")
     
-    manager = StrategyManager()
+    # CRITICAL: Pass max_date to prevent data leakage
+    # Only use draws that occurred BEFORE the target draw date
+    manager = StrategyManager(max_date=draw_date)
     tickets = manager.generate_balanced_tickets(total=total_tickets)
     
     logger.info(f"✅ Generated {len(tickets)} tickets by StrategyManager")

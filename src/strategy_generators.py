@@ -14,12 +14,15 @@ from src.database import get_db_connection, get_all_draws
 class BaseStrategy:
     """Base class for all ticket generation strategies"""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, max_date: str = None):
         self.name = name
-        self.draws_df = get_all_draws()
+        self.max_date = max_date
+        self.draws_df = get_all_draws(max_date=max_date)
 
         if self.draws_df.empty:
             logger.warning(f"Strategy {name}: No historical data available")
+        elif max_date:
+            logger.debug(f"Strategy {name}: Loaded {len(self.draws_df)} draws before {max_date}")
 
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate tickets. Must be implemented by subclasses"""
@@ -41,8 +44,8 @@ class BaseStrategy:
 class FrequencyWeightedStrategy(BaseStrategy):
     """Generate tickets using most frequent numbers with weighted probability"""
 
-    def __init__(self):
-        super().__init__("frequency_weighted")
+    def __init__(self, max_date: str = None):
+        super().__init__("frequency_weighted", max_date=max_date)
         self.frequencies = self._calculate_frequencies()
 
     def _calculate_frequencies(self) -> np.ndarray:
@@ -154,8 +157,8 @@ class FrequencyWeightedStrategy(BaseStrategy):
 class CoverageOptimizerStrategy(BaseStrategy):
     """Maximize unique numbers across all tickets"""
 
-    def __init__(self):
-        super().__init__("coverage_optimizer")
+    def __init__(self, max_date: str = None):
+        super().__init__("coverage_optimizer", max_date=max_date)
 
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate tickets maximizing number coverage"""
@@ -190,8 +193,8 @@ class CoverageOptimizerStrategy(BaseStrategy):
 class CooccurrenceStrategy(BaseStrategy):
     """Use number pairs that frequently appear together"""
 
-    def __init__(self):
-        super().__init__("cooccurrence")
+    def __init__(self, max_date: str = None):
+        super().__init__("cooccurrence", max_date=max_date)
         self.strong_pairs = self._get_strong_pairs()
 
     def _get_strong_pairs(self) -> List[Tuple[int, int]]:
@@ -253,8 +256,8 @@ class CooccurrenceStrategy(BaseStrategy):
 class RangeBalancedStrategy(BaseStrategy):
     """Generate with balanced distribution: 2 low, 2 mid, 1 high"""
 
-    def __init__(self):
-        super().__init__("range_balanced")
+    def __init__(self, max_date: str = None):
+        super().__init__("range_balanced", max_date=max_date)
 
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate with typical low/mid/high distribution"""
@@ -294,8 +297,8 @@ class RangeBalancedStrategy(BaseStrategy):
 class AIGuidedStrategy(BaseStrategy):
     """Use ML model (XGBoost) predictions for intelligent ticket generation"""
 
-    def __init__(self):
-        super().__init__("ai_guided")
+    def __init__(self, max_date: str = None):
+        super().__init__("ai_guided", max_date=max_date)
         self._predictor = None
         self._ml_available = self._initialize_ml_predictor()
 
@@ -420,8 +423,8 @@ class AIGuidedStrategy(BaseStrategy):
 class RandomBaselineStrategy(BaseStrategy):
     """Pure random generation (scientific control baseline)"""
 
-    def __init__(self):
-        super().__init__("random_baseline")
+    def __init__(self, max_date: str = None):
+        super().__init__("random_baseline", max_date=max_date)
 
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate completely random tickets"""
@@ -445,8 +448,8 @@ class RandomBaselineStrategy(BaseStrategy):
 class XGBoostMLStrategy(BaseStrategy):
     """Generate tickets using XGBoost ML model from predictor.py"""
 
-    def __init__(self):
-        super().__init__("xgboost_ml")
+    def __init__(self, max_date: str = None):
+        super().__init__("xgboost_ml", max_date=max_date)
         self._predictor = None
         self._ml_available = self._initialize_ml_predictor()
 
@@ -537,8 +540,8 @@ class XGBoostMLStrategy(BaseStrategy):
 class RandomForestMLStrategy(BaseStrategy):
     """Generate tickets using Random Forest ML model"""
 
-    def __init__(self):
-        super().__init__("random_forest_ml")
+    def __init__(self, max_date: str = None):
+        super().__init__("random_forest_ml", max_date=max_date)
         self._rf_model = None
         self._ml_available = self._initialize_rf_model()
 
@@ -629,8 +632,8 @@ class RandomForestMLStrategy(BaseStrategy):
 class LSTMNeuralStrategy(BaseStrategy):
     """Generate tickets using LSTM neural network model"""
 
-    def __init__(self):
-        super().__init__("lstm_neural")
+    def __init__(self, max_date: str = None):
+        super().__init__("lstm_neural", max_date=max_date)
         self._lstm_model = None
         self._ml_available = self._initialize_lstm_model()
 
@@ -721,8 +724,8 @@ class LSTMNeuralStrategy(BaseStrategy):
 class HybridEnsembleStrategy(BaseStrategy):
     """Hybrid strategy combining 70% XGBoost + 30% Cooccurrence"""
 
-    def __init__(self):
-        super().__init__("hybrid_ensemble")
+    def __init__(self, max_date: str = None):
+        super().__init__("hybrid_ensemble", max_date=max_date)
         self._xgboost_strategy = XGBoostMLStrategy()
         self._cooccurrence_strategy = CooccurrenceStrategy()
 
@@ -759,8 +762,8 @@ class HybridEnsembleStrategy(BaseStrategy):
 class IntelligentScoringStrategy(BaseStrategy):
     """Generate tickets using multi-criteria intelligent scoring system"""
 
-    def __init__(self):
-        super().__init__("intelligent_scoring")
+    def __init__(self, max_date: str = None):
+        super().__init__("intelligent_scoring", max_date=max_date)
         self._generator = None
         self._generator_available = self._initialize_generator()
 
@@ -840,25 +843,36 @@ class StrategyManager:
     Uses Bayesian weight updating based on historical performance.
     """
 
-    def __init__(self):
+    def __init__(self, max_date: str = None):
+        """
+        Initialize StrategyManager.
+        
+        Args:
+            max_date: Optional date limit (YYYY-MM-DD). Only uses historical data before this date.
+                      Critical for preventing data leakage when generating historical predictions.
+        """
+        self.max_date = max_date
         self.strategies = {
             # Original 6 strategies
-            'frequency_weighted': FrequencyWeightedStrategy(),
-            'coverage_optimizer': CoverageOptimizerStrategy(),
-            'cooccurrence': CooccurrenceStrategy(),
-            'range_balanced': RangeBalancedStrategy(),
-            'ai_guided': AIGuidedStrategy(),
-            'random_baseline': RandomBaselineStrategy(),
+            'frequency_weighted': FrequencyWeightedStrategy(max_date=max_date),
+            'coverage_optimizer': CoverageOptimizerStrategy(max_date=max_date),
+            'cooccurrence': CooccurrenceStrategy(max_date=max_date),
+            'range_balanced': RangeBalancedStrategy(max_date=max_date),
+            'ai_guided': AIGuidedStrategy(max_date=max_date),
+            'random_baseline': RandomBaselineStrategy(max_date=max_date),
             # New 5 ML strategies (PHASE 2)
-            'xgboost_ml': XGBoostMLStrategy(),
-            'random_forest_ml': RandomForestMLStrategy(),
-            'lstm_neural': LSTMNeuralStrategy(),
-            'hybrid_ensemble': HybridEnsembleStrategy(),
-            'intelligent_scoring': IntelligentScoringStrategy()
+            'xgboost_ml': XGBoostMLStrategy(max_date=max_date),
+            'random_forest_ml': RandomForestMLStrategy(max_date=max_date),
+            'lstm_neural': LSTMNeuralStrategy(max_date=max_date),
+            'hybrid_ensemble': HybridEnsembleStrategy(max_date=max_date),
+            'intelligent_scoring': IntelligentScoringStrategy(max_date=max_date)
         }
 
         self._initialize_strategy_weights()
-        logger.info(f"StrategyManager initialized with {len(self.strategies)} strategies")
+        if max_date:
+            logger.info(f"StrategyManager initialized with {len(self.strategies)} strategies (data filtered to before {max_date})")
+        else:
+            logger.info(f"StrategyManager initialized with {len(self.strategies)} strategies")
 
     def _initialize_strategy_weights(self):
         """Initialize strategy_performance table with equal weights (1/11 each = ~0.091)"""
