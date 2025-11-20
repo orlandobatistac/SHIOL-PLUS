@@ -33,10 +33,16 @@ def get_historical_draw_dates(from_date: str, count: int) -> list[str]:
         count: Number of draw dates to retrieve
         
     Returns:
-        List of draw dates in YYYY-MM-DD format, newest first
+        List of draw dates in YYYY-MM-DD format, OLDEST FIRST (chronological order)
+        
+    Note:
+        Returns in chronological order (oldest → newest) to ensure adaptive learning
+        works correctly. Each evaluation updates strategy weights incrementally,
+        simulating real-time learning as if the system had run historically.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # CRITICAL: ORDER BY ASC (oldest first) for proper adaptive learning progression
         cursor.execute("""
             SELECT draw_date 
             FROM powerball_draws 
@@ -46,7 +52,8 @@ def get_historical_draw_dates(from_date: str, count: int) -> list[str]:
         """, (from_date, count))
         
         results = cursor.fetchall()
-        return [row[0] for row in results]
+        # Reverse to get chronological order (oldest → newest)
+        return [row[0] for row in reversed(results)]
 
 
 def generate_predictions_for_date(draw_date: str, total_tickets: int = 500) -> int:
@@ -150,12 +157,15 @@ def main():
         return 1
     
     logger.info(f"Found {len(draw_dates)} historical draws:")
-    for date in draw_dates:
-        logger.info(f"  - {date}")
+    logger.info(f"Processing in CHRONOLOGICAL order (oldest → newest) for adaptive learning:")
+    for i, date in enumerate(draw_dates, 1):
+        logger.info(f"  {i}. {date}")
     
-    # Generate predictions for each date
+    # Generate predictions for each date (oldest → newest)
+    # This order ensures adaptive learning updates weights progressively
     total_inserted = 0
-    for draw_date in draw_dates:
+    for idx, draw_date in enumerate(draw_dates, 1):
+        logger.info(f"\n[{idx}/{len(draw_dates)}] Processing draw: {draw_date}")
         try:
             inserted = generate_predictions_for_date(draw_date, args.tickets_per_draw)
             total_inserted += inserted
