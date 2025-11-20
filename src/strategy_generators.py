@@ -442,28 +442,426 @@ class RandomBaselineStrategy(BaseStrategy):
         return tickets
 
 
+class XGBoostMLStrategy(BaseStrategy):
+    """Generate tickets using XGBoost ML model from predictor.py"""
+
+    def __init__(self):
+        super().__init__("xgboost_ml")
+        self._predictor = None
+        self._ml_available = self._initialize_ml_predictor()
+
+    def _initialize_ml_predictor(self) -> bool:
+        """Initialize the XGBoost predictor. Returns True if successful."""
+        try:
+            from src.predictor import Predictor
+            self._predictor = Predictor()
+            
+            # Verify model is loaded
+            if self._predictor.model is not None:
+                logger.info(f"{self.name}: XGBoost ML model loaded successfully")
+                return True
+            else:
+                logger.warning(f"{self.name}: ML model not available, will use fallback")
+                return False
+        except Exception as e:
+            logger.warning(f"{self.name}: Could not initialize ML predictor: {e}")
+            return False
+
+    def generate(self, count: int = 5) -> List[Dict]:
+        """Generate tickets using XGBoost ML model probabilities"""
+        tickets = []
+
+        # Try ML-guided generation first
+        if self._ml_available and self._predictor is not None:
+            try:
+                # Get probability predictions from XGBoost model (use_ensemble=False for pure XGBoost)
+                wb_probs, pb_probs = self._predictor.predict_probabilities(use_ensemble=False)
+                
+                logger.debug(f"{self.name}: Successfully obtained XGBoost ML probabilities")
+                
+                # Generate tickets using ML probabilities
+                for _ in range(count):
+                    try:
+                        # Sample white balls using ML probabilities
+                        white_balls = sorted(np.random.choice(
+                            range(1, 70),
+                            size=5,
+                            replace=False,
+                            p=wb_probs
+                        ).tolist())
+                        
+                        # Sample powerball using ML probabilities
+                        powerball = int(np.random.choice(range(1, 27), p=pb_probs))
+                        
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.85  # Higher confidence since using ML
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"{self.name}: Error generating ticket with ML probs: {e}")
+                        # Fallback to random for this ticket
+                        white_balls = sorted(random.sample(range(1, 70), 5))
+                        powerball = random.randint(1, 26)
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.50
+                        })
+                
+                logger.debug(f"{self.name}: Generated {len(tickets)} tickets using XGBoost ML model")
+                return tickets
+                
+            except Exception as e:
+                logger.error(f"{self.name}: ML prediction pipeline failed: {e}, using fallback")
+                # Continue to fallback below
+
+        # Fallback to random if ML not available
+        for _ in range(count):
+            white_balls = sorted(random.sample(range(1, 70), 5))
+            powerball = random.randint(1, 26)
+            tickets.append({
+                'white_balls': white_balls,
+                'powerball': powerball,
+                'strategy': self.name,
+                'confidence': 0.50
+            })
+
+        logger.debug(f"{self.name}: Generated {count} tickets (fallback mode)")
+        return tickets
+
+
+class RandomForestMLStrategy(BaseStrategy):
+    """Generate tickets using Random Forest ML model"""
+
+    def __init__(self):
+        super().__init__("random_forest_ml")
+        self._rf_model = None
+        self._ml_available = self._initialize_rf_model()
+
+    def _initialize_rf_model(self) -> bool:
+        """Initialize the Random Forest model. Returns True if successful."""
+        try:
+            from src.ml_models.random_forest_model import RandomForestModel
+            self._rf_model = RandomForestModel(use_pretrained=True)
+            
+            # Verify models are loaded
+            if self._rf_model.wb_models and self._rf_model.pb_model:
+                logger.info(f"{self.name}: Random Forest models loaded successfully")
+                return True
+            else:
+                logger.warning(f"{self.name}: RF models not available, will use fallback")
+                return False
+        except Exception as e:
+            logger.warning(f"{self.name}: Could not initialize RF model: {e}")
+            return False
+
+    def generate(self, count: int = 5) -> List[Dict]:
+        """Generate tickets using Random Forest model probabilities"""
+        tickets = []
+
+        # Try RF-guided generation first
+        if self._ml_available and self._rf_model is not None:
+            try:
+                # Get probability predictions from Random Forest model
+                wb_probs, pb_probs = self._rf_model.predict_probabilities(self.draws_df)
+                
+                logger.debug(f"{self.name}: Successfully obtained Random Forest probabilities")
+                
+                # Generate tickets using RF probabilities
+                for _ in range(count):
+                    try:
+                        # Sample white balls using RF probabilities
+                        white_balls = sorted(np.random.choice(
+                            range(1, 70),
+                            size=5,
+                            replace=False,
+                            p=wb_probs
+                        ).tolist())
+                        
+                        # Sample powerball using RF probabilities
+                        powerball = int(np.random.choice(range(1, 27), p=pb_probs))
+                        
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.80  # High confidence for RF
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"{self.name}: Error generating ticket with RF probs: {e}")
+                        # Fallback to random for this ticket
+                        white_balls = sorted(random.sample(range(1, 70), 5))
+                        powerball = random.randint(1, 26)
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.50
+                        })
+                
+                logger.debug(f"{self.name}: Generated {len(tickets)} tickets using Random Forest")
+                return tickets
+                
+            except Exception as e:
+                logger.error(f"{self.name}: RF prediction pipeline failed: {e}, using fallback")
+                # Continue to fallback below
+
+        # Fallback to random if RF not available
+        for _ in range(count):
+            white_balls = sorted(random.sample(range(1, 70), 5))
+            powerball = random.randint(1, 26)
+            tickets.append({
+                'white_balls': white_balls,
+                'powerball': powerball,
+                'strategy': self.name,
+                'confidence': 0.50
+            })
+
+        logger.debug(f"{self.name}: Generated {count} tickets (fallback mode)")
+        return tickets
+
+
+class LSTMNeuralStrategy(BaseStrategy):
+    """Generate tickets using LSTM neural network model"""
+
+    def __init__(self):
+        super().__init__("lstm_neural")
+        self._lstm_model = None
+        self._ml_available = self._initialize_lstm_model()
+
+    def _initialize_lstm_model(self) -> bool:
+        """Initialize the LSTM model. Returns True if successful."""
+        try:
+            from src.ml_models.lstm_model import LSTMModel
+            self._lstm_model = LSTMModel(use_pretrained=True)
+            
+            # Verify models are loaded
+            if self._lstm_model.wb_model and self._lstm_model.pb_model:
+                logger.info(f"{self.name}: LSTM models loaded successfully")
+                return True
+            else:
+                logger.warning(f"{self.name}: LSTM models not available, will use fallback")
+                return False
+        except Exception as e:
+            logger.warning(f"{self.name}: Could not initialize LSTM model: {e}")
+            return False
+
+    def generate(self, count: int = 5) -> List[Dict]:
+        """Generate tickets using LSTM model probabilities"""
+        tickets = []
+
+        # Try LSTM-guided generation first
+        if self._ml_available and self._lstm_model is not None:
+            try:
+                # Get probability predictions from LSTM model
+                wb_probs, pb_probs = self._lstm_model.predict_probabilities(self.draws_df)
+                
+                logger.debug(f"{self.name}: Successfully obtained LSTM probabilities")
+                
+                # Generate tickets using LSTM probabilities
+                for _ in range(count):
+                    try:
+                        # Sample white balls using LSTM probabilities
+                        white_balls = sorted(np.random.choice(
+                            range(1, 70),
+                            size=5,
+                            replace=False,
+                            p=wb_probs
+                        ).tolist())
+                        
+                        # Sample powerball using LSTM probabilities
+                        powerball = int(np.random.choice(range(1, 27), p=pb_probs))
+                        
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.78  # High confidence for LSTM
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"{self.name}: Error generating ticket with LSTM probs: {e}")
+                        # Fallback to random for this ticket
+                        white_balls = sorted(random.sample(range(1, 70), 5))
+                        powerball = random.randint(1, 26)
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.50
+                        })
+                
+                logger.debug(f"{self.name}: Generated {len(tickets)} tickets using LSTM")
+                return tickets
+                
+            except Exception as e:
+                logger.error(f"{self.name}: LSTM prediction pipeline failed: {e}, using fallback")
+                # Continue to fallback below
+
+        # Fallback to random if LSTM not available
+        for _ in range(count):
+            white_balls = sorted(random.sample(range(1, 70), 5))
+            powerball = random.randint(1, 26)
+            tickets.append({
+                'white_balls': white_balls,
+                'powerball': powerball,
+                'strategy': self.name,
+                'confidence': 0.50
+            })
+
+        logger.debug(f"{self.name}: Generated {count} tickets (fallback mode)")
+        return tickets
+
+
+class HybridEnsembleStrategy(BaseStrategy):
+    """Hybrid strategy combining 70% XGBoost + 30% Cooccurrence"""
+
+    def __init__(self):
+        super().__init__("hybrid_ensemble")
+        self._xgboost_strategy = XGBoostMLStrategy()
+        self._cooccurrence_strategy = CooccurrenceStrategy()
+
+    def generate(self, count: int = 5) -> List[Dict]:
+        """Generate tickets by blending XGBoost (70%) and Cooccurrence (30%)"""
+        tickets = []
+        
+        # Calculate split: 70% XGBoost, 30% Cooccurrence
+        xgboost_count = int(count * 0.7)
+        cooccurrence_count = count - xgboost_count
+        
+        # Generate from XGBoost
+        if xgboost_count > 0:
+            xgboost_tickets = self._xgboost_strategy.generate(xgboost_count)
+            # Update strategy name to hybrid_ensemble
+            for ticket in xgboost_tickets:
+                ticket['strategy'] = self.name
+                ticket['confidence'] = 0.82  # Slightly higher for hybrid
+            tickets.extend(xgboost_tickets)
+        
+        # Generate from Cooccurrence
+        if cooccurrence_count > 0:
+            cooccurrence_tickets = self._cooccurrence_strategy.generate(cooccurrence_count)
+            # Update strategy name to hybrid_ensemble
+            for ticket in cooccurrence_tickets:
+                ticket['strategy'] = self.name
+                ticket['confidence'] = 0.82  # Slightly higher for hybrid
+            tickets.extend(cooccurrence_tickets)
+        
+        logger.debug(f"{self.name}: Generated {len(tickets)} tickets (70% XGBoost + 30% Cooccurrence)")
+        return tickets
+
+
+class IntelligentScoringStrategy(BaseStrategy):
+    """Generate tickets using multi-criteria intelligent scoring system"""
+
+    def __init__(self):
+        super().__init__("intelligent_scoring")
+        self._generator = None
+        self._generator_available = self._initialize_generator()
+
+    def _initialize_generator(self) -> bool:
+        """Initialize the IntelligentGenerator. Returns True if successful."""
+        try:
+            from src.intelligent_generator import IntelligentGenerator
+            
+            # Try initializing without parameters first
+            try:
+                self._generator = IntelligentGenerator()
+            except TypeError:
+                # If it requires historical data, pass it
+                self._generator = IntelligentGenerator(self.draws_df)
+            
+            logger.info(f"{self.name}: IntelligentGenerator initialized successfully")
+            return True
+        except Exception as e:
+            logger.warning(f"{self.name}: Could not initialize IntelligentGenerator: {e}")
+            return False
+
+    def generate(self, count: int = 5) -> List[Dict]:
+        """Generate tickets using intelligent multi-criteria scoring"""
+        tickets = []
+
+        # Try intelligent generation first
+        if self._generator_available and self._generator is not None:
+            try:
+                for _ in range(count):
+                    try:
+                        prediction = self._generator.generate_smart_play()
+                        
+                        tickets.append({
+                            'white_balls': sorted(prediction['numbers']),
+                            'powerball': prediction['powerball'],
+                            'strategy': self.name,
+                            'confidence': prediction.get('score', 0.75)
+                        })
+                    except Exception as e:
+                        logger.error(f"{self.name}: IntelligentGenerator failed: {e}")
+                        # Fallback to random for this ticket
+                        white_balls = sorted(random.sample(range(1, 70), 5))
+                        powerball = random.randint(1, 26)
+                        tickets.append({
+                            'white_balls': white_balls,
+                            'powerball': powerball,
+                            'strategy': self.name,
+                            'confidence': 0.50
+                        })
+                
+                logger.debug(f"{self.name}: Generated {len(tickets)} tickets using IntelligentGenerator")
+                return tickets
+                
+            except Exception as e:
+                logger.error(f"{self.name}: Intelligent scoring failed: {e}, using fallback")
+                # Continue to fallback below
+
+        # Fallback to random if generator not available
+        for _ in range(count):
+            white_balls = sorted(random.sample(range(1, 70), 5))
+            powerball = random.randint(1, 26)
+            tickets.append({
+                'white_balls': white_balls,
+                'powerball': powerball,
+                'strategy': self.name,
+                'confidence': 0.50
+            })
+
+        logger.debug(f"{self.name}: Generated {count} tickets (fallback mode)")
+        return tickets
+
+
 class StrategyManager:
     """
-    Manages all 6 strategies and selects which to use based on adaptive weights.
+    Manages all 11 strategies and selects which to use based on adaptive weights.
     
     Uses Bayesian weight updating based on historical performance.
     """
 
     def __init__(self):
         self.strategies = {
+            # Original 6 strategies
             'frequency_weighted': FrequencyWeightedStrategy(),
             'coverage_optimizer': CoverageOptimizerStrategy(),
             'cooccurrence': CooccurrenceStrategy(),
             'range_balanced': RangeBalancedStrategy(),
             'ai_guided': AIGuidedStrategy(),
-            'random_baseline': RandomBaselineStrategy()
+            'random_baseline': RandomBaselineStrategy(),
+            # New 5 ML strategies (PHASE 2)
+            'xgboost_ml': XGBoostMLStrategy(),
+            'random_forest_ml': RandomForestMLStrategy(),
+            'lstm_neural': LSTMNeuralStrategy(),
+            'hybrid_ensemble': HybridEnsembleStrategy(),
+            'intelligent_scoring': IntelligentScoringStrategy()
         }
 
         self._initialize_strategy_weights()
         logger.info(f"StrategyManager initialized with {len(self.strategies)} strategies")
 
     def _initialize_strategy_weights(self):
-        """Initialize strategy_performance table with equal weights (1/6 each)"""
+        """Initialize strategy_performance table with equal weights (1/11 each = ~0.091)"""
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -471,7 +869,7 @@ class StrategyManager:
             cursor.execute("""
                 INSERT OR IGNORE INTO strategy_performance 
                 (strategy_name, current_weight, confidence)
-                VALUES (?, 0.1667, 0.5)
+                VALUES (?, 0.091, 0.5)
             """, (name,))
 
         conn.commit()

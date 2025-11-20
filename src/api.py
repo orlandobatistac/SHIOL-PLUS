@@ -1280,17 +1280,17 @@ async def trigger_full_pipeline_automatically():
             if deleted_count > 0:
                 logger.info(f"[{execution_id}] Deleted {deleted_count} old predictions for {next_draw}")
 
-            # Generate and save predictions in BATCHES (5 batches of 40 tickets each)
+            # Generate and save predictions in BATCHES (5 batches of 100 tickets each)
             # This reduces memory footprint and prevents OOM kills
             total_saved = 0
             strategy_dist = {}
-            batch_size = 40  # Save every 40 tickets
+            batch_size = 100  # Save every 100 tickets
             
             for batch_num in range(5):
                 batch_tickets = []
                 
-                # Generate 40 tickets per batch
-                for _ in range(8):  # 8 sets of 5 = 40 tickets
+                # Generate 100 tickets per batch
+                for _ in range(20):  # 20 sets of 5 = 100 tickets
                     tickets = engine.generate_tickets(5)
                     batch_tickets.extend(tickets)
                     
@@ -1303,19 +1303,19 @@ async def trigger_full_pipeline_automatically():
                 batch_saved = save_generated_tickets(batch_tickets, next_draw)
                 total_saved += batch_saved
                 
-                logger.info(f"[{execution_id}] Batch {batch_num + 1}/5: Saved {batch_saved} tickets ({total_saved}/200 total)")
+                logger.info(f"[{execution_id}] Batch {batch_num + 1}/5: Saved {batch_saved} tickets ({total_saved}/500 total)")
                 
                 # Clear batch from memory immediately
                 del batch_tickets
                 
-                # Force garbage collection every 40 tickets to prevent memory bloat
+                # Force garbage collection every 100 tickets to prevent memory bloat
                 gc.collect()
             
             logger.info(f"[{execution_id}] Generated and saved {total_saved} tickets for {next_draw}")
             logger.info(f"[{execution_id}] Strategy distribution: {strategy_dist}")
             
             # VALIDATION GATE 5
-            expected_count = 200
+            expected_count = 500
             validation_result = validate_step_5_prediction(total_saved, expected_count, execution_id)
             
             if not validation_result['success']:
