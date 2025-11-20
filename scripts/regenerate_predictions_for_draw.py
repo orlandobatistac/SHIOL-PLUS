@@ -68,9 +68,31 @@ def generate_predictions(draw_date: str, total_tickets: int = 500) -> int:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         inserted = 0
+        skipped = 0
         
         for ticket in tickets:
             try:
+                wb = ticket['white_balls']
+                pb = ticket['powerball']
+                
+                # Validate white balls range (1-69)
+                if not all(1 <= n <= 69 for n in wb):
+                    logger.warning(f"Skipping ticket with invalid white balls: {wb}")
+                    skipped += 1
+                    continue
+                
+                # Validate powerball range (1-26)
+                if not (1 <= pb <= 26):
+                    logger.warning(f"Skipping ticket with invalid powerball: {pb}")
+                    skipped += 1
+                    continue
+                
+                # Validate sorted order
+                if wb != sorted(wb):
+                    logger.warning(f"Skipping ticket with unsorted white balls: {wb}")
+                    skipped += 1
+                    continue
+                
                 cursor.execute("""
                     INSERT INTO generated_tickets (
                         draw_date, strategy_used, n1, n2, n3, n4, n5, powerball, confidence_score
@@ -78,22 +100,22 @@ def generate_predictions(draw_date: str, total_tickets: int = 500) -> int:
                 """, (
                     draw_date,
                     ticket['strategy'],
-                    ticket['white_balls'][0],
-                    ticket['white_balls'][1],
-                    ticket['white_balls'][2],
-                    ticket['white_balls'][3],
-                    ticket['white_balls'][4],
-                    ticket['powerball'],
+                    wb[0], wb[1], wb[2], wb[3], wb[4],
+                    pb,
                     ticket.get('confidence', 0.5)
                 ))
                 inserted += 1
             except Exception as e:
                 logger.error(f"Error inserting ticket: {e}")
+                skipped += 1
                 continue
         
         conn.commit()
     
-    logger.success(f"✅ Inserted {inserted}/{len(tickets)} tickets for {draw_date}")
+    if skipped > 0:
+        logger.warning(f"⚠️  Skipped {skipped} invalid tickets")
+    
+    logger.success(f"✅ Inserted {inserted}/{len(tickets)} valid tickets for {draw_date}")
     return inserted
 
 
