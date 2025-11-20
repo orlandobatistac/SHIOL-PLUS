@@ -170,6 +170,7 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 **Status:** ✅ COMPLETED - 2025-11-20
 
 **Summary:**
+
 - ✅ All batch-related code successfully removed (2,514 lines deleted)
 - ✅ Code cleanup completed with ruff (27 issues fixed)
 - ✅ Pipeline validated (5-step structure intact)
@@ -177,18 +178,20 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 - ✅ Main imports and database initialization working
 
 **Tasks Completed:**
+
 - Task 1.1: Dependency analysis ✅
-- Task 1.2: Batch code elimination ✅  
+- Task 1.2: Batch code elimination ✅
 - Task 1.3: Code cleanup with ruff ✅
 - Task 1.4: Post-cleanup validation ✅
 
 **Total Time:** ~2 hours (estimated 6-7 hours)
 **Efficiency:** 70% faster than estimated due to clean code architecture
 sqlite3 data/shiolplus.db ".backup data/backups/before_batch_removal.db"
-```
 
-**Time Estimate:** 30 minutos  
-**Priority:** CRITICAL  
+````
+
+**Time Estimate:** 30 minutos
+**Priority:** CRITICAL
 **Status:** PENDING
 
 #### Task 1.2: Eliminación de Código Batch
@@ -204,7 +207,7 @@ sqlite3 data/shiolplus.db ".backup data/backups/before_batch_removal.db"
 
 ```sql
 DROP TABLE IF EXISTS pre_generated_tickets;
-```
+````
 
 **Time Estimate:** 2 horas  
 **Priority:** CRITICAL  
@@ -213,7 +216,7 @@ DROP TABLE IF EXISTS pre_generated_tickets;
 #### Task 1.3: Limpieza de Código Muerto (PHASE 6 Task 6.4 adelantado) ✅ COMPLETED
 
 - [x] Ejecutar `ruff check src/ --fix` (auto-fix imports) - Fixed 23 issues
-- [x] Ejecutar `ruff check tests/ --fix` (auto-fix tests) - Fixed 4 issues  
+- [x] Ejecutar `ruff check tests/ --fix` (auto-fix tests) - Fixed 4 issues
 - [x] Buscar funciones no usadas manualmente - None found
 - [x] Eliminar comentarios obsoletos (`# TODO:` completados, `# DEPRECATED:`)
 - [x] Remover código comentado (dead code) - Removed list_users function, batch section header
@@ -282,6 +285,7 @@ DROP TABLE IF EXISTS pre_generated_tickets;
 **Status:** ✅ COMPLETED - 2025-11-20
 
 **Summary:**
+
 - ✅ Added 5 new ML strategies to expand pipeline from 6 to 11 strategies
 - ✅ Pipeline now generates 500 tickets (~45 per strategy)
 - ✅ All strategies working with graceful fallback to random when ML models unavailable
@@ -289,6 +293,7 @@ DROP TABLE IF EXISTS pre_generated_tickets;
 - ✅ Distribution validated: all 11 strategies used in generation (range: 34-56 tickets/strategy)
 
 **Tasks Completed:**
+
 - Task 2.1: Añadir 5 Estrategias ML al Pipeline ✅
 - Task 2.2: Testing de Integración ✅
 
@@ -333,10 +338,12 @@ DROP TABLE IF EXISTS pre_generated_tickets;
 - **IntelligentScoringStrategy**: Uses `IntelligentGenerator.generate_smart_play()` with multi-criteria frequency-based scoring
 
 **Files Modified:**
+
 - `src/strategy_generators.py`: Added 5 new strategy classes (409 lines added)
 - `src/api.py`: Updated pipeline to generate 500 tickets in 5 batches of 100 each
 
 **Commits:**
+
 - `5bbb2f7`: feat: add 5 ML strategies to expand pipeline from 6 to 11 strategies
 
 **Time Estimate:** 6-7 horas  
@@ -374,7 +381,7 @@ Statistics:
   Min:     34 tickets
   Max:     56 tickets
   Range:   22 tickets
-  
+
 ✓ All 11 strategies were used in generation
 ✓ All tickets have valid structure (white_balls, powerball, strategy, confidence)
 ✓ All white balls in range [1, 69], sorted, no duplicates
@@ -397,6 +404,66 @@ Statistics:
 
 ---
 
+#### Task 2.3: RandomForest Strategy Eager Loading & Fallback Attribution (NEXT)
+
+**Objective:** Ensure `random_forest_ml` receives fair probabilistic selection by loading models eagerly and preserving attribution on fallback generations.
+
+**Problem Observed (2025-11-20):** In a production pipeline run (500 tickets) `random_forest_ml` only generated 1 ticket despite equal weights (0.0909 each). Logs show successful model load, indicating lazy load timing / fallback attribution causing under-count rather than true probabilistic variance.
+
+**Root Causes (Hypothesis):**
+
+\
+
+- Lazy initialization occurs after initial strategy sampling, reducing early inclusion.
+- Exceptions or pre-load states trigger fallback to `RandomBaselineStrategy`, misattributing tickets that conceptually belong to `random_forest_ml`.
+- Lack of granular logging for failure vs not-ready state.
+
+**Scope / Changes:**
+
+\
+
+- Move model load to `__init__` or `StrategyManager` post-instantiation (eager load).
+- Add `self.model_ready` flag with explicit states (ready / failed / degraded).
+- On generation failure or not-ready state: still attribute ticket to `random_forest_ml` with `generation_mode` metadata (`normal` | `fallback_random` | `not_ready`).
+- Structured logging: `event=random_forest_generation`, include fields: `ready`, `attempt`, `mode`, `exception`.
+- Avoid inflating `random_baseline` counts artificially.
+- Add lightweight unit test: simulate generation pre/post eager load.
+- Add distribution verification script (`scripts/verify_strategy_distribution.py`).
+
+**Acceptance Criteria:**
+
+\
+
+- [ ] Eager load executes on service start (log: `random_forest_ml: eager model initialization complete`).
+- [ ] Pipeline run (500 tickets) shows `random_forest_ml` ticket count within expected probabilistic band (≥30 and ≤65 given uniform weights).
+- [ ] No tickets misattributed to `random_baseline` due to RF fallback (verify counts before/after patch).
+- [ ] Tickets generated during fallback retain `strategy='random_forest_ml'` and a `metadata.generation_mode != 'normal'`.
+- [ ] Structured logs present for each RF batch with `mode` field.
+- [ ] Test added covering eager loading + fallback attribution.
+- [ ] Script `verify_strategy_distribution.py` outputs JSON with counts and flags anomalies.
+- [ ] Documentation updated here & technical notes in `docs/TECHNICAL.md` (Strategy section).
+- [ ] No regression in other 10 strategies' selection distribution.
+- [ ] Commits reference this task number and include log samples.
+
+**Metrics to Capture (Before vs After):**
+
+\
+
+| Metric                                | Before         | After      | Target         |
+| ------------------------------------- | -------------- | ---------- | -------------- |
+| RF tickets (single run)               | 1              | TBD        | 30–65          |
+| Misattributed fallbacks               | >0 (suspected) | 0          | 0              |
+| Load latency (s)                      | ~2–3           | ≤3         | ≤3             |
+| Distribution std dev (all strategies) | Record         | Comparable | ~Probabilistic |
+
+**Priority:** HIGH  
+**Status:** PENDING  
+**Time Estimate:** 1 hora  
+**Owner:** Orlando / Copilot  
+**Date Added:** 2025-11-20
+
+---
+
 ### PHASE 3: API SIMPLIFICADA PARA PROYECTO EXTERNO ✅ COMPLETED
 
 **Goal:** Crear endpoint ligero que sirve predicciones del pipeline (NO genera nada nuevo)
@@ -404,6 +471,7 @@ Statistics:
 **Status:** ✅ COMPLETED - 2025-11-20
 
 **Summary:**
+
 - ✅ Created two new API endpoints for external project consumption
 - ✅ Both endpoints return data in <10ms (target achieved)
 - ✅ No new prediction generation - only database reads
@@ -411,6 +479,7 @@ Statistics:
 - ✅ Comprehensive test coverage added
 
 **Tasks Completed:**
+
 - Task 3.1: Endpoint `/api/v1/predictions/latest` ✅
 - Task 3.2: Endpoint `/api/v1/predictions/by-strategy` ✅
 
@@ -445,6 +514,7 @@ Statistics:
   - `strategy`: str (optional) - Filter by specific strategy name
   - `min_confidence`: float (0.0-1.0, optional) - Minimum confidence threshold
 - **Response Format:**
+
   ```json
   {
     "tickets": [
@@ -467,14 +537,17 @@ Statistics:
     }
   }
   ```
+
 - **Performance:** Average response time 3-8ms (under 10ms target)
 - **SQL Query:** `SELECT ... FROM generated_tickets WHERE ... ORDER BY confidence_score DESC, created_at DESC LIMIT ?`
 
 **Files Modified:**
+
 - `src/api_prediction_endpoints.py`: Added 119 lines for `/latest` endpoint
 
 **Test Results:**
-```
+
+```text
 ✓ Default parameters (limit=50): 8.60ms
 ✓ With limit=10: 3.43ms
 ✓ With min_confidence=0.7: 3.53ms
@@ -509,7 +582,8 @@ Statistics:
 - **Endpoint:** `GET /api/v1/predictions/by-strategy`
 - **No Parameters:** Returns all strategies with aggregated data
 - **Response Format:**
-  ```json
+
+````json
   {
     "strategies": {
       "xgboost_ml": {
@@ -526,14 +600,16 @@ Statistics:
           "confidence": 0.85,
           "last_updated": "2025-11-20T10:00:00"
         }
-      },
-      ...
-    },
+      }
+    ```
+
+    - **Performance:** Average response time 2-3ms (well under 10ms target)
     "total_strategies": 11,
     "total_tickets": 501,
     "timestamp": "2025-11-20T12:00:00Z"
   }
-  ```
+````
+
 - **Performance:** Average response time 2-3ms (well under 10ms target)
 - **SQL Queries:**
   - `SELECT strategy_used, COUNT(*), AVG(confidence_score) FROM generated_tickets GROUP BY strategy_used`
@@ -541,10 +617,12 @@ Statistics:
   - Data merged in-memory
 
 **Files Modified:**
+
 - `src/api_prediction_endpoints.py`: Added 117 lines for `/by-strategy` endpoint
 
 **Test Results:**
-```
+
+```text
 ✓ By-strategy aggregation: 3.12ms
 ✓ All 11 strategies returned with metrics
 ✓ Performance data correctly joined from strategy_performance table
@@ -804,9 +882,9 @@ def rl_weight_update(strategy_name, draw_result):
 
 ### Week of Nov 19-26, 2025
 
-**STRATEGY: Clean Before You Build**
+#### STRATEGY: Clean Before You Build
 
-**Day 1 (Nov 19): Batch Elimination & Code Cleanup**
+##### Day 1 (Nov 19): Batch Elimination & Code Cleanup
 
 1. ✅ Análisis de dependencias batch (Task 1.1) - 30 min
 2. ✅ Backup DB antes de cambios - 5 min
@@ -814,24 +892,24 @@ def rl_weight_update(strategy_name, draw_result):
 4. ✅ Limpieza código muerto con ruff (Task 1.3) - 2-3 horas
 5. ✅ Validación post-limpieza (Task 1.4) - 1 hora
 
-**Day 2-3 (Nov 20-21): Pipeline Expansion**
+##### Day 2-3 (Nov 20-21): Pipeline Expansion
 
-6. ✅ Crear 5 clases de estrategia ML (Task 2.1) - 6-7 horas
-7. ✅ Testing de integración (Task 2.2) - 2 horas
+- ✅ Crear 5 clases de estrategia ML (Task 2.1) - 6-7 horas
+- ✅ Testing de integración (Task 2.2) - 2 horas
 
-**Day 4-5 (Nov 22-23): API Externa**
+##### Day 4-5 (Nov 22-23): API Externa
 
-8. ✅ Endpoint `/predictions/latest` (Task 3.1) - 2 horas
-9. ✅ Endpoint `/predictions/by-strategy` (Task 3.2) - 1 hora
-10. ✅ Tests de performance (<10ms) - 30 min
+- ✅ Endpoint `/predictions/latest` (Task 3.1) - 2 horas
+- ✅ Endpoint `/predictions/by-strategy` (Task 3.2) - 1 hora
+- ✅ Tests de performance (<10ms) - 30 min
 
-**Day 6-7 (Nov 24-25): Testing & Deployment**
+##### Day 6-7 (Nov 24-25): Testing & Deployment
 
-11. ✅ Pipeline completo con 11 estrategias E2E
-12. ✅ Deploy a producción (GitHub Actions auto-deploy)
-13. ✅ Verificar 500 tickets con 11 estrategias
-14. ✅ Monitorear logs primeras 24h
-15. ✅ Documentar en PROJECT_ROADMAP_V8.md
+- ✅ Pipeline completo con 11 estrategias E2E
+- ✅ Deploy a producción (GitHub Actions auto-deploy)
+- ✅ Verificar 500 tickets con 11 estrategias
+- ✅ Monitorear logs primeras 24h
+- ✅ Documentar en PROJECT_ROADMAP_V8.md
 
 ---
 
@@ -888,7 +966,7 @@ def rl_weight_update(strategy_name, draw_result):
 
 ---
 
-## ✅ COMPLETED MILESTONES
+## ✅ Completed Milestones Detail
 
 ### PHASE 1: ELIMINACIÓN BATCH + CODE CLEANUP (COMPLETED 2025-11-20)
 
@@ -897,11 +975,13 @@ def rl_weight_update(strategy_name, draw_result):
 **What Was Accomplished:**
 
 1. **Task 1.1: Dependency Analysis** ✅
+
    - Analyzed batch system dependencies across codebase
    - Identified safe removal path
    - Created database backup before changes
 
 2. **Task 1.2: Batch Code Elimination** ✅
+
    - Removed `src/batch_generator.py` (complete file)
    - Removed `src/api_batch_endpoints.py` (complete file)
    - Removed all batch imports from `src/api.py`
@@ -910,6 +990,7 @@ def rl_weight_update(strategy_name, draw_result):
    - **Total:** 2,514 lines of code deleted
 
 3. **Task 1.3: Code Cleanup** ✅
+
    - Ran `ruff check src/ --fix`: Fixed 23 linting issues
    - Ran `ruff check tests/ --fix`: Fixed 4 linting issues
    - Removed obsolete section headers and dead code
@@ -932,6 +1013,7 @@ def rl_weight_update(strategy_name, draw_result):
 - ✅ Foundation ready for PHASE 2 (expansion to 11 strategies)
 
 **Commits:**
+
 - Batch system removal: 2,514 lines deleted
 - Code cleanup: 27 ruff issues fixed
 - Roadmap updated: PHASE 1 marked complete
@@ -976,9 +1058,9 @@ def rl_weight_update(strategy_name, draw_result):
 ## 📞 CONTACTS & RESOURCES
 
 **Project Owner:** Orlando Batista (orlandobatistac)  
-**Repository:** https://github.com/orlandobatistac/SHIOL-PLUS  
-**Production URL:** https://shiolplus.com  
-**API Docs:** https://shiolplus.com/api/docs
+**Repository:** <https://github.com/orlandobatistac/SHIOL-PLUS>  
+**Production URL:** <https://shiolplus.com>  
+**API Docs:** <https://shiolplus.com/api/docs>
 
 **External APIs Used:**
 
