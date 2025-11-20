@@ -12,6 +12,7 @@
 ### ⚠️ Critical Changes
 
 **1. RandomForest & LSTM Strategies Deactivated**
+
 - **Issue:** Models fallback to random generation (no real ML)
 - **RF Problem:** `predict_probabilities()` fails silently on VPS
 - **LSTM Problem:** Requires TensorFlow (500+ MB RAM, not installed)
@@ -19,12 +20,14 @@
 - **Impact:** Better distribution (~55 tickets/strategy vs ~45)
 
 **2. Dashboard Endpoint for Premium Users (URGENT)**
+
 - **Endpoint:** `GET /api/v1/analytics/dashboard`
 - **Purpose:** Immediate metrics for external project premium users
 - **Response:** <50ms (pre-computed data from DB)
 - **Metrics:** ROI, win_rate, hot/cold numbers, strategy performance
 
 **3. VPS-Optimized Analytics (PHASE 4.5 LITE)**
+
 - **Approved:** Gap analyzer, temporal decay, momentum (lightweight)
 - **Rejected:** PageRank, Apriori, Isolation Forest (too heavy)
 - **Constraints:** 2 vCores, 2 GB RAM
@@ -32,19 +35,19 @@
 
 ### Active Strategies (9 of 11)
 
-| # | Strategy | Status | Notes |
-|---|----------|--------|-------|
-| 1 | frequency_weighted | ✅ Active | Core statistical |
-| 2 | cooccurrence | ✅ Active | Pair analysis |
-| 3 | ai_guided | ✅ Active | XGBoost ML |
-| 4 | range_balanced | ✅ Active | Distribution |
-| 5 | random_baseline | ✅ Active | Control |
-| 6 | coverage_optimizer | ✅ Active | Coverage |
-| 7 | xgboost_ml | ✅ Active | Pure XGBoost |
-| 8 | hybrid_ensemble | ✅ Active | XGBoost+Cooccurrence |
-| 9 | intelligent_scoring | ✅ Active | Multi-criteria |
-| ~~10~~ | ~~random_forest_ml~~ | ❌ Disabled | Broken (fallback) |
-| ~~11~~ | ~~lstm_neural~~ | ❌ Disabled | No TensorFlow |
+| #      | Strategy             | Status      | Notes                |
+| ------ | -------------------- | ----------- | -------------------- |
+| 1      | frequency_weighted   | ✅ Active   | Core statistical     |
+| 2      | cooccurrence         | ✅ Active   | Pair analysis        |
+| 3      | ai_guided            | ✅ Active   | XGBoost ML           |
+| 4      | range_balanced       | ✅ Active   | Distribution         |
+| 5      | random_baseline      | ✅ Active   | Control              |
+| 6      | coverage_optimizer   | ✅ Active   | Coverage             |
+| 7      | xgboost_ml           | ✅ Active   | Pure XGBoost         |
+| 8      | hybrid_ensemble      | ✅ Active   | XGBoost+Cooccurrence |
+| 9      | intelligent_scoring  | ✅ Active   | Multi-criteria       |
+| ~~10~~ | ~~random_forest_ml~~ | ❌ Disabled | Broken (fallback)    |
+| ~~11~~ | ~~lstm_neural~~      | ❌ Disabled | No TensorFlow        |
 
 ---
 
@@ -677,11 +680,27 @@ Statistics:
 
 ---
 
-### PHASE 4.5: ANALYTICS LIGEROS & SCORING ENGINE (NOV 21-26) 🚀 IN PROGRESS
+### PHASE 4.5: TICKET ANALYZER & SCORING ENGINE (NOV 20-26) 🚀 IN PROGRESS
 
-**Goal:** Añadir analytics avanzados SIN degradar performance del VPS
+**Goal:** Analizar tickets del USUARIO y darle feedback de calidad (no analizar predicciones del pipeline)
 
 **Status:** 🚀 IN PROGRESS (Nov 20, 2025)
+
+**Objetivo Correcto:**
+- Usuario envía SUS tickets elegidos (white_balls + powerball)
+- Sistema analiza calidad multi-dimensional
+- Retorna scores, insights, recommendations
+- Similar a: "¿Qué tan buenos son mis números?"
+
+**Use Case del Proyecto Externo (PredictLottoPro):**
+1. Usuario elige números en UI del proyecto externo
+2. Antes de confirmar jugada, presiona "Analyze My Ticket"
+3. Endpoint `POST /api/v3/analytics/analyze-tickets` recibe tickets
+4. Sistema retorna:
+   - Scores (diversity, balance, pattern, hot/cold, gap, momentum)
+   - Insights (números hot/cold en su ticket, si está balanceado)
+   - Recommendation (EXCELLENT/GOOD/FAIR/POOR)
+5. Usuario decide si jugar ese ticket o modificarlo
 
 **Computational Impact Analysis:**
 
@@ -690,20 +709,20 @@ Statistics:
 | Temporal Decay Model | ⚡ Muy Bajo | <5 MB | <50ms | ✅ YES |
 | Gap/Drought Analyzer | ⚡ Muy Bajo | <5 MB | <100ms | ✅ YES |
 | Momentum Analyzer (window=20) | ⚡ Bajo | <10 MB | <200ms | ✅ YES |
-| Scoring Engine 6D | ⚡ Bajo | <2 MB | ~2.5s for 500 tickets | ✅ YES |
-| Analytics Endpoint | ⚡ Bajo | <20 MB | <50ms | ✅ YES |
-| **TOTAL IMPACT** | +5-10% CPU | +42 MB RAM | +3s to pipeline | ✅ **ACCEPTABLE** |
+| Scoring Engine 6D | ⚡ Bajo | <2 MB | ~5ms per ticket | ✅ YES |
+| Ticket Analysis Endpoint | ⚡ Bajo | <20 MB | <100ms for 5 tickets | ✅ YES |
+| **TOTAL IMPACT** | +5-10% CPU | +42 MB RAM | No impact on pipeline | ✅ **ACCEPTABLE** |
 
 **What NOT to Implement (Too Expensive for VPS):**
 
-| Feature | Why NOT | CPU Cost | RAM Cost |
-|---------|---------|----------|----------|
-| ❌ Correlation Network (PageRank) | O(V²) graph algorithms | 🔥 ALTO (+2-5 min) | 50-100 MB |
-| ❌ Pattern Mining (Apriori) | O(2^n) exponential | 🔥 MUY ALTO (+10-30 min) | 100-500 MB |
-| ❌ Isolation Forest | Redundant with XGBoost | 🔥 ALTO (+5-10 min) | 100-200 MB |
-| ❌ Fourier Periodicity | Pseudociencia (no cycles in random) | 🔥 ALTO (+3-5 min) | 50-100 MB |
-| ❌ New MomentumStrategy | Validate analytics first | ⚡ Medium (+10-15s) | <15 MB |
-| ❌ New GapTheoryStrategy | Validate analytics first | ⚡ Medium (+10-15s) | <10 MB |
+| Feature                           | Why NOT                             | CPU Cost                 | RAM Cost   |
+| --------------------------------- | ----------------------------------- | ------------------------ | ---------- |
+| ❌ Correlation Network (PageRank) | O(V²) graph algorithms              | 🔥 ALTO (+2-5 min)       | 50-100 MB  |
+| ❌ Pattern Mining (Apriori)       | O(2^n) exponential                  | 🔥 MUY ALTO (+10-30 min) | 100-500 MB |
+| ❌ Isolation Forest               | Redundant with XGBoost              | 🔥 ALTO (+5-10 min)      | 100-200 MB |
+| ❌ Fourier Periodicity            | Pseudociencia (no cycles in random) | 🔥 ALTO (+3-5 min)       | 50-100 MB  |
+| ❌ New MomentumStrategy           | Validate analytics first            | ⚡ Medium (+10-15s)      | <15 MB     |
+| ❌ New GapTheoryStrategy          | Validate analytics first            | ⚡ Medium (+10-15s)      | <10 MB     |
 
 **Decision:** Implementar solo analytics LIGEROS (items 1-5), posponer nuevas estrategias hasta validar correlaciones.
 
@@ -714,6 +733,7 @@ Statistics:
 **Objective:** Compute "days since last appearance" for each number (1-69 white, 1-26 powerball)
 
 **Implementation:**
+
 - [x] Función `compute_gap_analysis()` en `src/analytics_engine.py`
 - [x] Input: DataFrame de draws históricos
 - [x] Output: Dict con gap scores por número
@@ -721,6 +741,7 @@ Statistics:
 - [x] Cache en tabla `number_gap_analysis` (actualizar en STEP 2 del pipeline)
 
 **Expected Output:**
+
 ```python
 {
     'white_balls': {
@@ -749,6 +770,7 @@ Statistics:
 **Objective:** Compute frequency distributions with exponential decay weighting (recent draws matter more)
 
 **Implementation:**
+
 - [x] Función `compute_temporal_frequencies()` en `src/analytics_engine.py`
 - [x] Input: DataFrame de draws, decay_rate (default: 0.05)
 - [x] Output: Weighted frequency distributions
@@ -756,6 +778,7 @@ Statistics:
 - [x] Integrar en `update_analytics()` (STEP 2 del pipeline)
 
 **Expected Output:**
+
 ```python
 {
     'white_balls_temporal': array([0.012, 0.018, ...]),  # 69 elements
@@ -775,6 +798,7 @@ Statistics:
 **Objective:** Detect rising/falling trends in last 20 draws (NOT full 1864)
 
 **Implementation:**
+
 - [x] Función `compute_momentum_scores()` en `src/analytics_engine.py`
 - [x] Input: DataFrame de últimos 20 draws
 - [x] Output: Momentum scores (-1.0 to +1.0) por número
@@ -782,6 +806,7 @@ Statistics:
 - [x] Clasificación: rising (>0.2), stable (-0.2 to 0.2), falling (<-0.2)
 
 **Expected Output:**
+
 ```python
 {
     'white_balls_momentum': {
@@ -807,6 +832,7 @@ Statistics:
 **Objective:** Score each ticket on 6 quality dimensions (not just confidence)
 
 **Implementation:**
+
 - [x] Crear módulo `src/ticket_scorer.py`
 - [x] Función `score_ticket(ticket: Dict) -> Dict[str, float]`
 - [x] Dimensiones:
@@ -820,6 +846,7 @@ Statistics:
 - [x] Almacenar scores en `generated_tickets` table (añadir columnas)
 
 **Expected Output:**
+
 ```python
 {
     'diversity_score': 0.82,
@@ -843,6 +870,7 @@ Statistics:
 **Objective:** Endpoint `/api/v3/analytics/overview` con analytics completos
 
 **Implementation:**
+
 - [x] Crear en `src/api_prediction_endpoints.py`
 - [x] Incluir datos de:
   - Gap analysis (hot/cold by recency)
@@ -856,6 +884,7 @@ Statistics:
 - [x] Response format: JSON con visualizaciones ASCII opcionales
 
 **Expected Response:**
+
 ```json
 {
   "hot_numbers": {
@@ -877,7 +906,7 @@ Statistics:
   "patterns": {
     "odd_even_ratio": 0.6,
     "sum_range": [120, 180],
-    "decades": {"0-9": 1, "10-19": 2}
+    "decades": { "0-9": 1, "10-19": 2 }
   }
 }
 ```
@@ -1136,28 +1165,32 @@ def rl_weight_update(strategy_name, draw_result):
 
 **RandomForest & LSTM NO son viables en VPS actual:**
 
-| Model | Issue | CPU Cost | RAM Cost | Recommendation |
-|-------|-------|----------|----------|----------------|
-| **RandomForestML** | sklearn funciona PERO genera con fallback random (models no cargan correctamente) | 🔥 ALTO | 📊 100-200 MB | ⚠️ **DESACTIVAR temporalmente** |
-| **LSTM** | Requiere TensorFlow/Keras (NO instalado en VPS por limitaciones RAM) | 🔥 MUY ALTO | 📊 500+ MB | ❌ **DESACTIVAR permanentemente** |
+| Model              | Issue                                                                             | CPU Cost    | RAM Cost      | Recommendation                    |
+| ------------------ | --------------------------------------------------------------------------------- | ----------- | ------------- | --------------------------------- |
+| **RandomForestML** | sklearn funciona PERO genera con fallback random (models no cargan correctamente) | 🔥 ALTO     | 📊 100-200 MB | ⚠️ **DESACTIVAR temporalmente**   |
+| **LSTM**           | Requiere TensorFlow/Keras (NO instalado en VPS por limitaciones RAM)              | 🔥 MUY ALTO | 📊 500+ MB    | ❌ **DESACTIVAR permanentemente** |
 
 **Evidence from Logs:**
+
 - RandomForest: Models load successfully pero `predict_probabilities()` falla silenciosamente → fallback a random
 - LSTM: `KERAS_AVAILABLE = False` → todos los tickets son random fallback
 - Resultado: Estrategias "ML" generan tickets random (confidence=0.50) pero se atribuyen incorrectamente
 
 **Impact on Adaptive Learning:**
+
 - ❌ `random_forest_ml` y `lstm_neural` reciben crédito por tickets aleatorios
 - ❌ Distorsiona ROI metrics (random performance se atribuye a "ML")
 - ❌ Desperdicia slots de generación (45-50 tickets cada una = ~100 tickets/500 son random)
 
 **Action Items:**
+
 1. ⚠️ **DESACTIVAR `random_forest_ml` y `lstm_neural` TEMPORALMENTE** (reducir de 11 a 9 estrategias)
 2. ✅ **MANTENER `xgboost_ml`** (funciona correctamente sin TensorFlow/sklearn pesado)
 3. ✅ **MANTENER `hybrid_ensemble`** (usa XGBoost + Cooccurrence, no RF/LSTM)
 4. ✅ **MANTENER `intelligent_scoring`** (no usa ML pesado)
 
 **Result:**
+
 - Pipeline: 500 tickets ÷ 9 estrategias = ~55 tickets/estrategia (mejor distribución)
 - Performance: Sin overhead de models que fallan
 - Adaptive Learning: Métricas precisas (no se atribuye random a "ML")
@@ -1172,44 +1205,96 @@ def rl_weight_update(strategy_name, draw_result):
 
 #### ⚡ **IMMEDIATE (Hoy - 2-3 horas):**
 
-##### Task 0.1: Dashboard Básico con Métricas Actuales ✅ CRITICAL
-**Goal:** Exponer métricas existentes en endpoint consumible por proyecto externo
+##### Task 0.1: Ticket Analysis Endpoint para Usuarios Premium ✅ CRITICAL
+
+**Goal:** Analizar tickets que el USUARIO va a jugar y darle feedback de calidad
+
+**Context Correcto:**
+- NO es dashboard de predicciones del pipeline
+- ES un **validador/analizador de tickets del usuario**
+- Usuario envía SUS tickets elegidos → Sistema analiza calidad
+- Similar a "¿Qué tan buenos son mis números?"
 
 **Implementation:**
-- [x] Endpoint `GET /api/v1/analytics/dashboard` (NUEVO)
-- [x] Usar datos YA EXISTENTES en DB (strategy_performance, generated_tickets, powerball_draws)
-- [x] Métricas a incluir:
-  - Top 5 estrategias por ROI (strategy_performance.roi)
-  - Top 5 estrategias por win_rate (strategy_performance.win_rate)
-  - Últimas 20 predicciones con confidence >0.7
-  - Distribución de tickets por estrategia (últimos 7 días)
-  - Hot numbers (top 10 más frecuentes últimos 50 draws)
-  - Cold numbers (top 10 menos frecuentes últimos 50 draws)
-  - Próximo draw date
-- [x] Response time: <50ms (solo queries SELECT simples)
-- [x] NO requiere cálculos complejos (todo pre-computado en DB)
+
+- [x] Endpoint `POST /api/v3/analytics/analyze-tickets` (NUEVO)
+- [x] Input: Array de tickets del usuario
+  ```json
+  {
+    "tickets": [
+      {"white_balls": [5, 12, 23, 45, 67], "powerball": 10},
+      {"white_balls": [1, 2, 3, 4, 5], "powerball": 6}
+    ]
+  }
+  ```
+- [x] Output: Análisis multi-dimensional por ticket
+  ```json
+  {
+    "analysis": [
+      {
+        "ticket_id": 0,
+        "scores": {
+          "diversity_score": 0.82,        // Entropy analysis
+          "balance_score": 0.75,           // Range distribution
+          "pattern_score": 0.90,           // Odd/even, sum, decades
+          "hot_cold_score": 0.65,          // Temporal frequency
+          "gap_score": 0.70,               // Overdue numbers
+          "momentum_score": 0.80,          // Rising/falling trends
+          "composite_score": 0.77          // Weighted average
+        },
+        "insights": {
+          "hot_numbers": [12, 23],         // En tu ticket
+          "cold_numbers": [67],            // En tu ticket
+          "overdue_numbers": [45],         // Buenos candidatos
+          "balanced": true,                // Buena distribución
+          "odd_even_ratio": "3:2",         // Óptimo 3:2 o 2:3
+          "sum": 152,                      // En rango típico [100-250]
+          "recommendation": "GOOD"         // EXCELLENT/GOOD/FAIR/POOR
+        }
+      }
+    ],
+    "historical_context": {
+      "hot_numbers": [5, 12, 23, 34, 45],
+      "cold_numbers": [1, 8, 15, 60, 69],
+      "overdue_numbers": [3, 18, 52]
+    }
+  }
+  ```
+- [x] Análisis basado en:
+  - Temporal decay frequencies (hot/cold by recency)
+  - Gap analysis (overdue numbers)
+  - Momentum (rising/falling trends últimos 20 draws)
+  - Pattern conformity (odd/even, sum ranges, decades)
+  - Diversity (Shannon entropy)
+  - Balance (low/mid/high distribution)
 
 **Files to Create/Modify:**
-- `src/api_prediction_endpoints.py`: Añadir nuevo endpoint
-- Tests básicos de response structure
 
-**Time Estimate:** 2 horas  
+- `src/ticket_scorer.py`: Módulo de scoring (NUEVO)
+- `src/analytics_engine.py`: Añadir gap/temporal/momentum functions
+- `src/api_prediction_endpoints.py`: Endpoint `/analyze-tickets`
+- Tests de scoring dimensions
+
+**Time Estimate:** 4-6 horas  
 **Priority:** 🔥 **CRITICAL (HOY)**  
 **Status:** PENDING
 
 ##### Task 0.2: Desactivar RandomForest y LSTM Strategies
+
 **Goal:** Reducir de 11 a 9 estrategias (eliminar RF y LSTM que no funcionan)
 
 **Implementation:**
+
 - [x] Comentar `random_forest_ml` y `lstm_neural` en `StrategyManager.__init__()`
 - [x] Actualizar `strategy_performance` table (SET active=0 WHERE strategy IN ('random_forest_ml', 'lstm_neural'))
 - [x] Verificar pipeline genera 500 tickets con 9 estrategias (~55/estrategia)
 - [x] Documentar en TECHNICAL.md razón de desactivación
 
 **SQL:**
+
 ```sql
-UPDATE strategy_performance 
-SET current_weight = 0, active = 0 
+UPDATE strategy_performance
+SET current_weight = 0, active = 0
 WHERE strategy_name IN ('random_forest_ml', 'lstm_neural');
 ```
 
@@ -1224,28 +1309,38 @@ WHERE strategy_name IN ('random_forest_ml', 'lstm_neural');
 #### STRATEGY: Quick Wins First, Then Deep Analytics
 
 ##### Day 1 (Nov 20): COMPLETED ✅
+
 - ✅ PHASES 1-3 completadas (batch eliminado, 11 estrategias, API externa)
 
-##### Day 1 URGENT (Nov 20 - Tarde): Dashboard + Cleanup
-1. ⚡ Task 0.1: Dashboard básico métricas (2 horas) - CRITICAL
+##### Day 1 URGENT (Nov 20 - Tarde): Ticket Analyzer + Cleanup
+
+1. ⚡ Task 0.1: Ticket Analysis endpoint (4-6 horas) - CRITICAL
 2. ⚡ Task 0.2: Desactivar RF/LSTM (30 min) - CRITICAL
-3. 📊 Verificar `/api/v1/analytics/dashboard` funciona
-4. 🚀 Deploy a producción
-5. 📧 Notificar a proyecto externo que dashboard está listo
+3. 📊 Implementar scoring básico (diversity, balance, pattern)
+4. 📊 Implementar gap/temporal analysis (hot/cold/overdue)
+5. ✅ Testing con tickets de ejemplo
+6. 🚀 Deploy a producción
+7. 📧 Notificar a proyecto externo: analyzer listo
 
-##### Day 2-3 (Nov 21-22): Analytics Ligeros (PHASE 4.5 LITE)
-- 📊 Task 4.5.1: Gap Analyzer (2 horas)
-- 📊 Task 4.5.2: Temporal Decay Model (2 horas)
+##### Day 2-3 (Nov 21-22): Refinar Analytics & Momentum
+
 - 📊 Task 4.5.3: Momentum Analyzer (ventana=20) (3 horas)
-- 📊 Task 4.5.4: Integrar a dashboard (1 hora)
+- 📊 Integrar momentum scores al ticket analyzer
+- 📊 Añadir insights más detallados (recommendations)
+- 📊 ASCII visualizations opcionales (hot/cold charts)
 
-##### Day 4-5 (Nov 23-24): Scoring Engine Básico
-- 🎯 Task 4.5.5: Ticket Scorer (diversity, balance, pattern) (6 horas)
-- 🎯 Task 4.5.6: Endpoint `/api/v3/analytics/overview` (2 horas)
+##### Day 4-5 (Nov 23-24): Endpoint General Analytics (Contexto Histórico)
+
+- 🎯 Task 4.5.5: Endpoint `GET /api/v3/analytics/overview` (2 horas)
+  - Retorna contexto histórico global (hot/cold/overdue numbers)
+  - Proyecto externo lo usa para mostrar contexto antes de que usuario elija números
+- 🎯 Optimización de queries (<50ms target)
 
 ##### Day 6-7 (Nov 25-26): Testing & Refinamiento
-- ✅ Testing E2E de analytics
-- ✅ Optimización de queries (<50ms target)
+
+- ✅ Testing E2E de ticket analyzer
+- ✅ Validación de scoring dimensions
+- ✅ Optimización de performance
 - ✅ Deploy y monitoreo
 - ✅ Documentar en PROJECT_ROADMAP_V8.md
 
@@ -1459,4 +1554,3 @@ _Version: v8.1 (Analytics & VPS Optimization)_
 _Status: ✅ PHASES 1-3 COMPLETE | 🚀 PHASE 4.5 IN PROGRESS_  
 _Active Strategies: 9/11 (RF & LSTM disabled)_  
 _Next: Dashboard endpoint + Gap/Temporal/Momentum analytics_
-
