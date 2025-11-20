@@ -752,6 +752,4 @@ async def delete_account(
 # =====================
 
 # @auth_router.get("/admin/users")
-# async def list_users(current_user: Dict[str, Any] = Depends(require_admin)):
-#     """Admin endpoint to list users."""
-#     pass
+

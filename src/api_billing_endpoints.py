@@ -725,7 +725,7 @@ async def get_billing_status(request: Request, session_id: str = None):
                     logger.info(f"Existing Premium Pass found for {customer_email}: pass_id={existing_pass['pass_id']}")
                 else:
                     # Create Premium Pass immediately (ensures activation even if webhook hasn't fired)
-                    logger.warning(f"Payment verified but no Premium Pass exists - creating now (webhook may be delayed or failed)")
+                    logger.warning("Payment verified but no Premium Pass exists - creating now (webhook may be delayed or failed)")
                     
                     user_id = None
                     if current_user:

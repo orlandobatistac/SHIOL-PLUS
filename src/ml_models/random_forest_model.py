@@ -172,7 +172,7 @@ class RandomForestModel:
                 )
             
             # Add one std feature
-            features[f'pb_std_last_20'] = (
+            features['pb_std_last_20'] = (
                 draws_df['pb'].rolling(window=20, min_periods=1).std().fillna(0)
             )
         
