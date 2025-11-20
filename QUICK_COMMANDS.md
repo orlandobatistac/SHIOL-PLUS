@@ -1,5 +1,26 @@
 # Comandos Quick Reference - SHIOL+ Predictions
 
+## 🔄 Repoblar TODOS los Recent Draws (50 más recientes)
+
+**DEFAULT: Elimina TODA la base de datos y regenera desde cero**
+
+```bash
+# Repopular los 50 draws más recientes (frontend) - BORRA TODO primero
+cd /var/www/SHIOL-PLUS && /root/.venv_shiolplus/bin/python scripts/populate_recent_draws.py
+
+# Ver qué haría sin ejecutar (dry run)
+cd /var/www/SHIOL-PLUS && /root/.venv_shiolplus/bin/python scripts/populate_recent_draws.py --dry-run
+
+# Repopular más draws (ej: 100 más recientes)
+cd /var/www/SHIOL-PLUS && /root/.venv_shiolplus/bin/python scripts/populate_recent_draws.py --limit 100
+
+# Repopular con menos tickets por draw
+cd /var/www/SHIOL-PLUS && /root/.venv_shiolplus/bin/python scripts/populate_recent_draws.py --tickets 300
+
+# MODO INCREMENTAL: Solo genera para draws sin predicciones (NO borra)
+cd /var/www/SHIOL-PLUS && /root/.venv_shiolplus/bin/python scripts/populate_recent_draws.py --incremental
+```
+
 ## Ver tickets por fecha de sorteo (últimos 90 días)
 
 ```bash
