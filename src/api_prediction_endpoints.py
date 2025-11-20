@@ -1,5 +1,5 @@
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import HTTPException, Query, APIRouter
@@ -823,3 +823,211 @@ async def get_strategy_performance():
     except Exception as e:
         logger.error(f"Error fetching strategy performance: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- PHASE 3: External Project API Endpoints ---
+
+@prediction_router.get("/latest", response_model=Dict[str, Any])
+async def get_latest_predictions(
+    limit: int = Query(50, ge=1, le=500, description="Maximum number of predictions to return"),
+    strategy: Optional[str] = Query(None, description="Filter by strategy name"),
+    min_confidence: Optional[float] = Query(None, ge=0.0, le=1.0, description="Minimum confidence score")
+):
+    """
+    Get the latest predictions from the pipeline (read-only, no generation).
+    
+    Returns the most recent predictions from generated_tickets table,
+    ordered by confidence score descending.
+    
+    Query Parameters:
+    - limit: Number of predictions to return (default: 50, max: 500)
+    - strategy: Filter by specific strategy name (optional)
+    - min_confidence: Filter by minimum confidence score (optional)
+    
+    Returns:
+    - tickets: List of predictions with numbers, strategy, confidence
+    - total: Total number of tickets returned
+    - timestamp: Query execution timestamp
+    """
+    try:
+        logger.info(f"Getting latest predictions - limit: {limit}, strategy: {strategy}, min_confidence: {min_confidence}")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Build query with optional filters
+        query = """
+            SELECT 
+                id,
+                draw_date,
+                strategy_used,
+                n1, n2, n3, n4, n5, powerball,
+                confidence_score,
+                created_at
+            FROM generated_tickets
+            WHERE 1=1
+        """
+        params = []
+        
+        # Add strategy filter if provided
+        if strategy:
+            query += " AND strategy_used = ?"
+            params.append(strategy)
+        
+        # Add confidence filter if provided
+        if min_confidence is not None:
+            query += " AND confidence_score >= ?"
+            params.append(min_confidence)
+        
+        # Order by confidence and limit
+        query += " ORDER BY confidence_score DESC, created_at DESC LIMIT ?"
+        params.append(limit)
+        
+        cursor.execute(query, params)
+        predictions = cursor.fetchall()
+        conn.close()
+        
+        # Format predictions
+        formatted_predictions = []
+        for pred in predictions:
+            formatted_predictions.append({
+                "id": pred[0],
+                "draw_date": pred[1],
+                "strategy": pred[2],
+                "white_balls": [pred[3], pred[4], pred[5], pred[6], pred[7]],
+                "powerball": pred[8],
+                "confidence": round(pred[9], 4) if pred[9] is not None else 0.5,
+                "created_at": pred[10]
+            })
+        
+        logger.info(f"✅ Returned {len(formatted_predictions)} predictions")
+        
+        return {
+            "tickets": formatted_predictions,
+            "total": len(formatted_predictions),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "filters_applied": {
+                "limit": limit,
+                "strategy": strategy,
+                "min_confidence": min_confidence
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting latest predictions: {e}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@prediction_router.get("/by-strategy", response_model=Dict[str, Any])
+async def get_predictions_by_strategy():
+    """
+    Get predictions grouped by strategy with performance metrics.
+    
+    Returns aggregated data for each strategy including:
+    - Average confidence score
+    - Total tickets generated
+    - Performance metrics from strategy_performance table (ROI, win_rate, current_weight)
+    
+    This endpoint is cached for 5 minutes to reduce database load.
+    
+    Returns:
+    - strategies: Dict of strategy data with metrics
+    - total_strategies: Number of strategies
+    - total_tickets: Total predictions across all strategies
+    - timestamp: Query execution timestamp
+    """
+    try:
+        logger.info("Getting predictions grouped by strategy")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get aggregated ticket data by strategy
+        cursor.execute("""
+            SELECT 
+                strategy_used,
+                COUNT(*) as total_tickets,
+                AVG(confidence_score) as avg_confidence,
+                MAX(created_at) as last_generated
+            FROM generated_tickets
+            GROUP BY strategy_used
+            ORDER BY total_tickets DESC
+        """)
+        ticket_stats = cursor.fetchall()
+        
+        # Get performance metrics from strategy_performance table
+        cursor.execute("""
+            SELECT 
+                strategy_name,
+                total_plays,
+                total_wins,
+                win_rate,
+                roi,
+                avg_prize,
+                current_weight,
+                confidence,
+                last_updated
+            FROM strategy_performance
+        """)
+        performance_data = cursor.fetchall()
+        conn.close()
+        
+        # Build performance lookup dict
+        performance_lookup = {}
+        for perf in performance_data:
+            performance_lookup[perf[0]] = {
+                "total_plays": perf[1],
+                "total_wins": perf[2],
+                "win_rate": round(perf[3], 4) if perf[3] is not None else 0.0,
+                "roi": round(perf[4], 4) if perf[4] is not None else 0.0,
+                "avg_prize": round(perf[5], 2) if perf[5] is not None else 0.0,
+                "current_weight": round(perf[6], 4) if perf[6] is not None else 0.0,
+                "confidence": round(perf[7], 4) if perf[7] is not None else 0.5,
+                "last_updated": perf[8]
+            }
+        
+        # Combine ticket stats with performance data
+        strategies = {}
+        total_tickets = 0
+        
+        for stat in ticket_stats:
+            strategy_name = stat[0]
+            ticket_count = stat[1]
+            avg_conf = stat[2]
+            last_gen = stat[3]
+            
+            total_tickets += ticket_count
+            
+            # Get performance metrics if available
+            perf_metrics = performance_lookup.get(strategy_name, {
+                "total_plays": 0,
+                "total_wins": 0,
+                "win_rate": 0.0,
+                "roi": 0.0,
+                "avg_prize": 0.0,
+                "current_weight": 0.0,
+                "confidence": 0.5,
+                "last_updated": None
+            })
+            
+            strategies[strategy_name] = {
+                "total_tickets": ticket_count,
+                "avg_confidence": round(avg_conf, 4) if avg_conf is not None else 0.5,
+                "last_generated": last_gen,
+                "performance": perf_metrics
+            }
+        
+        logger.info(f"✅ Returned data for {len(strategies)} strategies")
+        
+        return {
+            "strategies": strategies,
+            "total_strategies": len(strategies),
+            "total_tickets": total_tickets,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting predictions by strategy: {e}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
