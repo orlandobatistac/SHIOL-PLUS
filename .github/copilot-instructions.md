@@ -87,6 +87,7 @@ Delegate tasks to a specialized coding agent when:
 - ✅ **Need deep code search** before implementation (grep/semantic search intensive)
 
 **Benefits:**
+
 - 🎯 Focused execution on single objective
 - 📋 Clear acceptance criteria from roadmap
 - 🔄 Agent handles search → implement → test cycle autonomously
@@ -113,6 +114,7 @@ OBJECTIVE:
 [One-sentence clear goal from roadmap]
 
 CONTEXT FROM ROADMAP:
+
 - Current PHASE: [PHASE number and name]
 - Task Priority: [CRITICAL/HIGH/MEDIUM/LOW]
 - Time Estimate: [hours from roadmap]
@@ -120,11 +122,13 @@ CONTEXT FROM ROADMAP:
 - Related Files: [from roadmap or project knowledge]
 
 IMPLEMENTATION CHECKLIST (from roadmap):
+
 - [ ] [Item 1 from roadmap task]
 - [ ] [Item 2 from roadmap task]
 - [ ] [Item 3 from roadmap task]
 
 ACCEPTANCE CRITERIA:
+
 - [ ] Code changes committed and pushed
 - [ ] All tests passing (pytest tests/ -v)
 - [ ] PROJECT_ROADMAP_V8.md updated (task marked [x], status: COMPLETED)
@@ -135,11 +139,13 @@ SPECIFIC REQUIREMENTS:
 [Any additional constraints, performance targets, or architectural decisions from roadmap]
 
 WHAT NOT TO DO (from roadmap):
+
 - ❌ [Check roadmap "What NOT to do" section]
 - ❌ Work on deprecated batch system
 - ❌ Skip adaptive learning validation
 
 EXPECTED DELIVERABLES:
+
 1. Summary of files modified with line counts
 2. Key architectural decisions made
 3. Test results (pytest output)
@@ -177,6 +183,7 @@ OBJECTIVE:
 Integrate XGBoost, RandomForest, LSTM, Hybrid, and IntelligentScoring as evaluable strategies in the pipeline.
 
 CONTEXT FROM ROADMAP:
+
 - Current PHASE: PHASE 2 - Pipeline Strategy Expansion
 - Task Priority: CRITICAL
 - Time Estimate: 6-7 hours
@@ -184,16 +191,18 @@ CONTEXT FROM ROADMAP:
 - Related Files: src/strategy_generators.py, src/database.py, src/api.py
 
 IMPLEMENTATION CHECKLIST:
+
 - [ ] Create XGBoostMLStrategy class in src/strategy_generators.py
 - [ ] Create RandomForestMLStrategy class
 - [ ] Create LSTMNeuralStrategy class
 - [ ] Create HybridEnsembleStrategy class
 - [ ] Create IntelligentScoringStrategy class
-- [ ] Register all 5 in StrategyManager.__init__()
+- [ ] Register all 5 in StrategyManager.**init**()
 - [ ] Add 5 rows to strategy_performance table (weight=0.10 each)
 - [ ] Test locally: pipeline generates 500 tickets with 11 strategies
 
 ACCEPTANCE CRITERIA:
+
 - [ ] Pipeline generates 500 tickets (~45 per strategy)
 - [ ] All strategies return tickets with draw_date (evaluable)
 - [ ] Adaptive learning can adjust weights for all 11 strategies
@@ -201,6 +210,7 @@ ACCEPTANCE CRITERIA:
 - [ ] PROJECT_ROADMAP_V8.md Task 2.1 marked [x] COMPLETED
 
 SPECIFIC REQUIREMENTS:
+
 - Each strategy must inherit from BaseStrategy
 - Must implement generate(count: int) method
 - Return format: [{'white_balls': [1,2,3,4,5], 'powerball': 6, 'strategy': 'name', 'confidence': 0.5}]
@@ -208,11 +218,13 @@ SPECIFIC REQUIREMENTS:
 - No hardcoded paths, use relative imports
 
 WHAT NOT TO DO:
+
 - ❌ Don't recreate batch system
 - ❌ Don't generate predictions without draw_date
 - ❌ Don't skip era-aware filtering (pb_is_current == 1)
 
 EXPECTED DELIVERABLES:
+
 1. 5 new strategy classes in src/strategy_generators.py
 2. StrategyManager updated with 11 strategies
 3. Database has 11 rows in strategy_performance
@@ -229,12 +241,14 @@ OBJECTIVE:
 Clean legacy code, remove unused functions, fix linting errors, eliminate dead code.
 
 CONTEXT FROM ROADMAP:
+
 - Current PHASE: PHASE 1 - Elimination Batch + Code Cleanup
 - Task Priority: HIGH
 - Time Estimate: 2-3 hours
 - Dependencies: Task 1.2 completed (batch code eliminated)
 
 IMPLEMENTATION CHECKLIST:
+
 - [ ] Run ruff check src/ --fix (auto-fix imports and formatting)
 - [ ] Identify unused functions (manual review + grep)
 - [ ] Remove TODO comments that are completed
@@ -243,6 +257,7 @@ IMPLEMENTATION CHECKLIST:
 - [ ] Clean up unused imports not caught by ruff
 
 ACCEPTANCE CRITERIA:
+
 - [ ] ruff check src/ returns 0 errors (or only acceptable warnings)
 - [ ] No commented code blocks in src/
 - [ ] All TODO/DEPRECATED comments resolved or documented
@@ -252,9 +267,10 @@ ACCEPTANCE CRITERIA:
 COMMANDS TO RUN:
 grep -r "# TODO" src/ | grep -i "done\|completed\|fixed"
 grep -r "# DEPRECATED" src/
-grep -r "^[\s]*#.*def \|^[\s]*#.*class " src/  # Find commented code
+grep -r "^[\s]*#.*def \|^[\s]*#.*class " src/ # Find commented code
 
 EXPECTED DELIVERABLES:
+
 1. List of files modified with cleanup summary
 2. Ruff output showing improvements
 3. List of removed functions/code blocks
@@ -270,12 +286,14 @@ OBJECTIVE:
 Validate that pipeline works correctly with all 11 strategies, generates 500 tickets, and adaptive learning functions.
 
 CONTEXT FROM ROADMAP:
+
 - Current PHASE: PHASE 2 - Pipeline Strategy Expansion
 - Task Priority: CRITICAL
 - Time Estimate: 2 hours
 - Dependencies: Task 2.1 completed (5 strategies added)
 
 IMPLEMENTATION CHECKLIST:
+
 - [ ] Run full pipeline locally (5 steps)
 - [ ] Verify 500 tickets generated
 - [ ] Check distribution: ~45 tickets per strategy
@@ -284,6 +302,7 @@ IMPLEMENTATION CHECKLIST:
 - [ ] Confirm tickets saved to generated_tickets table
 
 ACCEPTANCE CRITERIA:
+
 - [ ] Pipeline completes without errors
 - [ ] generated_tickets table has 500 new rows
 - [ ] Each strategy has ~40-50 tickets (distribution acceptable)
@@ -292,9 +311,10 @@ ACCEPTANCE CRITERIA:
 
 VALIDATION COMMANDS:
 python scripts/run_pipeline.py
-sqlite3 data/shiolplus.db "SELECT strategy, COUNT(*) FROM generated_tickets WHERE pipeline_run_id = (SELECT MAX(id) FROM pipeline_execution_logs) GROUP BY strategy;"
+sqlite3 data/shiolplus.db "SELECT strategy, COUNT(\*) FROM generated_tickets WHERE pipeline_run_id = (SELECT MAX(id) FROM pipeline_execution_logs) GROUP BY strategy;"
 
 EXPECTED DELIVERABLES:
+
 1. Pipeline execution log (success/failure)
 2. Ticket distribution by strategy (SQL query result)
 3. Screenshot or output of adaptive learning weight adjustments

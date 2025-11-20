@@ -33,7 +33,6 @@ from src.api_public_endpoints import public_frontend_router, set_public_componen
 from src.api_ticket_endpoints import ticket_router
 from src.api_auth_endpoints import auth_router
 from src.api_admin_endpoints import router as admin_router
-from src.api_batch_endpoints import batch_router
 import psutil
 import shutil
 import platform
@@ -1380,47 +1379,11 @@ async def trigger_full_pipeline_automatically():
             )
             
             logger.info(f"[{execution_id}] 🎉 ========== PIPELINE STATUS: COMPLETED ==========")
-            logger.info(f"[{execution_id}] ✅ All 7 steps executed successfully in {elapsed:.2f}s")
+            logger.info(f"[{execution_id}] ✅ All 5 steps executed successfully in {elapsed:.2f}s")
             logger.info(f"[{execution_id}] 📊 Generated {total_saved} tickets for draw {next_draw}")
             logger.info(f"[{execution_id}] 📡 Data source: {final_data_source}")
             logger.info(f"[{execution_id}] =====================================")
             
-            # ========== BATCH TICKET PRE-GENERATION (BACKGROUND, NON-BLOCKING) ==========
-            # Trigger batch generation in background (doesn't block pipeline completion)
-            try:
-                from src.batch_generator import BatchTicketGenerator
-                
-                logger.info(f"[{execution_id}] 🔄 Triggering batch ticket pre-generation in background...")
-                
-                # Initialize batch generator with configured modes
-                batch_generator = BatchTicketGenerator(
-                    batch_size=100,  # Generate 100 tickets per mode
-                    modes=['random_forest', 'lstm', 'v1', 'v2', 'hybrid'],  # All 5 prediction modes
-                    auto_cleanup=True,  # Auto-cleanup old tickets
-                    cleanup_days=7  # Keep tickets for 7 days
-                )
-                
-                # Generate batch in background (async, non-blocking)
-                batch_result = batch_generator.generate_batch(
-                    pipeline_run_id=execution_id,
-                    async_mode=True  # Run in background thread
-                )
-                
-                if batch_result.get('started'):
-                    logger.info(
-                        f"[{execution_id}] ✓ Batch generation started in background: "
-                        f"modes={batch_result['modes']}, batch_size={batch_result['batch_size']}"
-                    )
-                else:
-                    logger.warning(
-                        f"[{execution_id}] ⚠ Batch generation skipped: "
-                        f"{batch_result.get('error', 'unknown error')}"
-                    )
-            except Exception as e:
-                # Log error but don't fail pipeline (batch generation is non-critical)
-                logger.warning(f"[{execution_id}] ⚠ Batch generation failed (non-critical): {e}")
-                logger.debug("Batch generation exception:", exc_info=True)
-
             active_pipeline_execution_id = None  # Clear tracking on completion
             return {
                 'success': True,
@@ -1433,18 +1396,18 @@ async def trigger_full_pipeline_automatically():
             }
 
         except Exception as e:
-            # EXCEPTION DURING STEP 6 - HALT PIPELINE
+            # EXCEPTION DURING PIPELINE - HALT EXECUTION
             logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
-            logger.error(f"[{execution_id}] ❌ STEP 6 EXCEPTION: {e}")
+            logger.error(f"[{execution_id}] ❌ PIPELINE EXCEPTION: {e}")
             logger.exception("Full traceback:")
             
             elapsed = (datetime.now() - start_time).total_seconds()
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
                 status="failed",
-                current_step="❌ FAILED at STEP 6/7",
+                current_step="❌ FAILED during pipeline execution",
                 end_time=datetime.now().isoformat(),
-                error=f"FAILED: STEP 6 EXCEPTION - {str(e)}",
+                error=f"FAILED: PIPELINE EXCEPTION - {str(e)}",
                 elapsed_seconds=elapsed
             )
             
@@ -2403,7 +2366,6 @@ app.include_router(admin_router)  # Admin endpoints
 app.include_router(prediction_router, prefix="/api/v1/predictions")
 app.include_router(draw_router, prefix="/api/v1/draws")
 app.include_router(ticket_router)  # Ticket verification endpoints
-app.include_router(batch_router, prefix="/api/v1/tickets")  # Batch ticket endpoints
 app.include_router(public_frontend_router)
 
 # Import and mount v3 analytics router (SHIOL+ v2)
