@@ -93,8 +93,6 @@ def generate_predictions(draw_date: str, total_tickets: int = 500) -> int:
                 continue
             
             try:
-                
-            try:
                 cursor.execute("""
                     INSERT INTO generated_tickets (
                         draw_date, strategy_used, n1, n2, n3, n4, n5, powerball, confidence_score
