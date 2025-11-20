@@ -7,6 +7,7 @@
 **BEFORE implementing any feature, fixing any bug, or writing any code:**
 
 1. **READ** `PROJECT_ROADMAP_V8.md` completely to understand:
+
    - Current project vision and priorities
    - Active roadmap phases (PHASE 1-7)
    - Which tasks are PENDING, IN PROGRESS, or COMPLETED
@@ -14,6 +15,7 @@
    - What NOT to do (deprecated systems, anti-patterns)
 
 2. **VERIFY** your task aligns with roadmap priorities:
+
    - Is this task in the current active phase?
    - Does it conflict with planned deprecations? (e.g., batch system elimination)
    - Are there dependencies on other incomplete tasks?
@@ -25,6 +27,7 @@
    - **Architectural Decisions**: Why pipeline-centric, why SQLite, etc.
 
 **Example workflow:**
+
 ```bash
 # WRONG ❌ - Start coding immediately
 git checkout -b feature/add-batch-optimization
@@ -38,6 +41,7 @@ git checkout -b feature/add-ml-strategies-to-pipeline
 ```
 
 **Why this matters:**
+
 - Prevents working on deprecated features (e.g., optimizing batch system that will be deleted)
 - Ensures alignment with project vision (pipeline-centric, not dual-system)
 - Avoids conflicts with ongoing architectural changes
@@ -47,25 +51,26 @@ git checkout -b feature/add-ml-strategies-to-pipeline
 
 ### 1. **Code Language**: ALL code, methods, functions, classes, variables, comments, and docstrings MUST be written in **English**
 
-   - ✅ `def calculate_next_draw()` → Good
-   - ❌ `def calcular_siguiente_sorteo()` → Never do this
-   - ✅ `# Calculate frequency distribution` → Good
-   - ❌ `# Calcular distribución de frecuencia` → Never do this
+- ✅ `def calculate_next_draw()` → Good
+- ❌ `def calcular_siguiente_sorteo()` → Never do this
+- ✅ `# Calculate frequency distribution` → Good
+- ❌ `# Calcular distribución de frecuencia` → Never do this
 
 ### 2. **Chat Communication**: Respond to the user (Orlando) in **Spanish (Latin American)**
 
-   - When explaining changes, debugging, or discussing architecture → use Spanish
-   - When writing code or documentation → use English
+- When explaining changes, debugging, or discussing architecture → use Spanish
+- When writing code or documentation → use English
 
 ### 3. **Version Control**: After completing any significant improvement or fix:
-   - Always create a descriptive commit message (in English)
-   - Push changes immediately to remote repository
-   - Example workflow:
-     ```bash
-     git add .
-     git commit -m "feat: add temporal weighting to analytics engine"
-     git push origin main
-     ```
+
+- Always create a descriptive commit message (in English)
+- Push changes immediately to remote repository
+- Example workflow:
+  ```bash
+  git add .
+  git commit -m "feat: add temporal weighting to analytics engine"
+  git push origin main
+  ```
 
 ## Project Overview
 

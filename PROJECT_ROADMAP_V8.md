@@ -148,13 +148,15 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 
 **Decision:** Eliminar sistema Batch PRIMERO antes de expandir Pipeline
 
-**Razón:** 
+**Razón:**
+
 - Evitar duplicar esfuerzo en código que será eliminado
 - Base de código más limpia facilita agregar nuevas estrategias
 - Reduce riesgo de errores al trabajar en código enfocado
 - Previene confusión entre sistemas batch (deprecated) y pipeline (activo)
 
 **Secuencia:**
+
 1. 🧹 PHASE 1: Eliminar Batch + Código muerto (THIS WEEK - CRITICAL 🔥)
 2. 🚀 PHASE 2: Expandir Pipeline a 11 estrategias (AFTER CLEANUP)
 3. 🌐 PHASE 3: API para proyecto externo (AFTER EXPANSION)
@@ -164,12 +166,14 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 ### PHASE 1: ELIMINACIÓN BATCH + CODE CLEANUP (THIS WEEK - CRITICAL 🔥)
 
 **Goal:** Limpiar código legacy antes de expandir pipeline
+
 - [ ] Identificar endpoints que consumen batch (`/batch/*`)
 - [ ] Verificar si frontend usa batch (unlikely)
 - [ ] Listar archivos a eliminar completos
 - [ ] Crear backup de DB antes de DROP table
 
 **Commands:**
+
 ```bash
 grep -r "pre_generated_tickets" src/ frontend/
 grep -r "batch_generator" src/
@@ -191,6 +195,7 @@ sqlite3 data/shiolplus.db ".backup data/backups/before_batch_removal.db"
 - [ ] Remover router batch de FastAPI app
 
 **SQL:**
+
 ```sql
 DROP TABLE IF EXISTS pre_generated_tickets;
 ```
@@ -208,6 +213,7 @@ DROP TABLE IF EXISTS pre_generated_tickets;
 - [ ] Limpiar imports innecesarios que ruff no detectó
 
 **Commands:**
+
 ```bash
 ruff check src/ --fix
 grep -r "# TODO" src/ | grep -i "done\|completed\|fixed"
@@ -722,4 +728,3 @@ def rl_weight_update(strategy_name, draw_result):
 _Last Updated: 2025-11-19 21:30 ET_  
 _Next Review: 2025-11-20 (Post-Phase 1 Task 1.1-1.2 completion)_  
 _Status: 🧹 Active Development - Phase 1 (Clean Before You Build) Starting NOW_
-
