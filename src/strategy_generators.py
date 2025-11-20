@@ -6,7 +6,7 @@ Six different strategies for intelligent ticket generation.
 
 import numpy as np
 import random
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 from loguru import logger
 from src.database import get_db_connection, get_all_draws
 
@@ -834,6 +834,297 @@ class IntelligentScoringStrategy(BaseStrategy):
 
         logger.debug(f"{self.name}: Generated {count} tickets (fallback mode)")
         return tickets
+
+
+class CustomInteractiveGenerator(BaseStrategy):
+    """
+    Generate tickets based on user-defined parameters (risk, temperature, exclusions).
+    
+    This strategy allows interactive customization:
+    - Risk level: How much to deviate from statistical norms
+    - Temperature: Favor hot (recent) or cold (overdue) numbers
+    - Exclusions: Numbers to avoid
+    """
+    
+    def __init__(self, max_date: str = None):
+        super().__init__("custom_interactive", max_date=max_date)
+        self._analytics_cache = None
+        
+    def _get_analytics(self) -> Dict[str, Any]:
+        """Get or cache analytics data for efficient generation."""
+        if self._analytics_cache is None:
+            try:
+                from src.analytics_engine import compute_gap_analysis, compute_temporal_frequencies
+                
+                # Use instance's draws_df which respects max_date
+                self._analytics_cache = {
+                    'gap_analysis': compute_gap_analysis(self.draws_df),
+                    'temporal_frequencies': compute_temporal_frequencies(self.draws_df, decay_rate=0.05)
+                }
+            except Exception as e:
+                logger.error(f"Failed to compute analytics for custom generator: {e}")
+                # Return default analytics
+                self._analytics_cache = {
+                    'gap_analysis': {
+                        'white_balls': {i: 0 for i in range(1, 70)},
+                        'powerball': {i: 0 for i in range(1, 27)}
+                    },
+                    'temporal_frequencies': {
+                        'white_balls': np.ones(69) / 69,
+                        'powerball': np.ones(26) / 26
+                    }
+                }
+        
+        return self._analytics_cache
+    
+    def generate_custom(
+        self,
+        params: Dict[str, Any],
+        context: Dict[str, Any] = None
+    ) -> List[Dict]:
+        """
+        Generate tickets based on custom parameters.
+        
+        Args:
+            params: Dict with:
+                - count: Number of tickets to generate (default 5)
+                - risk: 'low', 'med', 'high' (default 'med')
+                - temperature: 'hot', 'cold', 'neutral' (default 'neutral')
+                - exclude: List of numbers to exclude (default [])
+            context: Optional analytics context (if not provided, will compute)
+            
+        Returns:
+            List of ticket dictionaries
+        """
+        # Parse parameters with defaults
+        count = params.get('count', 5)
+        risk = params.get('risk', 'med').lower()
+        temperature = params.get('temperature', 'neutral').lower()
+        exclude = set(params.get('exclude', []))
+        
+        logger.info(f"Generating {count} custom tickets: risk={risk}, temperature={temperature}, exclude={len(exclude)} numbers")
+        
+        # Validate risk level
+        if risk not in ['low', 'med', 'high']:
+            logger.warning(f"Invalid risk level '{risk}', defaulting to 'med'")
+            risk = 'med'
+        
+        # Validate temperature
+        if temperature not in ['hot', 'cold', 'neutral']:
+            logger.warning(f"Invalid temperature '{temperature}', defaulting to 'neutral'")
+            temperature = 'neutral'
+        
+        # Get analytics (use provided context or compute)
+        if context:
+            analytics = context
+        else:
+            analytics = self._get_analytics()
+        
+        tickets = []
+        
+        for _ in range(count):
+            try:
+                # Generate white balls based on parameters
+                white_balls = self._generate_white_balls(risk, temperature, exclude, analytics)
+                
+                # Generate powerball based on parameters
+                powerball = self._generate_powerball(risk, temperature, analytics)
+                
+                # Calculate confidence based on parameters
+                confidence = self._calculate_confidence(risk, temperature)
+                
+                tickets.append({
+                    'white_balls': sorted(white_balls),
+                    'powerball': powerball,
+                    'strategy': self.name,
+                    'confidence': confidence
+                })
+                
+            except Exception as e:
+                logger.error(f"Error generating custom ticket: {e}, using fallback")
+                # Fallback to random
+                available = [n for n in range(1, 70) if n not in exclude]
+                if len(available) < 5:
+                    available = list(range(1, 70))  # Ignore exclusions if not enough numbers
+                
+                white_balls = sorted(random.sample(available, 5))
+                powerball = random.randint(1, 26)
+                
+                tickets.append({
+                    'white_balls': white_balls,
+                    'powerball': powerball,
+                    'strategy': self.name,
+                    'confidence': 0.50
+                })
+        
+        logger.debug(f"{self.name}: Generated {len(tickets)} custom tickets")
+        return tickets
+    
+    def _generate_white_balls(
+        self,
+        risk: str,
+        temperature: str,
+        exclude: set,
+        analytics: Dict[str, Any]
+    ) -> List[int]:
+        """
+        Generate 5 white balls based on parameters.
+        
+        Args:
+            risk: Risk level ('low', 'med', 'high')
+            temperature: Temperature preference ('hot', 'cold', 'neutral')
+            exclude: Set of numbers to exclude
+            analytics: Analytics data with gap_analysis and temporal_frequencies
+            
+        Returns:
+            List of 5 white ball numbers (not sorted)
+        """
+        # Filter available numbers (exclude user-specified numbers)
+        available = [n for n in range(1, 70) if n not in exclude]
+        
+        if len(available) < 5:
+            logger.warning(f"Exclusions too restrictive ({len(exclude)} excluded), ignoring exclusions")
+            available = list(range(1, 70))
+        
+        # Get weighting based on temperature
+        if temperature == 'hot':
+            # Use temporal frequencies (favor recent numbers)
+            temporal_freq = analytics.get('temporal_frequencies', {}).get('white_balls', np.ones(69) / 69)
+            weights = np.array([temporal_freq[n - 1] for n in available])
+            
+        elif temperature == 'cold':
+            # Use gap analysis (favor overdue numbers)
+            gap_data = analytics.get('gap_analysis', {}).get('white_balls', {})
+            # Higher gap = more overdue = higher weight
+            gaps = np.array([gap_data.get(n, 0) for n in available])
+            # Normalize gaps to weights (higher gap = higher weight)
+            if gaps.sum() > 0:
+                weights = gaps / gaps.sum()
+            else:
+                weights = np.ones(len(available)) / len(available)
+                
+        else:  # neutral
+            # Uniform distribution
+            weights = np.ones(len(available)) / len(available)
+        
+        # Adjust weights based on risk level
+        if risk == 'low':
+            # Low risk: Flatten the distribution (less extreme)
+            weights = np.power(weights, 0.5)  # Reduce contrast
+        elif risk == 'high':
+            # High risk: Sharpen the distribution (more extreme)
+            weights = np.power(weights, 2.0)  # Increase contrast
+        # 'med' keeps weights as-is
+        
+        # Normalize weights
+        weights = weights / weights.sum()
+        
+        # Sample without replacement
+        try:
+            selected = np.random.choice(
+                available,
+                size=5,
+                replace=False,
+                p=weights
+            ).tolist()
+            return selected
+        except Exception as e:
+            logger.error(f"Error in weighted sampling: {e}, using uniform random")
+            return random.sample(available, 5)
+    
+    def _generate_powerball(
+        self,
+        risk: str,
+        temperature: str,
+        analytics: Dict[str, Any]
+    ) -> int:
+        """
+        Generate powerball based on parameters.
+        
+        Args:
+            risk: Risk level ('low', 'med', 'high')
+            temperature: Temperature preference ('hot', 'cold', 'neutral')
+            analytics: Analytics data
+            
+        Returns:
+            Powerball number (1-26)
+        """
+        # Get weighting based on temperature
+        if temperature == 'hot':
+            temporal_freq = analytics.get('temporal_frequencies', {}).get('powerball', np.ones(26) / 26)
+            weights = temporal_freq
+            
+        elif temperature == 'cold':
+            gap_data = analytics.get('gap_analysis', {}).get('powerball', {})
+            gaps = np.array([gap_data.get(n, 0) for n in range(1, 27)])
+            if gaps.sum() > 0:
+                weights = gaps / gaps.sum()
+            else:
+                weights = np.ones(26) / 26
+                
+        else:  # neutral
+            weights = np.ones(26) / 26
+        
+        # Adjust weights based on risk level
+        if risk == 'low':
+            weights = np.power(weights, 0.5)
+        elif risk == 'high':
+            weights = np.power(weights, 2.0)
+        
+        # Normalize
+        weights = weights / weights.sum()
+        
+        # Sample
+        try:
+            return int(np.random.choice(range(1, 27), p=weights))
+        except Exception as e:
+            logger.error(f"Error in powerball sampling: {e}, using random")
+            return random.randint(1, 26)
+    
+    def _calculate_confidence(self, risk: str, temperature: str) -> float:
+        """
+        Calculate confidence score based on parameters.
+        
+        Args:
+            risk: Risk level
+            temperature: Temperature preference
+            
+        Returns:
+            Confidence score (0.0-1.0)
+        """
+        # Base confidence
+        base = 0.70
+        
+        # Temperature affects confidence
+        if temperature in ['hot', 'cold']:
+            base += 0.05  # Slight boost for strategic choice
+        
+        # Risk affects confidence
+        if risk == 'low':
+            base += 0.05  # Conservative approach
+        elif risk == 'high':
+            base -= 0.10  # Risky approach
+        
+        return min(0.95, max(0.50, base))
+    
+    def generate(self, count: int = 5) -> List[Dict]:
+        """
+        Standard generate method (uses neutral parameters).
+        
+        Args:
+            count: Number of tickets to generate
+            
+        Returns:
+            List of ticket dictionaries
+        """
+        # Use neutral parameters for standard generation
+        params = {
+            'count': count,
+            'risk': 'med',
+            'temperature': 'neutral',
+            'exclude': []
+        }
+        return self.generate_custom(params)
 
 
 class StrategyManager:
