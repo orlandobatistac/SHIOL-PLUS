@@ -17,7 +17,7 @@ SHIOL+ es un **motor de predicciones con aprendizaje adaptativo** que evalúa co
 
 1. **🧠 Pipeline como Cerebro del Sistema (PRIORIDAD #1)**
 
-   - Generar 200 predicciones evaluables por sorteo (3x semana)
+   - Generar 500 predicciones evaluables por sorteo (3x semana)
    - Expandir de 6 a 11 estrategias (añadir modelos ML del batch)
    - Adaptive learning automático basado en performance real
    - Métricas de ROI y win_rate por estrategia
@@ -74,7 +74,7 @@ STEP 1: update_database_from_source()      → Fetch nuevo draw MUSL/NY API
 STEP 2: update_analytics()                 → Calcular co-occurrences, patterns
 STEP 3: evaluate_predictions_for_draw()    → Comparar predicciones vs resultado
 STEP 4: adaptive_learning_update()         → Ajustar pesos según performance
-STEP 5: generate_balanced_tickets(200)     → Generar predicciones para próximo draw
+STEP 5: generate_balanced_tickets(500)     → Generar predicciones para próximo draw
 STEP 6: [FUTURO] Batch generation (eliminable)
 ```
 
@@ -92,7 +92,7 @@ STEP 6: [FUTURO] Batch generation (eliminable)
 - Base de datos: 1,864 draws históricos (2009-2025)
 - Tabla principal: `generated_tickets` (predicciones evaluables)
 - Scheduler: APScheduler (3 jobs: post_drawing_pipeline, maintenance, daily_full_sync)
-- Performance: ~60s para generar 200 tickets
+- Performance: ~2-3 min para generar 500 tickets
 
 ### Sistema Batch (A ELIMINAR/REFACTORIZAR)
 
@@ -227,7 +227,7 @@ grep -r "# DEPRECATED" src/
 #### Task 1.4: Validación Post-Limpieza
 
 - [ ] Ejecutar pipeline completo manualmente (5 steps)
-- [ ] Verificar que genera 200 tickets correctamente
+- [ ] Verificar que genera 500 tickets correctamente
 - [ ] Confirmar adaptive learning funciona
 - [ ] Tests: `pytest tests/ -v`
 - [ ] Verificar scheduler sigue funcionando
@@ -258,12 +258,12 @@ grep -r "# DEPRECATED" src/
 - [ ] Crear clases `XGBoostMLStrategy`, `RandomForestMLStrategy`, `LSTMNeuralStrategy`, `HybridEnsembleStrategy`, `IntelligentScoringStrategy` en `src/strategy_generators.py`
 - [ ] Registrar en `StrategyManager.__init__()`
 - [ ] Inicializar 5 filas en `strategy_performance` table (peso inicial: 0.10)
-- [ ] Verificar distribución de 200 tickets entre 11 estrategias (~18/estrategia)
+- [ ] Verificar distribución de 500 tickets entre 11 estrategias (~45/estrategia)
 - [ ] Test local con todas las estrategias
 
 **Resultado Esperado:**
 
-- Pipeline genera 200 tickets con 11 estrategias
+- Pipeline genera 500 tickets con 11 estrategias
 - Todas evaluables con `draw_date` específico
 - Adaptive learning ajusta pesos según ROI real
 
@@ -274,10 +274,10 @@ grep -r "# DEPRECATED" src/
 #### Task 2.2: Testing de Integración
 
 - [ ] Ejecutar pipeline completo con 11 estrategias
-- [ ] Verificar distribución de tickets (~18/estrategia)
+- [ ] Verificar distribución de tickets (~45/estrategia)
 - [ ] Simular evaluación post-sorteo (STEP 4)
 - [ ] Verificar adaptive learning ajusta pesos (STEP 5)
-- [ ] Confirmar 200 tickets guardados en `generated_tickets`
+- [ ] Confirmar 500 tickets guardados en `generated_tickets`
 
 **Time Estimate:** 2 horas  
 **Status:** PENDING
@@ -292,7 +292,7 @@ grep -r "# DEPRECATED" src/
 
 **Funcionalidad:**
 
-- Sirve las últimas 200 predicciones del pipeline
+- Sirve las últimas 500 predicciones del pipeline
 - Filtros: `limit` (default: 50), `strategy`, `min_confidence`
 - Ordenado por confidence DESC
 - Performance target: <10ms (solo lectura DB)
@@ -535,9 +535,9 @@ def rl_weight_update(strategy_name, draw_result):
 **Pipeline:**
 
 - Estrategias Activas: 6/11 (expansión pendiente)
-- Tickets por Run: 200
+- Tickets por Run: 500 (optimizado para análisis estadístico con 11 estrategias → ~45/estrategia)
 - Frecuencia: 3x semana (Lun/Mié/Sáb post-sorteo)
-- Performance: ~60s total (STEPS 1-5)
+- Performance: ~2-3 min total (STEPS 1-5)
 - Última Ejecución: 2025-11-19 02:54:12 UTC ✅
 
 **Database:**
@@ -549,13 +549,16 @@ def rl_weight_update(strategy_name, draw_result):
 
 **Production Environment:**
 
-- Hosting: Contabo VPS ($2/month)
-- OS: Ubuntu Server
+- Hosting: Contabo VPS S ($3/month, upgraded Nov 2025)
+- CPU: 2 vCores
+- RAM: 2 GB
+- Storage: 80 GB NVMe
+- OS: Ubuntu Server 22.04 LTS
 - Web Server: Nginx + Gunicorn
 - SSL: Let's Encrypt
 - Domain: shiolplus.com
 - API Response Time: <50ms (avg)
-- Memory Usage: ~300MB
+- Memory Usage: ~400MB (pipeline activo), ~200MB (idle)
 
 **Tech Stack:**
 
@@ -598,7 +601,7 @@ def rl_weight_update(strategy_name, draw_result):
 
 11. ✅ Pipeline completo con 11 estrategias E2E
 12. ✅ Deploy a producción (GitHub Actions auto-deploy)
-13. ✅ Verificar 200 tickets con 11 estrategias
+13. ✅ Verificar 500 tickets con 11 estrategias
 14. ✅ Monitorear logs primeras 24h
 15. ✅ Documentar en PROJECT_ROADMAP_V8.md
 
