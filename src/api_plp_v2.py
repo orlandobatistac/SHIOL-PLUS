@@ -612,15 +612,28 @@ async def plp_analytics_context() -> Dict[str, Any]:
             key=lambda x: x[1]
         )[:10]
         
-        # Build response
+        # Build response with expected key names
         data = {
-            'hot_numbers': hot_numbers,
-            'cold_numbers': cold_numbers,
-            'momentum': {
+            'hot_numbers': {
+                'white_balls': hot_numbers[:10],
+                'powerball': sorted(
+                    [(int(num), score) for num, score in powerball_gaps.items()],
+                    key=lambda x: x[1]
+                )[:5]
+            },
+            'cold_numbers': {
+                'white_balls': cold_numbers[:10],
+                'powerball': sorted(
+                    [(int(num), score) for num, score in powerball_gaps.items()],
+                    key=lambda x: x[1],
+                    reverse=True
+                )[:5]
+            },
+            'momentum_trends': {
                 'rising_numbers': [{'number': num, 'score': round(score, 2)} for num, score in rising_numbers],
                 'falling_numbers': [{'number': num, 'score': round(score, 2)} for num, score in falling_numbers],
             },
-            'gaps': {
+            'gap_patterns': {
                 'white_balls': {int(k): int(v) for k, v in white_balls_gaps.items()},
                 'powerball': {int(k): int(v) for k, v in powerball_gaps.items()},
             },
@@ -707,8 +720,8 @@ class InteractiveGeneratorRequest(BaseModel):
     """Request model for interactive ticket generation"""
     risk: str = Field("med", description="Risk level: 'low', 'med', or 'high'")
     temperature: str = Field("neutral", description="Temperature preference: 'hot', 'cold', or 'neutral'")
-    exclude: List[int] = Field(default_factory=list, description="Numbers to exclude from generation")
-    count: int = Field(5, ge=1, le=50, description="Number of tickets to generate (1-50)")
+    exclude_numbers: List[int] = Field(default_factory=list, max_length=20, description="Numbers to exclude from generation (max 20)")
+    count: int = Field(5, ge=1, le=10, description="Number of tickets to generate (1-10)")
 
 
 @router.post("/generator/interactive")
@@ -746,13 +759,25 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
             )
         
         # Validate exclusions
-        if req.exclude:
-            invalid_exclusions = [n for n in req.exclude if not (1 <= n <= 69)]
+        if req.exclude_numbers:
+            if len(req.exclude_numbers) > 20:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Too many exclusions. Maximum 20 numbers allowed."
+                )
+            invalid_exclusions = [n for n in req.exclude_numbers if not (1 <= n <= 69)]
             if invalid_exclusions:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Invalid exclusion numbers: {invalid_exclusions}. Must be between 1 and 69"
                 )
+        
+        # Validate count
+        if req.count > 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Too many tickets requested. Maximum 10 allowed."
+            )
         
         # Get analytics context
         context = get_analytics_overview()
@@ -765,7 +790,7 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
             'count': req.count,
             'risk': risk,
             'temperature': temperature,
-            'exclude': req.exclude,
+            'exclude': req.exclude_numbers,
         }
         
         # Generate tickets
@@ -797,7 +822,7 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
                 'parameters': {
                     'risk': risk,
                     'temperature': temperature,
-                    'excluded_count': len(req.exclude),
+                    'excluded_count': len(req.exclude_numbers),
                     'requested_count': req.count,
                     'generated_count': len(formatted_tickets),
                 },

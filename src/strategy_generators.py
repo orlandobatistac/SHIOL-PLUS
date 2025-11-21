@@ -979,12 +979,17 @@ class CustomInteractiveGenerator(BaseStrategy):
         Returns:
             List of 5 white ball numbers (not sorted)
         """
+        # Convert exclude to set if it's a list
+        if isinstance(exclude, list):
+            exclude = set(exclude)
+        
         # Filter available numbers (exclude user-specified numbers)
         available = [n for n in range(1, 70) if n not in exclude]
         
         if len(available) < 5:
-            logger.warning(f"Exclusions too restrictive ({len(exclude)} excluded), ignoring exclusions")
-            available = list(range(1, 70))
+            logger.warning(f"Exclusions too restrictive ({len(exclude)} excluded), need at least 64 numbers available")
+            # Don't ignore exclusions, instead raise error
+            raise ValueError(f"Too many exclusions: {len(exclude)}. Maximum 64 numbers can be excluded (need 5 available).")
         
         # Get weighting based on temperature
         if temperature == 'hot':
