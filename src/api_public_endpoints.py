@@ -152,15 +152,15 @@ async def get_public_smart_predictions(limit: int = 100):
 @public_frontend_router.get("/api/v1/public/recent-draws")
 async def get_public_recent_draws(limit: int = Query(default=50, le=100)):
     """
-    Get recent powerball draws for public access - OPTIMIZED v5.0
+    Get recent powerball draws for public access - OPTIMIZED v5.1
     
     Uses LEFT JOIN with draw_evaluation_results for efficient data retrieval.
     Single query replaces N+1 queries (1 draw query + N prediction queries).
     
     Returns draws with evaluation data:
     - All draws (with or without predictions)
-    - Pre-calculated totals from draw_evaluation_results
-    - Flags for draws without predictions
+    - Pre-calculated totals from draw_evaluation_results (when available)
+    - Always verifies has_predictions against generated_tickets (source of truth)
     """
     try:
         from src.database import get_db_connection
@@ -176,19 +176,18 @@ async def get_public_recent_draws(limit: int = Query(default=50, le=100)):
         cursor = conn.cursor()
 
         # OPTIMIZED: Single query with LEFT JOIN to draw_evaluation_results
-        # FALLBACK: Also check generated_tickets for has_predictions (until STEP 4 populates evaluation table)
+        # FIXED: Always use generated_tickets as source of truth for has_predictions
+        # (draw_evaluation_results.has_predictions may be stale/incorrect)
         try:
             cursor.execute("""
                 SELECT 
                     p.rowid,
                     p.draw_date,
                     p.n1, p.n2, p.n3, p.n4, p.n5, p.pb,
-                    COALESCE(e.has_predictions, 
-                        CASE WHEN EXISTS (SELECT 1 FROM generated_tickets g WHERE g.draw_date = p.draw_date) 
-                        THEN 1 ELSE 0 END
-                    ) as has_predictions,
+                    CASE WHEN EXISTS (SELECT 1 FROM generated_tickets g WHERE g.draw_date = p.draw_date) 
+                    THEN 1 ELSE 0 END as has_predictions,
                     COALESCE(e.total_prize,
-                        (SELECT COALESCE(SUM(prize_won), 0.0) FROM generated_tickets g WHERE g.draw_date = p.draw_date)
+                        (SELECT COALESCE(SUM(COALESCE(prize_won, 0.0)), 0.0) FROM generated_tickets g WHERE g.draw_date = p.draw_date)
                     ) as total_prize,
                     COALESCE(e.total_tickets, 
                         (SELECT COUNT(*) FROM generated_tickets g WHERE g.draw_date = p.draw_date)
@@ -226,7 +225,7 @@ async def get_public_recent_draws(limit: int = Query(default=50, le=100)):
                     "n4": int(draw[5]) if draw[5] is not None else 0,
                     "n5": int(draw[6]) if draw[6] is not None else 0,
                     "pb": int(draw[7]) if draw[7] is not None else 0,
-                    "has_predictions": bool(draw[8]),  # New field from draw_evaluation_results
+                    "has_predictions": bool(draw[8]),  # Computed from generated_tickets (source of truth)
                     "total_prize": float(draw[9]) if draw[9] is not None else 0.0,
                     "total_tickets": int(draw[10]) if draw[10] is not None else 0,
                     "jackpot": "Not available"  # Legacy field for compatibility

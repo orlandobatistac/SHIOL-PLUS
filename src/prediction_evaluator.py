@@ -347,7 +347,7 @@ class PredictionEvaluator:
                     SELECT 
                         COUNT(*) as total_evaluated,
                         COUNT(CASE WHEN prize_won > 0 THEN 1 END) as winning_predictions,
-                        SUM(prize_won) as total_prizes,
+                        COALESCE(SUM(COALESCE(prize_won, 0)), 0) as total_prizes,
                         AVG(NULL) as avg_main_matches,
                         MAX(prize_won) as best_prize
                     FROM generated_tickets
@@ -380,7 +380,7 @@ class PredictionEvaluator:
                         WHEN prize_won > 0 THEN '<1K'
                         ELSE 'none' END as tier,
                     COUNT(*) as count,
-                    SUM(prize_won) as total
+                    COALESCE(SUM(COALESCE(prize_won, 0)), 0) as total
                     FROM generated_tickets
                     WHERE (prize_won IS NOT NULL AND prize_won != 0)
                     AND created_at >= datetime('now', '-' || ? || ' days')
