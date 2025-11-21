@@ -176,19 +176,18 @@ async def get_public_recent_draws(limit: int = Query(default=50, le=100)):
         cursor = conn.cursor()
 
         # OPTIMIZED: Single query with LEFT JOIN to draw_evaluation_results
-        # FALLBACK: Also check generated_tickets for has_predictions (until STEP 4 populates evaluation table)
+        # FIXED: Always use generated_tickets as source of truth for has_predictions
+        # (draw_evaluation_results.has_predictions may be stale/incorrect)
         try:
             cursor.execute("""
                 SELECT 
                     p.rowid,
                     p.draw_date,
                     p.n1, p.n2, p.n3, p.n4, p.n5, p.pb,
-                    COALESCE(e.has_predictions, 
-                        CASE WHEN EXISTS (SELECT 1 FROM generated_tickets g WHERE g.draw_date = p.draw_date) 
-                        THEN 1 ELSE 0 END
-                    ) as has_predictions,
+                    CASE WHEN EXISTS (SELECT 1 FROM generated_tickets g WHERE g.draw_date = p.draw_date) 
+                    THEN 1 ELSE 0 END as has_predictions,
                     COALESCE(e.total_prize,
-                        (SELECT COALESCE(SUM(prize_won), 0.0) FROM generated_tickets g WHERE g.draw_date = p.draw_date)
+                        (SELECT COALESCE(SUM(COALESCE(prize_won, 0.0)), 0.0) FROM generated_tickets g WHERE g.draw_date = p.draw_date)
                     ) as total_prize,
                     COALESCE(e.total_tickets, 
                         (SELECT COUNT(*) FROM generated_tickets g WHERE g.draw_date = p.draw_date)

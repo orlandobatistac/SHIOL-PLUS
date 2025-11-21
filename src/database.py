@@ -1793,7 +1793,7 @@ def get_analytics_summary(days_back: int = 30) -> Dict[str, Any]:
             SELECT 
                 COUNT(*) as total_predictions,
                 COUNT(CASE WHEN prize_won > 0 THEN 1 END) as winning_predictions,
-                COALESCE(SUM(prize_won), 0) as total_prize,
+                COALESCE(SUM(COALESCE(prize_won, 0)), 0) as total_prize,
                 AVG(confidence_score) as avg_confidence
             FROM generated_tickets
             WHERE created_at >= datetime('now', '-' || ? || ' days')
