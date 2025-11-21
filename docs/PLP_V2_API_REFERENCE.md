@@ -18,6 +18,7 @@ Authorization: Bearer YOUR_PLP_API_KEY
 **Environment Variable**: `PREDICTLOTTOPRO_API_KEY`
 
 **Response Codes**:
+
 - `401`: Missing or malformed Authorization header
 - `403`: Invalid API key
 - `200`: Success
@@ -26,11 +27,11 @@ Authorization: Bearer YOUR_PLP_API_KEY
 
 ## 📊 Endpoints Overview
 
-| Endpoint | Method | Purpose | Avg Response Time |
-|----------|--------|---------|-------------------|
-| `/api/v2/analytics/context` | GET | Dashboard analytics | ~605ms |
-| `/api/v2/analytics/analyze-ticket` | POST | Score user tickets | <1ms |
-| `/api/v2/generator/interactive` | POST | Generate custom tickets | <1ms |
+| Endpoint                           | Method | Purpose                 | Avg Response Time |
+| ---------------------------------- | ------ | ----------------------- | ----------------- |
+| `/api/v2/analytics/context`        | GET    | Dashboard analytics     | ~605ms            |
+| `/api/v2/analytics/analyze-ticket` | POST   | Score user tickets      | <1ms              |
+| `/api/v2/generator/interactive`    | POST   | Generate custom tickets | <1ms              |
 
 ---
 
@@ -73,12 +74,12 @@ curl -X GET "https://shiolplus.com/api/v2/analytics/context" \
     },
     "momentum_trends": {
       "rising_numbers": [
-        {"number": 5, "score": 0.95},
-        {"number": 10, "score": 0.82}
+        { "number": 5, "score": 0.95 },
+        { "number": 10, "score": 0.82 }
       ],
       "falling_numbers": [
-        {"number": 60, "score": -0.5},
-        {"number": 55, "score": -0.3}
+        { "number": 60, "score": -0.5 },
+        { "number": 55, "score": -0.3 }
       ]
     },
     "gap_patterns": {
@@ -107,18 +108,22 @@ curl -X GET "https://shiolplus.com/api/v2/analytics/context" \
 ### Data Structure
 
 - **hot_numbers**: Most frequently drawn numbers recently (low gap)
+
   - `white_balls`: Top 10 hot white ball numbers (1-69)
   - `powerball`: Top 5 hot powerball numbers with gap values `[number, gap]`
 
 - **cold_numbers**: Overdue numbers (high gap)
+
   - `white_balls`: Top 10 cold white ball numbers
   - `powerball`: Top 5 cold powerball numbers with gap values
 
 - **momentum_trends**: Numbers with rising/falling frequency trends
+
   - `rising_numbers`: Numbers gaining momentum (positive scores)
   - `falling_numbers`: Numbers losing momentum (negative scores)
 
 - **gap_patterns**: Days since last appearance for each number
+
   - `white_balls`: Object with number → days mapping
   - `powerball`: Object with number → days mapping
 
@@ -146,6 +151,7 @@ curl -X POST "https://shiolplus.com/api/v2/analytics/analyze-ticket" \
 ```
 
 **Request Body**:
+
 ```json
 {
   "white_balls": [7, 23, 34, 47, 62],
@@ -154,6 +160,7 @@ curl -X POST "https://shiolplus.com/api/v2/analytics/analyze-ticket" \
 ```
 
 **Validation Rules**:
+
 - `white_balls`: Array of exactly 5 unique integers (1-69)
 - `powerball`: Integer (1-26)
 
@@ -198,17 +205,20 @@ curl -X POST "https://shiolplus.com/api/v2/analytics/analyze-ticket" \
 ### Scoring Components
 
 - **Diversity Score (0.0-1.0)**: Spread across number ranges
+
   - 7 ranges: 1-9, 10-19, 20-29, 30-39, 40-49, 50-59, 60-69
   - Best: 5 unique ranges (score 1.0)
   - Good: 4 ranges (score 0.8)
   - Poor: 1-2 ranges (score <0.5)
 
 - **Balance Score (0.0-1.0)**: Sum and odd/even ratio
+
   - Optimal sum range: 130-220
   - Optimal odd/even ratio: 2:3 or 3:2
   - Combined score based on both factors
 
 - **Potential Score (0.0-1.0)**: Alignment with analytics
+
   - Hot numbers: Recently drawn (gap <30)
   - Rising momentum: Numbers with positive trends (score >0.2)
   - Higher score = more alignment with current trends
@@ -218,6 +228,7 @@ curl -X POST "https://shiolplus.com/api/v2/analytics/analyze-ticket" \
 ### Error Responses
 
 **400 Bad Request** - Validation errors:
+
 ```json
 {
   "success": false,
@@ -228,6 +239,7 @@ curl -X POST "https://shiolplus.com/api/v2/analytics/analyze-ticket" \
 ```
 
 Common validation errors:
+
 - "Must provide exactly 5 white ball numbers"
 - "White ball numbers must be unique"
 - "White ball numbers must be between 1 and 69"
@@ -254,6 +266,7 @@ curl -X POST "https://shiolplus.com/api/v2/generator/interactive" \
 ```
 
 **Request Body**:
+
 ```json
 {
   "risk": "high",
@@ -264,17 +277,21 @@ curl -X POST "https://shiolplus.com/api/v2/generator/interactive" \
 ```
 
 **Parameters**:
+
 - `risk` (string, optional): Risk level for generation
+
   - `"low"`: Conservative (flatten probability distribution)
   - `"med"`: Balanced (default)
   - `"high"`: Aggressive (sharpen probability distribution)
 
 - `temperature` (string, optional): Number preference
+
   - `"hot"`: Favor recently drawn numbers
   - `"neutral"`: Uniform distribution (default)
   - `"cold"`: Favor overdue numbers
 
 - `exclude_numbers` (array, optional): Numbers to avoid
+
   - Max 20 numbers
   - Must be 1-69
   - Default: `[]` (no exclusions)
@@ -296,7 +313,7 @@ curl -X POST "https://shiolplus.com/api/v2/generator/interactive" \
         "white_balls": [6, 11, 16, 22, 54],
         "powerball": 25,
         "strategy": "custom_interactive",
-        "confidence": 0.80
+        "confidence": 0.8
       },
       {
         "rank": 2,
@@ -329,6 +346,7 @@ curl -X POST "https://shiolplus.com/api/v2/generator/interactive" \
 ### Response Fields
 
 - **tickets**: Array of generated tickets
+
   - `rank`: Ticket ranking (1-based)
   - `white_balls`: 5 sorted white ball numbers (1-69)
   - `powerball`: Powerball number (1-26)
@@ -342,6 +360,7 @@ curl -X POST "https://shiolplus.com/api/v2/generator/interactive" \
 ### Error Responses
 
 **400 Bad Request** - Invalid parameters:
+
 ```json
 {
   "success": false,
@@ -352,6 +371,7 @@ curl -X POST "https://shiolplus.com/api/v2/generator/interactive" \
 ```
 
 **422 Unprocessable Entity** - Validation errors:
+
 ```json
 {
   "detail": [
@@ -365,6 +385,7 @@ curl -X POST "https://shiolplus.com/api/v2/generator/interactive" \
 ```
 
 Common validation errors:
+
 - Invalid risk level (must be low/med/high)
 - Invalid temperature (must be hot/cold/neutral)
 - Count out of range (must be 1-10)
@@ -379,14 +400,14 @@ Common validation errors:
 
 ```typescript
 const PLP_API_KEY = process.env.PREDICTLOTTOPRO_API_KEY;
-const BASE_URL = 'https://shiolplus.com';
+const BASE_URL = "https://shiolplus.com";
 
 // Get analytics context
 async function getAnalyticsContext() {
   const response = await fetch(`${BASE_URL}/api/v2/analytics/context`, {
     headers: {
-      'Authorization': `Bearer ${PLP_API_KEY}`
-    }
+      Authorization: `Bearer ${PLP_API_KEY}`,
+    },
   });
   return response.json();
 }
@@ -394,33 +415,33 @@ async function getAnalyticsContext() {
 // Analyze ticket
 async function analyzeTicket(whiteBalls: number[], powerball: number) {
   const response = await fetch(`${BASE_URL}/api/v2/analytics/analyze-ticket`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${PLP_API_KEY}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${PLP_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       white_balls: whiteBalls,
-      powerball: powerball
-    })
+      powerball: powerball,
+    }),
   });
   return response.json();
 }
 
 // Generate tickets
 async function generateTickets(params: {
-  risk?: 'low' | 'med' | 'high',
-  temperature?: 'hot' | 'cold' | 'neutral',
-  exclude_numbers?: number[],
-  count?: number
+  risk?: "low" | "med" | "high";
+  temperature?: "hot" | "cold" | "neutral";
+  exclude_numbers?: number[];
+  count?: number;
 }) {
   const response = await fetch(`${BASE_URL}/api/v2/generator/interactive`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${PLP_API_KEY}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${PLP_API_KEY}`,
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(params)
+    body: JSON.stringify(params),
   });
   return response.json();
 }
@@ -481,6 +502,7 @@ def generate_tickets(risk='med', temperature='neutral', exclude_numbers=None, co
 **Current Limits**: No rate limiting implemented (subject to change)
 
 **Best Practices**:
+
 1. **Cache analytics context**: Update every 5-10 minutes max (data changes post-draw only)
 2. **Batch ticket analysis**: Send multiple tickets in separate requests but throttle to ~10 req/sec
 3. **Error handling**: Always check `success` field before using `data`
@@ -494,18 +516,22 @@ def generate_tickets(risk='med', temperature='neutral', exclude_numbers=None, co
 ### Common Issues
 
 **Issue**: `401 Unauthorized`
+
 - **Cause**: Missing or malformed Authorization header
 - **Fix**: Ensure header is `Authorization: Bearer YOUR_API_KEY`
 
 **Issue**: `403 Forbidden`
+
 - **Cause**: Invalid API key
 - **Fix**: Verify `PREDICTLOTTOPRO_API_KEY` environment variable
 
 **Issue**: `422 Validation Error`
+
 - **Cause**: Request body doesn't match schema
 - **Fix**: Check parameter types and ranges in error details
 
 **Issue**: Slow response from `/analytics/context`
+
 - **Cause**: Endpoint computes analytics on-the-fly (~605ms)
 - **Fix**: Implement client-side caching, refresh every 5-10 minutes
 
@@ -514,6 +540,7 @@ def generate_tickets(risk='med', temperature='neutral', exclude_numbers=None, co
 ## 📝 Changelog
 
 ### v2.1.0 (2025-11-21) - CURRENT
+
 - ✅ Fixed response structure keys: `momentum` → `momentum_trends`, `gaps` → `gap_patterns`
 - ✅ Added strict validation: max 10 tickets, max 20 exclusions
 - ✅ Improved exclusion filter reliability
@@ -521,6 +548,7 @@ def generate_tickets(risk='med', temperature='neutral', exclude_numbers=None, co
 - ✅ 100% test coverage (33/33 tests passing)
 
 ### v2.0.0 (2025-11-20)
+
 - Initial release with 3 endpoints
 - Core analytics engines integration
 - API key authentication
