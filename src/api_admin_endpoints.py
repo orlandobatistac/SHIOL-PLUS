@@ -123,28 +123,40 @@ async def force_pipeline_run(
     - message: Human-readable status message
     - status: Will be 'queued' (execution happens in background)
     """
+    import uuid
+    from datetime import datetime
+    
     try:
         logger.info(f"🔧 [admin] Manual pipeline execution requested by admin {admin['id']} ({admin['username']})")
 
-        # Import here to avoid circular dependency
-        from src.api import trigger_full_pipeline_automatically
-        import uuid
-
-        # Generate execution ID for tracking
+        # Generate execution hint for tracking
         execution_hint = str(uuid.uuid4())[:8]
+        timestamp = datetime.now().isoformat()
+
+        # Create a simple wrapper to avoid import issues
+        async def run_pipeline():
+            try:
+                from src.api import trigger_full_pipeline_automatically
+                logger.info(f"🔧 [admin] Starting background pipeline execution (hint: {execution_hint})")
+                await trigger_full_pipeline_automatically()
+                logger.info(f"🔧 [admin] Background pipeline completed (hint: {execution_hint})")
+            except Exception as e:
+                logger.error(f"🔧 [admin] Background pipeline failed (hint: {execution_hint}): {e}")
+                logger.exception("Full traceback:")
 
         # Schedule pipeline execution in background
-        background_tasks.add_task(trigger_full_pipeline_automatically)
+        background_tasks.add_task(run_pipeline)
 
         logger.info(f"🔧 [admin] Pipeline queued for background execution (hint: {execution_hint})")
 
         # Return immediately (202 Accepted)
         return {
             "success": True,
-            "message": "Pipeline iniciado en segundo plano",
+            "message": "Pipeline started in background",
             "status": "queued",
             "hint": execution_hint,
-            "note": "El pipeline se está ejecutando en segundo plano. Revisa los logs en unos segundos."
+            "timestamp": timestamp,
+            "note": "Pipeline is executing in the background. Check logs in a few seconds."
         }
     except Exception as e:
         logger.error(f"🔧 [admin] Failed to queue pipeline execution: {e}")

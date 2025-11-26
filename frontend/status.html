@@ -999,7 +999,7 @@
 
         async function retryPipeline(executionId) {
             if (!confirm(`¿Reintentar pipeline ${executionId}?`)) return;
-            
+
             try {
                 const response = await fetch('/api/v1/admin/pipeline/force-run', {
                     method: 'POST',
@@ -1015,13 +1015,13 @@
                 }
 
                 const result = await response.json();
-                
+
                 // Show success message (pipeline is running in background)
                 alert(`✅ Pipeline iniciado en segundo plano\n\nStatus: ${result.status}\n${result.note || ''}\n\nLos logs se actualizarán automáticamente en unos segundos.`);
-                
+
                 // Refresh logs after 3 seconds (give pipeline time to start)
                 setTimeout(() => loadPipelineLogs(), 3000);
-                
+
             } catch (error) {
                 console.error('Error retrying pipeline:', error);
                 alert(`❌ Error al reintentar pipeline: ${error.message}`);
@@ -1041,17 +1041,15 @@
 
                 const data = await response.json();
                 const failedLogs = (data.logs || []).filter(log => log.status === 'failed' || log.status === 'timeout');
-
+                
                 if (failedLogs.length === 0) {
-                    alert('No hay ejecuciones fallidas para reintentar.');
+                    alert('No failed executions to retry.');
                     return;
                 }
 
-                if (!confirm(`¿Reintentar ${failedLogs.length} ejecuciones fallidas?\n\nNota: Se ejecutará el pipeline completo una vez (no ${failedLogs.length} veces).`)) {
+                if (!confirm(`Retry ${failedLogs.length} failed executions?\n\nNote: Pipeline will run once (not ${failedLogs.length} times).`)) {
                     return;
-                }
-
-                // Execute pipeline once (it will process all pending work)
+                }                // Execute pipeline once (it will process all pending work)
                 const retryResponse = await fetch('/api/v1/admin/pipeline/force-run', {
                     method: 'POST',
                     credentials: 'include',
@@ -1066,9 +1064,9 @@
                 }
 
                 const result = await retryResponse.json();
-                
-                alert(`✅ Pipeline iniciado en segundo plano\n\nStatus: ${result.status}\n${result.note || ''}\n\nProcesará las ${failedLogs.length} ejecuciones fallidas.\nLos logs se actualizarán en unos segundos.`);
-                
+
+                alert(`✅ Pipeline started in background\n\nStatus: ${result.status}\n${result.note || ''}\n\nWill process ${failedLogs.length} failed executions.\nLogs will update in a few seconds.`);
+
                 // Refresh logs after 3 seconds
                 setTimeout(() => loadPipelineLogs(), 3000);            } catch (error) {
                 console.error('Error retrying failed pipelines:', error);
