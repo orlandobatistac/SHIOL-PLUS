@@ -105,6 +105,7 @@ def toggle_premium(user_id: int, admin: dict = Depends(require_admin_access)):
 })
 async def force_pipeline_run(
     background_tasks: BackgroundTasks,
+    retry_of: int = None,
     admin: dict = Depends(require_admin_access)
 ):
     """
@@ -112,6 +113,9 @@ async def force_pipeline_run(
 
     This endpoint returns immediately (202 Accepted) and executes the pipeline
     in the background to avoid nginx timeout issues.
+
+    Params:
+    - retry_of: Optional execution_id to delete before retrying (for failed executions)
 
     Useful for:
     - Recovery from failed pipeline executions
@@ -125,9 +129,30 @@ async def force_pipeline_run(
     """
     import uuid
     from datetime import datetime
-    
+
     try:
-        logger.info(f"🔧 [admin] Manual pipeline execution requested by admin {admin['id']} ({admin['username']})")
+        # Delete failed execution if this is a retry
+        if retry_of is not None:
+            try:
+                from src.database import get_db_connection
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        DELETE FROM pipeline_execution_logs 
+                        WHERE execution_id = ? AND status IN ('failed', 'error')
+                    """, (retry_of,))
+                    deleted_count = cursor.rowcount
+                    conn.commit()
+                    
+                    if deleted_count > 0:
+                        logger.info(f"🔧 [admin] Deleted failed execution {retry_of} before retry")
+                    else:
+                        logger.warning(f"🔧 [admin] Could not delete execution {retry_of} (may not exist or not in failed state)")
+            except Exception as e:
+                logger.error(f"🔧 [admin] Error deleting failed execution {retry_of}: {e}")
+                # Continue with retry even if deletion fails
+        
+        logger.info(f"🔧 [admin] Manual pipeline execution requested by admin {admin['id']} ({admin['username']})" + (f" (retry of {retry_of})" if retry_of else ""))
 
         # Generate execution hint for tracking
         execution_hint = str(uuid.uuid4())[:8]
@@ -152,7 +177,7 @@ async def force_pipeline_run(
         # Return immediately (202 Accepted)
         return {
             "success": True,
-            "message": "Pipeline started in background",
+            "message": "Pipeline started in background" + (" (retrying after deleting failed execution)" if retry_of else ""),
             "status": "queued",
             "hint": execution_hint,
             "timestamp": timestamp,
