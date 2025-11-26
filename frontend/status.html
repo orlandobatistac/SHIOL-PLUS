@@ -930,7 +930,7 @@
 
                     // Retry button for failed executions
                     const retryButton = (log.status === 'failed' || log.status === 'timeout') ? `
-                        <button onclick="event.stopPropagation(); retryPipeline('${log.execution_id}');"
+                        <button onclick="event.stopPropagation(); retryPipeline('${log.execution_id}', '${log.target_draw_date || ''}');"
                                 class="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-300 px-2 py-1 rounded text-xs transition-all"
                                 title="Retry this pipeline execution">
                             <i class="fas fa-redo mr-1"></i>Retry
@@ -997,16 +997,13 @@
             }
         }
 
-        async function retryPipeline(executionId) {
-            // Get the draw_date for this execution
-            const execution = recentExecutions.find(e => e.execution_id === executionId);
-            if (!execution || !execution.target_draw_date) {
+        async function retryPipeline(executionId, drawDate) {
+            // Validate that we have a draw_date
+            if (!drawDate || drawDate === 'null' || drawDate === 'undefined') {
                 alert('❌ Cannot retry: No draw_date found for this execution');
                 return;
             }
-            
-            const drawDate = execution.target_draw_date;
-            
+
             if (!confirm(`Retry execution for draw ${drawDate}?\n\nThis will:\n1. Delete existing tickets for ${drawDate}\n2. Generate 500 new predictions\n3. Evaluate against official results`)) {
                 return;
             }
@@ -1040,7 +1037,7 @@
                         method: 'POST',
                         credentials: 'include',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ retry_of: executionId })
+                        body: JSON.stringify({ retry_of: parseInt(executionId) })
                     });
                     if (deleteResponse.ok) {
                         console.log(`Deleted failed execution ${executionId}`);
@@ -1070,7 +1067,7 @@
                 }
 
                 const data = await response.json();
-                const failedLogs = (data.logs || []).filter(log => 
+                const failedLogs = (data.logs || []).filter(log =>
                     (log.status === 'failed' || log.status === 'timeout') && log.target_draw_date
                 );
 
