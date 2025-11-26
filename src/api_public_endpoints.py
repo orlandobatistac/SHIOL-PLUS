@@ -64,11 +64,11 @@ async def get_public_predictions_by_draw(
 
         # Query predictions for the specific draw date
         cursor.execute("""
-            SELECT id, created_at, draw_date, n1, n2, n3, n4, n5, powerball, 
+            SELECT id, created_at, draw_date, n1, n2, n3, n4, n5, powerball,
                    strategy_used, confidence_score, created_at, was_played, 0, 0
-            FROM generated_tickets 
+            FROM generated_tickets
             WHERE draw_date = ?
-            ORDER BY confidence_score DESC, created_at DESC 
+            ORDER BY confidence_score DESC, created_at DESC
             LIMIT ?
         """, (draw_date, limit))
 
@@ -152,18 +152,19 @@ async def get_public_smart_predictions(limit: int = 100):
 @public_frontend_router.get("/api/v1/public/recent-draws")
 async def get_public_recent_draws(limit: int = Query(default=50, le=100)):
     """
-    Get recent powerball draws for public access - OPTIMIZED v5.1
-    
-    Uses LEFT JOIN with draw_evaluation_results for efficient data retrieval.
-    Single query replaces N+1 queries (1 draw query + N prediction queries).
-    
+    Get recent powerball draws for public access - OPTIMIZED v6.0
+
+    IMPORTANT: Now recalculates total_prize in real-time using the same logic
+    as get_draw_analytics() to ensure consistency between grid and modal.
+
     Returns draws with evaluation data:
     - All draws (with or without predictions)
-    - Pre-calculated totals from draw_evaluation_results (when available)
+    - Real-time calculated total_prize (same as Smart Insights modal)
     - Always verifies has_predictions against generated_tickets (source of truth)
     """
     try:
         from src.database import get_db_connection
+        from src.prize_calculator import calculate_prize_amount
         import time
 
         start_time = time.time()
@@ -175,59 +176,81 @@ async def get_public_recent_draws(limit: int = Query(default=50, le=100)):
 
         cursor = conn.cursor()
 
-        # OPTIMIZED: Single query with LEFT JOIN to draw_evaluation_results
-        # FIXED: Always use generated_tickets as source of truth for has_predictions
-        # (draw_evaluation_results.has_predictions may be stale/incorrect)
+        # Step 1: Get all recent draws with their winning numbers
         try:
             cursor.execute("""
-                SELECT 
+                SELECT
                     p.rowid,
                     p.draw_date,
-                    p.n1, p.n2, p.n3, p.n4, p.n5, p.pb,
-                    CASE WHEN EXISTS (SELECT 1 FROM generated_tickets g WHERE g.draw_date = p.draw_date) 
-                    THEN 1 ELSE 0 END as has_predictions,
-                    COALESCE(e.total_prize,
-                        (SELECT COALESCE(SUM(COALESCE(prize_won, 0.0)), 0.0) FROM generated_tickets g WHERE g.draw_date = p.draw_date)
-                    ) as total_prize,
-                    COALESCE(e.total_tickets, 
-                        (SELECT COUNT(*) FROM generated_tickets g WHERE g.draw_date = p.draw_date)
-                    ) as total_tickets
+                    p.n1, p.n2, p.n3, p.n4, p.n5, p.pb
                 FROM powerball_draws p
-                LEFT JOIN draw_evaluation_results e ON p.draw_date = e.draw_date
-                ORDER BY p.draw_date DESC 
+                ORDER BY p.draw_date DESC
                 LIMIT ?
             """, (limit,))
-
             draws = cursor.fetchall()
         except Exception as query_error:
             logger.error(f"Database query error: {query_error}")
             conn.close()
             raise HTTPException(status_code=500, detail="Database query failed")
 
-        elapsed = time.time() - start_time
-        logger.info(f"Recent draws query completed in {elapsed:.3f}s, found {len(draws) if draws else 0} draws")
-
         if not draws:
             conn.close()
             logger.warning("No draws found in database")
             return {"draws": [], "count": 0, "status": "no_data"}
 
-        # Format draws - data already includes evaluation results
+        # Step 2: For each draw, calculate total_prize in real-time (same as modal)
         draws_list = []
         for draw in draws:
             try:
+                draw_id = int(draw[0]) if draw[0] is not None else 0
+                draw_date = str(draw[1]) if draw[1] else ""
+                winning_numbers = [
+                    int(draw[2]) if draw[2] is not None else 0,
+                    int(draw[3]) if draw[3] is not None else 0,
+                    int(draw[4]) if draw[4] is not None else 0,
+                    int(draw[5]) if draw[5] is not None else 0,
+                    int(draw[6]) if draw[6] is not None else 0,
+                ]
+                winning_pb = int(draw[7]) if draw[7] is not None else 0
+
+                # Get all predictions for this draw
+                cursor.execute("""
+                    SELECT n1, n2, n3, n4, n5, powerball
+                    FROM generated_tickets
+                    WHERE draw_date = ?
+                """, (draw_date,))
+                predictions = cursor.fetchall()
+
+                total_tickets = len(predictions)
+                has_predictions = total_tickets > 0
+                total_prize = 0.0
+
+                # Calculate prize for each prediction (same logic as get_draw_analytics)
+                if has_predictions and winning_numbers[0] > 0:  # Only if we have valid winning numbers
+                    for pred in predictions:
+                        pred_numbers = [pred[0], pred[1], pred[2], pred[3], pred[4]]
+                        pred_pb = pred[5]
+
+                        # Count main number matches
+                        matches_main = sum(1 for n in pred_numbers if n in winning_numbers)
+                        pb_match = (pred_pb == winning_pb)
+
+                        # Calculate prize using same function as modal
+                        prize_amount, _ = calculate_prize_amount(matches_main, pb_match)
+                        total_prize += float(prize_amount or 0.0)
+
                 draws_list.append({
-                    "id": int(draw[0]) if draw[0] is not None else 0,
-                    "draw_date": str(draw[1]) if draw[1] else "",
-                    "n1": int(draw[2]) if draw[2] is not None else 0,
-                    "n2": int(draw[3]) if draw[3] is not None else 0,
-                    "n3": int(draw[4]) if draw[4] is not None else 0,
-                    "n4": int(draw[5]) if draw[5] is not None else 0,
-                    "n5": int(draw[6]) if draw[6] is not None else 0,
-                    "pb": int(draw[7]) if draw[7] is not None else 0,
-                    "has_predictions": bool(draw[8]),  # Computed from generated_tickets (source of truth)
-                    "total_prize": float(draw[9]) if draw[9] is not None else 0.0,
-                    "total_tickets": int(draw[10]) if draw[10] is not None else 0,
+                    "id": draw_id,
+                    "draw_date": draw_date,
+                    "n1": winning_numbers[0],
+                    "n2": winning_numbers[1],
+                    "n3": winning_numbers[2],
+                    "n4": winning_numbers[3],
+                    "n5": winning_numbers[4],
+                    "pb": winning_pb,
+                    "has_predictions": has_predictions,
+                    "total_prize": total_prize,
+                    "total_tickets": total_tickets,
                     "jackpot": "Not available"  # Legacy field for compatibility
                 })
             except (ValueError, TypeError) as format_error:
@@ -235,6 +258,9 @@ async def get_public_recent_draws(limit: int = Query(default=50, le=100)):
                 continue
 
         conn.close()
+
+        elapsed = time.time() - start_time
+        logger.info(f"Recent draws query completed in {elapsed:.3f}s, found {len(draws_list)} draws")
 
         return {
             "draws": draws_list,
@@ -281,16 +307,16 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
         # Added column aliases for frontend compatibility
         try:
             cursor.execute("""
-                SELECT 
-                    id, 
+                SELECT
+                    id,
                     created_at as timestamp,
                     draw_date as target_draw_date,
-                    n1, n2, n3, n4, n5, powerball, 
+                    n1, n2, n3, n4, n5, powerball,
                     strategy_used as model_version,
                     confidence_score as score_total,
                     created_at
-                FROM generated_tickets 
-                ORDER BY created_at DESC 
+                FROM generated_tickets
+                ORDER BY created_at DESC
                 LIMIT ?
             """, (limit,))
 
@@ -599,7 +625,7 @@ async def register_unique_visit(request: Request):
 
         # Check if device already visited
         cursor.execute("""
-            SELECT id, visit_count FROM unique_visits 
+            SELECT id, visit_count FROM unique_visits
             WHERE device_fingerprint = ?
         """, (device_fingerprint,))
 
@@ -608,8 +634,8 @@ async def register_unique_visit(request: Request):
         if existing_visit:
             # Update last visit time and increment count
             cursor.execute("""
-                UPDATE unique_visits 
-                SET last_visit = CURRENT_TIMESTAMP, 
+                UPDATE unique_visits
+                SET last_visit = CURRENT_TIMESTAMP,
                     visit_count = visit_count + 1
                 WHERE device_fingerprint = ?
             """, (device_fingerprint,))
@@ -647,7 +673,7 @@ async def register_pwa_install(request: Request):
 
         # Check if already installed
         cursor.execute("""
-            SELECT id FROM pwa_installs 
+            SELECT id FROM pwa_installs
             WHERE device_fingerprint = ?
         """, (device_fingerprint,))
 
