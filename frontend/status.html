@@ -9,7 +9,7 @@
       gtag('js', new Date());
       gtag('config', 'G-ZTYG2V67XT');
     </script>
-    
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SHIOL+</title>
@@ -27,20 +27,20 @@
             --canvas-accent: #00e0ff;
             --canvas-accent2: #ff6b9d;
         }
-        
+
         body {
             background: #0d0f1a;
             color: #e2e8f0;
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
         }
-        
+
         .gradient-text {
             background: linear-gradient(135deg, var(--canvas-accent) 0%, var(--canvas-accent2) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
         .status-card {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -48,35 +48,35 @@
             padding: 1.5rem;
             transition: all 0.3s;
         }
-        
+
         .status-card:hover {
             background: rgba(255, 255, 255, 0.08);
             border-color: rgba(0, 224, 255, 0.3);
             transform: translateY(-2px);
         }
-        
+
         .status-badge {
             padding: 0.25rem 0.75rem;
             border-radius: 9999px;
             font-size: 0.75rem;
             font-weight: 600;
         }
-        
+
         .status-running {
             background: rgba(16, 185, 129, 0.2);
             color: #10b981;
         }
-        
+
         .status-error {
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
         }
-        
+
         .status-warning {
             background: rgba(251, 191, 36, 0.2);
             color: #fbbf24;
         }
-        
+
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
@@ -84,14 +84,14 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        
+
         .section-title {
             font-size: 1.25rem;
             font-weight: 600;
             margin-bottom: 1rem;
             color: #e2e8f0;
         }
-        
+
         .loading-spinner {
             border: 3px solid rgba(255, 255, 255, 0.1);
             border-top-color: var(--canvas-accent);
@@ -100,11 +100,11 @@
             height: 40px;
             animation: spin 1s linear infinite;
         }
-        
+
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        
+
         .refresh-btn {
             background: linear-gradient(135deg, var(--canvas-accent) 0%, var(--canvas-accent2) 100%);
             color: white;
@@ -113,11 +113,11 @@
             font-weight: 600;
             transition: opacity 0.3s;
         }
-        
+
         .refresh-btn:hover {
             opacity: 0.9;
         }
-        
+
         .updating-indicator {
             position: fixed;
             top: 20px;
@@ -135,16 +135,16 @@
             pointer-events: none;
             z-index: 1000;
         }
-        
+
         .updating-indicator.show {
             opacity: 1;
             transform: translateY(0);
         }
-        
+
         .fade-update {
             animation: fadeUpdate 0.5s ease;
         }
-        
+
         @keyframes fadeUpdate {
             0% { opacity: 0.5; }
             100% { opacity: 1; }
@@ -156,7 +156,7 @@
     <div id="update-indicator" class="updating-indicator">
         <i class="fas fa-sync-alt fa-spin mr-2"></i>Updating...
     </div>
-    
+
     <div class="max-w-7xl mx-auto">
         <!-- Header -->
         <div class="flex items-center justify-between mb-8">
@@ -207,7 +207,7 @@
             <!-- Pipeline Execution Logs (Admin Only) -->
             <section class="mb-8" id="pipeline-logs-section" style="display:none;">
                 <h2 class="section-title"><i class="fas fa-list-check mr-2"></i>Pipeline Execution History</h2>
-                
+
                 <!-- Statistics Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div class="status-card">
@@ -497,7 +497,7 @@
                 const response = await fetch('/api/v1/scheduler/health');
                 const data = await response.json();
                 const serverNow = data?.now?.utc ? (safeParseISO(data.now.utc) || new Date()) : new Date();
-                
+
                 // Update scheduler status
                 const statusBadge = document.getElementById('scheduler-status');
                 if (data.scheduler_running) {
@@ -530,14 +530,14 @@
                         uptimeText.textContent = '';
                     }
                 }
-                
+
                 // Update total jobs
                 document.getElementById('total-jobs').textContent = data.total_jobs;
-                
+
                 // Update jobs list
                 const jobsList = document.getElementById('jobs-list');
                 jobsList.innerHTML = '';
-                
+
                 if (data.jobs && data.jobs.length > 0) {
                     // Clear previous countdown map
                     for (const k of Object.keys(jobCountdowns)) delete jobCountdowns[k];
@@ -619,7 +619,7 @@
             try {
                 const response = await fetch('/api/v1/system/stats');
                 const data = await response.json();
-                
+
                 // Update database stats
                 document.getElementById('total-draws').textContent = data.database.total_draws.toLocaleString();
                 document.getElementById('total-predictions').textContent = data.database.total_predictions.toLocaleString();
@@ -627,17 +627,17 @@
                 document.getElementById('premium-users').textContent = data.database.premium_users.toLocaleString();
                 document.getElementById('total-visits').textContent = (data.database.total_visits || 0).toLocaleString();
                 document.getElementById('unique-visitors').textContent = (data.database.unique_visitors || 0).toLocaleString();
-                
+
                 // Update Google Analytics stats if available
                 if (data.analytics && data.analytics.enabled) {
                     const ga = data.analytics;
-                    
+
                     // Update GA4 specific stats if elements exist
                     const gaActiveUsers = document.getElementById('ga-active-users');
                     const gaSessions = document.getElementById('ga-sessions-7d');
                     const gaPageviews = document.getElementById('ga-pageviews-7d');
                     const gaAvgDuration = document.getElementById('ga-avg-duration');
-                    
+
                     if (gaActiveUsers) gaActiveUsers.textContent = (ga.active_users_now || 0).toLocaleString();
                     if (gaSessions) gaSessions.textContent = (ga.total_sessions_7d || 0).toLocaleString();
                     if (gaPageviews) gaPageviews.textContent = (ga.total_pageviews_7d || 0).toLocaleString();
@@ -647,12 +647,12 @@
                         gaAvgDuration.textContent = `${minutes}m ${seconds}s`;
                     }
                 }
-                
+
                 // Update system health
                 document.getElementById('api-version').textContent = `v${data.system.version}`;
                 document.getElementById('model-status').textContent = data.system.model_loaded ? '✓' : '✗';
                 document.getElementById('generators-status').textContent = data.system.generators_loaded ? '✓' : '✗';
-                
+
             } catch (error) {
                 console.error('Error loading system stats:', error);
             }
@@ -683,11 +683,11 @@
                     }
                     if (cu) cu.href = '#';
                 }
-                
+
                 const branchEl = document.getElementById('branch-name');
                 const msgEl = document.getElementById('commit-message');
                 const dateEl = document.getElementById('commit-date');
-                
+
                 if (branchEl) branchEl.textContent = git.branch || '-';
                 if (msgEl) msgEl.textContent = git.last_message || '-';
                 if (dateEl) dateEl.textContent = git.commit_date ? new Date(git.commit_date).toLocaleString() : '-';
@@ -756,7 +756,7 @@
                     const swapUsageEl = document.getElementById('swap-usage');
                     const cpuUsageEl = document.getElementById('cpu-usage');
                     const diskUsageEl = document.getElementById('disk-usage');
-                    
+
                     if (memUsageEl) memUsageEl.textContent = 'Unavailable';
                     if (swapUsageEl) swapUsageEl.textContent = 'Unavailable';
                     if (cpuUsageEl) cpuUsageEl.textContent = 'Unavailable';
@@ -798,17 +798,17 @@
                 }
 
                 const data = await response.json();
-                
+
                 // Show the pipeline logs section (admin only)
                 document.getElementById('pipeline-logs-section').style.display = 'block';
 
                 // Update statistics
                 const stats = data.statistics || {};
                 document.getElementById('pipeline-total-runs').textContent = stats.total_runs || 0;
-                
+
                 const successRate = stats.success_rate?.toFixed(1) || '0.0';
                 document.getElementById('pipeline-success-rate').textContent = `${successRate}%`;
-                
+
                 const avgDuration = stats.avg_duration_seconds?.toFixed(2) || '-';
                 document.getElementById('pipeline-avg-duration').textContent = avgDuration !== '-' ? avgDuration : '-';
 
@@ -816,11 +816,11 @@
                 if (stats.last_execution) {
                     const lastTime = new Date(stats.last_execution.start_time);
                     document.getElementById('pipeline-last-exec-time').textContent = lastTime.toLocaleString();
-                    
+
                     const statusEl = document.getElementById('pipeline-last-exec-status');
                     const status = stats.last_execution.status;
-                    const statusClass = status === 'completed' ? 'text-green-400' : 
-                                       status === 'failed' ? 'text-red-400' : 
+                    const statusClass = status === 'completed' ? 'text-green-400' :
+                                       status === 'failed' ? 'text-red-400' :
                                        status === 'running' ? 'text-yellow-400' : 'text-gray-400';
                     statusEl.className = `text-sm ${statusClass}`;
                     statusEl.textContent = status.toUpperCase();
@@ -832,7 +832,7 @@
                 // Render logs timeline
                 const logsList = document.getElementById('pipeline-logs-list');
                 const logs = data.logs || [];
-                
+
                 if (logs.length === 0) {
                     logsList.innerHTML = '<div class="text-gray-400 text-sm p-4 text-center">No pipeline executions found</div>';
                     return;
@@ -842,7 +842,7 @@
                     const startTime = new Date(log.start_time);
                     const endTime = log.end_time ? new Date(log.end_time) : null;
                     const duration = log.elapsed_seconds?.toFixed(2) || '-';
-                    
+
                     // Status badge styling
                     let statusBadge = '';
                     if (log.status === 'completed') {
@@ -854,7 +854,7 @@
                     } else if (log.status === 'timeout') {
                         statusBadge = '<span class="status-badge status-warning">⏱ Timeout</span>';
                     }
-                    
+
                     // Data source badge
                     let sourceBadge = '';
                     const dataSource = log.data_source || 'UNKNOWN';
@@ -889,11 +889,11 @@
                     if (log.metadata && log.metadata.polling_summary && log.metadata.polling_summary.enabled) {
                         const polling = log.metadata.polling_summary;
                         const pollingMinutes = (polling.elapsed_seconds / 60).toFixed(1);
-                        
+
                         let pollingStatusIcon = '';
                         let pollingStatusClass = '';
                         let pollingStatusText = '';
-                        
+
                         if (polling.result === 'complete') {
                             pollingStatusIcon = '✅';
                             pollingStatusClass = 'text-green-400';
@@ -907,7 +907,7 @@
                             pollingStatusClass = 'text-red-400';
                             pollingStatusText = 'Error';
                         }
-                        
+
                         pollingSummaryHtml = `
                             <div class="mt-2 mb-2 p-2 bg-indigo-500/10 border border-indigo-500/20 rounded text-xs">
                                 <div class="flex items-center gap-2">
@@ -930,7 +930,7 @@
 
                     // Retry button for failed executions
                     const retryButton = (log.status === 'failed' || log.status === 'timeout') ? `
-                        <button onclick="event.stopPropagation(); retryPipeline('${log.execution_id}');" 
+                        <button onclick="event.stopPropagation(); retryPipeline('${log.execution_id}');"
                                 class="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-300 px-2 py-1 rounded text-xs transition-all"
                                 title="Retry this pipeline execution">
                             <i class="fas fa-redo mr-1"></i>Retry
@@ -950,7 +950,7 @@
                                         <span class="text-xs text-gray-400">${startTime.toLocaleString()}</span>
                                     </div>
                                     <div class="text-sm text-gray-300">
-                                        ${log.current_step || 'No step info'} 
+                                        ${log.current_step || 'No step info'}
                                         <span class="text-gray-400">(${log.steps_completed}/${log.total_steps} steps)</span>
                                     </div>
                                     ${pollingSummaryHtml}
@@ -958,13 +958,13 @@
                                 </div>
                                 <div class="text-right ml-4">
                                     <div class="text-sm font-semibold text-cyan-400">${duration}s</div>
-                                    ${log.total_tickets_generated ? 
+                                    ${log.total_tickets_generated ?
                                         `<div class="text-xs text-gray-400">${log.total_tickets_generated} tickets</div>` : ''}
-                                    ${log.target_draw_date ? 
+                                    ${log.target_draw_date ?
                                         `<div class="text-xs text-gray-400">→ ${log.target_draw_date}</div>` : ''}
                                 </div>
                             </div>
-                            
+
                             <!-- Expandable details -->
                             <div id="${detailsId}" class="hidden mt-3 pt-3 border-t border-white/10">
                                 ${errorHtml}
@@ -1016,21 +1016,19 @@
 
                 const result = await response.json();
                 
-                // Show success message
-                alert(`✅ Pipeline reiniciado exitosamente\n\nExecution ID: ${result.execution_id}\nStatus: ${result.status}`);
+                // Show success message (pipeline is running in background)
+                alert(`✅ Pipeline iniciado en segundo plano\n\nStatus: ${result.status}\n${result.note || ''}\n\nLos logs se actualizarán automáticamente en unos segundos.`);
                 
-                // Refresh logs after 1 second
-                setTimeout(() => loadPipelineLogs(), 1000);
+                // Refresh logs after 3 seconds (give pipeline time to start)
+                setTimeout(() => loadPipelineLogs(), 3000);
                 
             } catch (error) {
                 console.error('Error retrying pipeline:', error);
                 alert(`❌ Error al reintentar pipeline: ${error.message}`);
             }
-        }
-
-        async function retryAllFailedPipelines() {
+        }        async function retryAllFailedPipelines() {
             const params = new URLSearchParams({ limit: '20' });
-            
+
             try {
                 // Fetch all recent logs
                 const response = await fetch(`/api/v1/admin/pipeline/execution-logs?${params}`, {
@@ -1043,7 +1041,7 @@
 
                 const data = await response.json();
                 const failedLogs = (data.logs || []).filter(log => log.status === 'failed' || log.status === 'timeout');
-                
+
                 if (failedLogs.length === 0) {
                     alert('No hay ejecuciones fallidas para reintentar.');
                     return;
@@ -1069,12 +1067,10 @@
 
                 const result = await retryResponse.json();
                 
-                alert(`✅ Pipeline reiniciado para procesar ejecuciones fallidas\n\nExecution ID: ${result.execution_id}\nStatus: ${result.status}`);
+                alert(`✅ Pipeline iniciado en segundo plano\n\nStatus: ${result.status}\n${result.note || ''}\n\nProcesará las ${failedLogs.length} ejecuciones fallidas.\nLos logs se actualizarán en unos segundos.`);
                 
-                // Refresh logs
-                setTimeout(() => loadPipelineLogs(), 1000);
-                
-            } catch (error) {
+                // Refresh logs after 3 seconds
+                setTimeout(() => loadPipelineLogs(), 3000);            } catch (error) {
                 console.error('Error retrying failed pipelines:', error);
                 alert(`❌ Error: ${error.message}`);
             }
@@ -1120,20 +1116,20 @@
             if (!showLoading) {
                 showUpdateIndicator();
             }
-            
+
             // Only show loading spinner on initial load or manual refresh
             if (showLoading) {
                 document.getElementById('loading').classList.remove('hidden');
                 document.getElementById('content').classList.add('hidden');
             }
-            
+
             await Promise.all([
                 loadSchedulerData(),
                 loadSystemStats(),
                 loadOverview(),
                 loadPipelineLogs() // Load pipeline logs if user is admin
             ]);
-            
+
             if (showLoading) {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('content').classList.remove('hidden');
@@ -1144,7 +1140,7 @@
                     document.getElementById('content').classList.remove('fade-update');
                 }, 500);
             }
-            
+
             // Update timestamp
             const now = new Date();
             const lastUpdateEl = document.getElementById('last-update');
@@ -1196,7 +1192,7 @@
                 console.error('Error fetching user for demo mode:', error);
             }
         }
-        
+
         // Wait for page to load, then wait for status-page.js to initialize
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(initDemoMode, 1500);

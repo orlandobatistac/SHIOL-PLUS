@@ -98,14 +98,20 @@ def toggle_premium(user_id: int, admin: dict = Depends(require_admin_access)):
     return {"success": True, "premium_status": status}
 
 
-@router.post("/pipeline/force-run", summary="Force manual pipeline execution", responses={
-    200: {"description": "Pipeline executed successfully"},
+@router.post("/pipeline/force-run", summary="Force manual pipeline execution (async)", responses={
+    202: {"description": "Pipeline started successfully (async)"},
     403: {"description": "Admin required"},
-    500: {"description": "Pipeline execution failed"}
+    500: {"description": "Pipeline execution failed to start"}
 })
-async def force_pipeline_run(admin: dict = Depends(require_admin_access)):
+async def force_pipeline_run(
+    background_tasks: BackgroundTasks,
+    admin: dict = Depends(require_admin_access)
+):
     """
-    Force manual execution of the full pipeline. Admin only.
+    Force manual execution of the full pipeline in background. Admin only.
+
+    This endpoint returns immediately (202 Accepted) and executes the pipeline
+    in the background to avoid nginx timeout issues.
 
     Useful for:
     - Recovery from failed pipeline executions
@@ -114,35 +120,38 @@ async def force_pipeline_run(admin: dict = Depends(require_admin_access)):
 
     Returns:
     - success: Whether pipeline started successfully
-    - execution_id: Unique ID for this pipeline run
-    - status: Current status of execution
     - message: Human-readable status message
+    - status: Will be 'queued' (execution happens in background)
     """
     try:
         logger.info(f"🔧 [admin] Manual pipeline execution requested by admin {admin['id']} ({admin['username']})")
 
         # Import here to avoid circular dependency
         from src.api import trigger_full_pipeline_automatically
+        import uuid
 
-        # Execute pipeline
-        result = await trigger_full_pipeline_automatically()
+        # Generate execution ID for tracking
+        execution_hint = str(uuid.uuid4())[:8]
 
-        logger.info(f"🔧 [admin] Manual pipeline completed: {result.get('status')}")
+        # Schedule pipeline execution in background
+        background_tasks.add_task(trigger_full_pipeline_automatically)
 
+        logger.info(f"🔧 [admin] Pipeline queued for background execution (hint: {execution_hint})")
+
+        # Return immediately (202 Accepted)
         return {
             "success": True,
-            "message": "Pipeline ejecutado manualmente",
-            "execution_id": result.get('execution_id'),
-            "status": result.get('status'),
-            "steps_completed": result.get('steps_completed'),
-            "result": result
+            "message": "Pipeline iniciado en segundo plano",
+            "status": "queued",
+            "hint": execution_hint,
+            "note": "El pipeline se está ejecutando en segundo plano. Revisa los logs en unos segundos."
         }
     except Exception as e:
-        logger.error(f"🔧 [admin] Manual pipeline execution failed: {e}")
+        logger.error(f"🔧 [admin] Failed to queue pipeline execution: {e}")
         logger.exception("Full traceback:")
         raise HTTPException(
             status_code=500,
-            detail=f"Pipeline execution failed: {str(e)}"
+            detail=f"Failed to start pipeline: {str(e)}"
         )
 
 
