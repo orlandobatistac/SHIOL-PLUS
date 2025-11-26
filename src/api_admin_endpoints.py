@@ -310,3 +310,154 @@ async def trigger_pipeline(
         logger.error(f"Failed to trigger pipeline: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to trigger pipeline: {str(e)}")
 
+
+@router.post("/pipeline/regenerate-for-draw", summary="Regenerate predictions for specific draw", responses={
+    202: {"description": "Regeneration started successfully (async)"},
+    400: {"description": "Invalid draw_date format"},
+    403: {"description": "Admin required"},
+    500: {"description": "Regeneration failed to start"}
+})
+async def regenerate_predictions_for_draw(
+    background_tasks: BackgroundTasks,
+    draw_date: str = Body(..., description="Draw date in YYYY-MM-DD format"),
+    tickets: int = Body(500, description="Number of tickets to generate"),
+    admin: dict = Depends(require_admin_access)
+):
+    """
+    Regenerate predictions for a specific draw date. Admin only.
+    
+    This endpoint:
+    1. Deletes existing tickets for the draw_date
+    2. Generates new predictions using historical data BEFORE the draw
+    3. Evaluates predictions against official results (if available)
+    
+    Returns immediately (202 Accepted) and executes in background.
+    
+    Params:
+    - draw_date: Target draw date in YYYY-MM-DD format (e.g., "2025-11-23")
+    - tickets: Number of tickets to generate (default: 500)
+    
+    Returns:
+    - success: Whether regeneration started successfully
+    - message: Human-readable status message
+    - status: Will be 'queued' (execution happens in background)
+    """
+    import uuid
+    from datetime import datetime
+    import re
+    
+    # Validate draw_date format
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', draw_date):
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid draw_date format. Use YYYY-MM-DD (e.g., 2025-11-23)"
+        )
+    
+    # Validate tickets count
+    if tickets < 1 or tickets > 10000:
+        raise HTTPException(
+            status_code=400,
+            detail="tickets must be between 1 and 10000"
+        )
+    
+    try:
+        logger.info(f"🔧 [admin] Regenerate predictions requested by admin {admin['id']} ({admin['username']}) for draw_date={draw_date}, tickets={tickets}")
+        
+        execution_hint = str(uuid.uuid4())[:8]
+        timestamp = datetime.now().isoformat()
+        
+        async def run_regeneration():
+            try:
+                from src.database import get_db_connection
+                from src.strategy_generators import StrategyManager
+                from src.prediction_evaluator import PredictionEvaluator
+                
+                logger.info(f"🔧 [admin] Starting regeneration (hint: {execution_hint})")
+                
+                # Step 1: Delete existing tickets
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM generated_tickets WHERE draw_date = ?", (draw_date,))
+                    existing_count = cursor.fetchone()[0]
+                    
+                    if existing_count > 0:
+                        cursor.execute("DELETE FROM generated_tickets WHERE draw_date = ?", (draw_date,))
+                        conn.commit()
+                        logger.info(f"🗑️  Deleted {existing_count} existing tickets for {draw_date}")
+                
+                # Step 2: Generate new predictions (using historical data BEFORE draw_date)
+                logger.info(f"🎲 Generating {tickets} predictions for {draw_date}")
+                manager = StrategyManager(max_date=draw_date)
+                new_tickets = manager.generate_balanced_tickets(total=tickets)
+                
+                # Insert new tickets
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    inserted = 0
+                    
+                    for ticket in new_tickets:
+                        wb = ticket['white_balls']
+                        pb = ticket['powerball']
+                        
+                        # Validate ranges
+                        if not all(1 <= n <= 69 for n in wb) or not (1 <= pb <= 26):
+                            continue
+                        
+                        cursor.execute("""
+                            INSERT INTO generated_tickets (
+                                draw_date, strategy_used, n1, n2, n3, n4, n5, powerball, confidence_score
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            draw_date,
+                            ticket['strategy'],
+                            wb[0], wb[1], wb[2], wb[3], wb[4],
+                            pb,
+                            ticket.get('confidence', 0.5)
+                        ))
+                        inserted += 1
+                    
+                    conn.commit()
+                
+                logger.success(f"✅ Inserted {inserted} tickets for {draw_date}")
+                
+                # Step 3: Evaluate predictions (if draw exists)
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM powerball_draws WHERE draw_date = ?", (draw_date,))
+                    draw_exists = cursor.fetchone()[0] > 0
+                
+                if draw_exists:
+                    logger.info(f"📊 Evaluating predictions for {draw_date}")
+                    evaluator = PredictionEvaluator()
+                    result = evaluator.evaluate_predictions_for_date(draw_date)
+                    logger.success(f"✅ Evaluation complete: {result.get('total_wins', 0)} wins, ${result.get('total_winnings', 0):,.2f}")
+                else:
+                    logger.warning(f"⏭️  Skipping evaluation (no official results for {draw_date} yet)")
+                
+                logger.info(f"🔧 [admin] Regeneration completed (hint: {execution_hint})")
+                
+            except Exception as e:
+                logger.error(f"🔧 [admin] Regeneration failed (hint: {execution_hint}): {e}")
+                logger.exception("Full traceback:")
+        
+        # Schedule regeneration in background
+        background_tasks.add_task(run_regeneration)
+        
+        logger.info(f"🔧 [admin] Regeneration queued for background execution (hint: {execution_hint})")
+        
+        return {
+            "success": True,
+            "message": f"Regeneration started for draw {draw_date}",
+            "status": "queued",
+            "draw_date": draw_date,
+            "tickets": tickets,
+            "hint": execution_hint,
+            "timestamp": timestamp,
+            "note": "Regeneration is executing in the background. Check logs in a few seconds."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start regeneration: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start regeneration: {str(e)}")

@@ -998,32 +998,59 @@
         }
 
         async function retryPipeline(executionId) {
-            if (!confirm(`Retry pipeline ${executionId}? The failed execution will be removed.`)) return;
+            // Get the draw_date for this execution
+            const execution = recentExecutions.find(e => e.execution_id === executionId);
+            if (!execution || !execution.target_draw_date) {
+                alert('❌ Cannot retry: No draw_date found for this execution');
+                return;
+            }
+            
+            const drawDate = execution.target_draw_date;
+            
+            if (!confirm(`Retry execution for draw ${drawDate}?\n\nThis will:\n1. Delete existing tickets for ${drawDate}\n2. Generate 500 new predictions\n3. Evaluate against official results`)) {
+                return;
+            }
 
             try {
-                const response = await fetch('/api/v1/admin/pipeline/force-run', {
+                const response = await fetch('/api/v1/admin/pipeline/regenerate-for-draw', {
                     method: 'POST',
                     credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        retry_of: executionId
+                        draw_date: drawDate,
+                        tickets: 500
                     })
                 });
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`Failed to retry pipeline: ${response.status} - ${errorText}`);
+                    throw new Error(`Failed to retry: ${response.status} - ${errorText}`);
                 }
 
                 const result = await response.json();
 
-                // Show success message (pipeline is running in background)
-                alert(`✅ Pipeline started in background\n\nStatus: ${result.status}\n${result.note || ''}\n\nFailed execution has been removed. Logs will update automatically in a few seconds.`);
+                // Show success message
+                alert(`✅ Regeneration started for draw ${drawDate}\n\nStatus: ${result.status}\n${result.note || ''}\n\nTickets will be regenerated in the background.\n\nThe page will refresh in 3 seconds.`);
 
-                // Refresh logs after 3 seconds (give pipeline time to start)
-                setTimeout(() => loadPipelineLogs(), 3000);
+                // Delete the failed execution from UI
+                try {
+                    const deleteResponse = await fetch('/api/v1/admin/pipeline/force-run', {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ retry_of: executionId })
+                    });
+                    if (deleteResponse.ok) {
+                        console.log(`Deleted failed execution ${executionId}`);
+                    }
+                } catch (e) {
+                    console.warn('Could not delete old execution:', e);
+                }
+
+                // Refresh after 3 seconds
+                setTimeout(() => location.reload(), 3000);
 
             } catch (error) {
                 console.error('Error retrying pipeline:', error);
@@ -1043,35 +1070,74 @@
                 }
 
                 const data = await response.json();
-                const failedLogs = (data.logs || []).filter(log => log.status === 'failed' || log.status === 'timeout');
+                const failedLogs = (data.logs || []).filter(log => 
+                    (log.status === 'failed' || log.status === 'timeout') && log.target_draw_date
+                );
 
                 if (failedLogs.length === 0) {
-                    alert('No failed executions to retry.');
+                    alert('No failed executions with draw_date to retry.');
                     return;
                 }
 
-                if (!confirm(`Retry ${failedLogs.length} failed executions?\n\nNote: Pipeline will run once (not ${failedLogs.length} times).`)) {
+                // Group by draw_date to avoid duplicates
+                const uniqueDrawDates = [...new Set(failedLogs.map(log => log.target_draw_date))];
+
+                if (!confirm(`Retry ${uniqueDrawDates.length} failed draw(s)?\n\nDraws: ${uniqueDrawDates.join(', ')}\n\nThis will regenerate predictions for each draw.`)) {
                     return;
-                }                // Execute pipeline once (it will process all pending work)
-                const retryResponse = await fetch('/api/v1/admin/pipeline/force-run', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json'
+                }
+
+                // Retry each unique draw_date
+                let successCount = 0;
+                let failCount = 0;
+
+                for (const drawDate of uniqueDrawDates) {
+                    try {
+                        const retryResponse = await fetch('/api/v1/admin/pipeline/regenerate-for-draw', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                draw_date: drawDate,
+                                tickets: 500
+                            })
+                        });
+
+                        if (retryResponse.ok) {
+                            successCount++;
+                            console.log(`✅ Queued regeneration for ${drawDate}`);
+                        } else {
+                            failCount++;
+                            console.error(`❌ Failed to queue regeneration for ${drawDate}`);
+                        }
+                    } catch (e) {
+                        failCount++;
+                        console.error(`❌ Error retrying ${drawDate}:`, e);
                     }
-                });
 
-                if (!retryResponse.ok) {
-                    const errorText = await retryResponse.text();
-                    throw new Error(`Failed to retry: ${retryResponse.status} - ${errorText}`);
+                    // Small delay between requests
+                    await new Promise(resolve => setTimeout(resolve, 200));
                 }
 
-                const result = await retryResponse.json();
+                // Delete failed executions
+                for (const log of failedLogs) {
+                    try {
+                        await fetch('/api/v1/admin/pipeline/force-run', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ retry_of: log.execution_id })
+                        });
+                    } catch (e) {
+                        console.warn(`Could not delete execution ${log.execution_id}:`, e);
+                    }
+                }
 
-                alert(`✅ Pipeline started in background\n\nStatus: ${result.status}\n${result.note || ''}\n\nWill process ${failedLogs.length} failed executions.\nLogs will update in a few seconds.`);
+                alert(`✅ Regeneration queued for ${successCount} draw(s)\n${failCount > 0 ? `❌ Failed: ${failCount}` : ''}\n\nPredictions are being regenerated in the background.\n\nPage will refresh in 3 seconds.`);
 
                 // Refresh logs after 3 seconds
-                setTimeout(() => loadPipelineLogs(), 3000);            } catch (error) {
+                setTimeout(() => location.reload(), 3000);            } catch (error) {
                 console.error('Error retrying failed pipelines:', error);
                 alert(`❌ Error: ${error.message}`);
             }
