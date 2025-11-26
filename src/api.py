@@ -58,7 +58,7 @@ executors = {
 
 # Default job configuration
 job_defaults = {
-    'coalesce': True,           # Merge multiple missed runs into one
+    'coalesce': False,          # Allow multiple retries (don't merge)
     'max_instances': 1,         # Prevent overlapping executions
     'misfire_grace_time': 600   # 10 minutes tolerance for missed jobs
 }
@@ -75,7 +75,7 @@ SCHEDULER_START_TIME_UTC = None
 
 def recover_stale_pipelines():
     """Recovery function to clean up pipelines stuck in 'running' state on startup.
-    
+
     This handles cases where:
     - Process was killed by systemd (SIGKILL) during restart
     - Server crashed while pipeline was running
@@ -84,18 +84,18 @@ def recover_stale_pipelines():
     try:
         conn = db.get_db_connection()
         cursor = conn.cursor()
-        
+
         # Find pipelines stuck in 'running' state
         cursor.execute(
             "SELECT execution_id, start_time, current_step FROM pipeline_execution_logs "
             "WHERE status = 'running'"
         )
         stale_pipelines = cursor.fetchall()
-        
+
         if not stale_pipelines:
             logger.info("✅ No stale pipelines found - recovery check passed")
             return
-        
+
         # Mark all stale pipelines as failed (recovered from stuck state)
         for exec_id, start_time, current_step in stale_pipelines:
             cursor.execute(
@@ -108,24 +108,24 @@ def recover_stale_pipelines():
                 f"🔧 Recovered stale pipeline {exec_id} (started: {start_time}, "
                 f"step: {current_step})"
             )
-        
+
         conn.commit()
         logger.info(f"✅ Recovery complete - cleaned up {len(stale_pipelines)} stale pipeline(s)")
-        
+
     except Exception as e:
         logger.error(f"❌ Pipeline recovery failed: {e}", exc_info=True)
 
 def signal_handler(signum, frame):
     """Handle SIGTERM gracefully by updating pipeline status before shutdown.
-    
+
     This prevents pipelines from getting stuck in 'running' state when systemd
     restarts the service.
     """
     global active_pipeline_execution_id
-    
+
     signal_name = 'SIGTERM' if signum == signal.SIGTERM else f'Signal {signum}'
     logger.warning(f"⚠️  Received {signal_name} - attempting graceful shutdown...")
-    
+
     if active_pipeline_execution_id:
         try:
             conn = db.get_db_connection()
@@ -143,7 +143,7 @@ def signal_handler(signum, frame):
             )
         except Exception as e:
             logger.error(f"❌ Failed to update pipeline status on shutdown: {e}")
-    
+
     # Allow default signal handling to proceed
     sys.exit(0)
 
@@ -273,7 +273,7 @@ async def evaluate_predictions_for_draw(draw_date: str):
 def save_generated_tickets(tickets: List[Dict], draw_date: str):
     """
     Save generated tickets to `generated_tickets` table.
-    
+
     Behavior: Does NOT delete existing tickets - appends to them.
     This allows batch-wise saving during pipeline execution.
     Note: The pipeline itself deletes old tickets BEFORE starting generation.
@@ -323,11 +323,11 @@ def save_generated_tickets(tickets: List[Dict], draw_date: str):
 def validate_step_1_data_download(new_draws_count: int, execution_id: str) -> Dict:
     """
     Validate STEP 1: Data download from NC Lottery sources.
-    
+
     Success criteria:
     - new_draws_count > 0 (new data fetched)
     - OR latest_draw_date is same day as today (re-run scenario, data already fresh)
-    
+
     Returns:
         dict: {'success': bool, 'error': str or None, 'details': dict}
     """
@@ -336,7 +336,7 @@ def validate_step_1_data_download(new_draws_count: int, execution_id: str) -> Di
         from src.date_utils import DateManager
         current_et = DateManager.get_current_et_time()
         current_date_et = current_et.date()
-        
+
         if new_draws_count > 0:
             logger.info(f"[{execution_id}] ✅ STEP 1 VALID: {new_draws_count} total draws in DB")
             return {
@@ -348,12 +348,12 @@ def validate_step_1_data_download(new_draws_count: int, execution_id: str) -> Di
                     'validation': 'new_data_fetched'
                 }
             }
-        
+
         # Check if latest draw is same-day (re-run scenario)
         if latest_draw:
             from datetime import datetime
             latest_draw_dt = datetime.strptime(latest_draw, "%Y-%m-%d").date()
-            
+
             # Same-day scenario: pipeline re-run with fresh data already in DB
             if latest_draw_dt == current_date_et:
                 logger.info(f"[{execution_id}] ✅ STEP 1 VALID: Latest draw {latest_draw} is same-day (re-run scenario)")
@@ -366,7 +366,7 @@ def validate_step_1_data_download(new_draws_count: int, execution_id: str) -> Di
                         'validation': 'same_day_rerun'
                     }
                 }
-        
+
         # Failure: no new draws and not a same-day scenario
         error_msg = f"No new draws fetched and latest draw {latest_draw} is stale (API delay or network issue)"
         logger.error(f"[{execution_id}] ❌ STEP 1 FAILED: {error_msg}")
@@ -379,7 +379,7 @@ def validate_step_1_data_download(new_draws_count: int, execution_id: str) -> Di
                 'current_date_et': str(current_date_et)
             }
         }
-        
+
     except Exception as e:
         error_msg = f"Validation exception: {str(e)}"
         logger.error(f"[{execution_id}] ❌ STEP 1 VALIDATION ERROR: {error_msg}")
@@ -393,26 +393,26 @@ def validate_step_1_data_download(new_draws_count: int, execution_id: str) -> Di
 def validate_step_2_analytics(execution_id: str) -> Dict:
     """
     Validate STEP 2: Analytics update (co-occurrence matrix + pattern statistics).
-    
+
     Success criteria:
     - cooccurrences table has rows (> 0)
     - pattern_stats table has rows (> 0)
-    
+
     Returns:
         dict: {'success': bool, 'error': str or None, 'details': dict}
     """
     try:
         conn = db.get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("SELECT COUNT(*) FROM cooccurrences")
         cooccurrence_count = cursor.fetchone()[0]
-        
+
         cursor.execute("SELECT COUNT(*) FROM pattern_stats")
         pattern_count = cursor.fetchone()[0]
-        
+
         conn.close()
-        
+
         if cooccurrence_count > 0 and pattern_count > 0:
             logger.info(f"[{execution_id}] ✅ STEP 2 VALID: {cooccurrence_count} co-occurrences, {pattern_count} patterns")
             return {
@@ -447,11 +447,11 @@ def validate_step_2_analytics(execution_id: str) -> Dict:
 def validate_step_3_evaluation(execution_id: str, latest_draw: str) -> Dict:
     """
     Validate STEP 3: Prediction evaluation.
-    
+
     Success criteria:
     - Step always succeeds (evaluation is informational, not critical)
     - Log warning if no predictions to evaluate
-    
+
     Returns:
         dict: {'success': bool, 'error': str or None, 'details': dict}
     """
@@ -463,7 +463,7 @@ def validate_step_3_evaluation(execution_id: str, latest_draw: str) -> Dict:
                 'error': None,
                 'details': {'latest_draw': None, 'note': 'No draw available for evaluation'}
             }
-        
+
         logger.info(f"[{execution_id}] ✅ STEP 3 VALID: Evaluation completed for {latest_draw}")
         return {
             'success': True,
@@ -483,21 +483,21 @@ def validate_step_3_evaluation(execution_id: str, latest_draw: str) -> Dict:
 def validate_step_4_adaptive_learning(execution_id: str) -> Dict:
     """
     Validate STEP 4: Adaptive learning (strategy weight updates).
-    
+
     Success criteria:
     - strategy_performance table has rows (> 0)
     - All strategies have current_weight between 0.0 and 1.0
-    
+
     Returns:
         dict: {'success': bool, 'error': str or None, 'details': dict}
     """
     try:
         conn = db.get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("SELECT COUNT(*) FROM strategy_performance")
         strategy_count = cursor.fetchone()[0]
-        
+
         if strategy_count == 0:
             conn.close()
             error_msg = "strategy_performance table is empty"
@@ -507,11 +507,11 @@ def validate_step_4_adaptive_learning(execution_id: str) -> Dict:
                 'error': error_msg,
                 'details': {'strategy_count': 0}
             }
-        
+
         cursor.execute("SELECT strategy_name, current_weight FROM strategy_performance")
         strategies = cursor.fetchall()
         conn.close()
-        
+
         invalid_weights = [s for s in strategies if not (0.0 <= s[1] <= 1.0)]
         if invalid_weights:
             error_msg = f"Invalid strategy weights detected: {invalid_weights}"
@@ -521,7 +521,7 @@ def validate_step_4_adaptive_learning(execution_id: str) -> Dict:
                 'error': error_msg,
                 'details': {'invalid_weights': [s[0] for s in invalid_weights]}
             }
-        
+
         logger.info(f"[{execution_id}] ✅ STEP 4 VALID: {strategy_count} strategies with valid weights")
         return {
             'success': True,
@@ -541,10 +541,10 @@ def validate_step_4_adaptive_learning(execution_id: str) -> Dict:
 def validate_step_5_prediction(saved_count: int, expected_count: int, execution_id: str) -> Dict:
     """
     Validate STEP 5: Prediction generation and saving.
-    
+
     Success criteria:
     - saved_count == expected_count (all tickets saved successfully)
-    
+
     Returns:
         dict: {'success': bool, 'error': str or None, 'details': dict}
     """
@@ -583,19 +583,19 @@ def validate_step_5_prediction(saved_count: int, expected_count: int, execution_
 async def trigger_full_pipeline_automatically():
     """
     SYNC-FIRST PIPELINE v5.0 - Enhanced with pre-sync and comprehensive evaluation
-    
+
     NEW ARCHITECTURE (November 2025 v5.0):
     - STEP 1A: Daily sync FIRST (ensures DB is updated before polling)
     - STEP 1B: Check if draw exists in DB (skip polling if already there)
     - STEP 1C: Adaptive polling only if needed (Web → MUSL → NC CSV)
     - STEP 4: Comprehensive evaluation of ALL draws (with and without predictions)
     - 7 total steps vs 6 in v4.0
-    
+
     Benefits over v4.0:
     - More efficient: Avoids unnecessary polling if CSV already has data
     - More complete: Evaluates ALL historical draws, not just latest
     - More robust: Daily sync catches gaps before attempting real-time polling
-    
+
     Pipeline halts immediately if any critical step fails validation.
     All errors are logged to pipeline_execution_logs with detailed context.
 
@@ -610,23 +610,23 @@ async def trigger_full_pipeline_automatically():
     6. PREDICT: Generate new predictions using balanced strategies (CRITICAL)
     """
     global active_pipeline_execution_id
-    
+
     logger.info("🚀 ========== SYNC-FIRST PIPELINE v5.0 STARTING ==========")
     execution_id = str(uuid.uuid4())[:8]
     active_pipeline_execution_id = execution_id  # Track for graceful shutdown
     start_time = datetime.now()
     start_time_iso = start_time.isoformat()
-    
+
     # Calculate expected draw date for polling
     from src.date_utils import DateManager
-    
+
     # Get the last draw in database
     last_draw_in_db = db.get_latest_draw_date()
-    
+
     # Determine which draw the pipeline should fetch
     # This will return the most recent draw that should exist but might be missing from DB
     expected_draw_date = DateManager.get_expected_draw_for_pipeline(last_draw_in_db)
-    
+
     if not expected_draw_date:
         logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
         logger.error(f"[{execution_id}] ❌ Could not determine expected draw date")
@@ -645,9 +645,9 @@ async def trigger_full_pipeline_automatically():
             'execution_id': execution_id,
             'error': 'Could not determine expected draw date'
         }
-    
+
     logger.info(f"[{execution_id}] Last draw in DB: {last_draw_in_db}, Expected draw: {expected_draw_date}")
-    
+
     # Insert initial log entry
     db.insert_pipeline_execution_log(
         execution_id=execution_id,
@@ -663,25 +663,25 @@ async def trigger_full_pipeline_automatically():
         # ========== STEP 1A: DAILY SYNC FIRST (ENSURE DB IS UPDATED) ==========
         logger.info(f"[{execution_id}] 🔄 STEP 1A/7: Daily Sync - Update DB with CSV...")
         logger.info(f"[{execution_id}]   Downloading complete NC Lottery CSV before polling")
-        
+
         db.update_pipeline_execution_log(
             execution_id=execution_id,
             current_step="STEP 1A/7: Daily Sync (pre-polling)",
             steps_completed=0
         )
-        
+
         sync_start = datetime.now()
-        
+
         try:
             # Execute daily sync to ensure DB has latest draws
             sync_result = daily_full_sync_job()
             sync_elapsed = (datetime.now() - sync_start).total_seconds()
-            
+
             logger.info(
                 f"[{execution_id}] ✅ STEP 1A Complete: Daily sync finished "
                 f"({sync_result.get('draws_inserted', 0)} draws inserted, {sync_elapsed:.1f}s)"
             )
-            
+
             # Update metadata
             metadata = {
                 "trigger": "automated",
@@ -694,7 +694,7 @@ async def trigger_full_pipeline_automatically():
                     "elapsed_seconds": sync_elapsed
                 }
             }
-            
+
         except Exception as e:
             # Daily sync failed, but continue with polling (non-critical)
             logger.warning(f"[{execution_id}] ⚠️ STEP 1A Daily Sync failed (continuing): {e}")
@@ -709,21 +709,21 @@ async def trigger_full_pipeline_automatically():
                     "elapsed_seconds": sync_elapsed
                 }
             }
-        
+
         # ========== STEP 1B: CHECK IF DRAW ALREADY IN DB ==========
         logger.info(f"[{execution_id}] 🔍 STEP 1B/7: Checking if draw {expected_draw_date} exists in DB...")
-        
+
         db.update_pipeline_execution_log(
             execution_id=execution_id,
             current_step="STEP 1B/7: Check DB for draw",
             steps_completed=0,
             metadata=json.dumps(metadata)
         )
-        
+
         # Check if draw exists in database
         from src.database import get_db_connection
         draw_in_db = None
-        
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -742,7 +742,7 @@ async def trigger_full_pipeline_automatically():
                     'pb': result[6],
                     'source': 'database'
                 }
-        
+
         if draw_in_db:
             # Draw already in DB - skip polling
             logger.info(
@@ -752,10 +752,10 @@ async def trigger_full_pipeline_automatically():
                 f"[{execution_id}]   Draw: [{draw_in_db['n1']}, {draw_in_db['n2']}, {draw_in_db['n3']}, "
                 f"{draw_in_db['n4']}, {draw_in_db['n5']}] + PB {draw_in_db['pb']}"
             )
-            
+
             draw_data = draw_in_db
             data_source = 'database'
-            
+
             # Update metadata
             metadata['polling_summary'] = {
                 "enabled": False,
@@ -764,31 +764,31 @@ async def trigger_full_pipeline_automatically():
                 "reason": "Draw already exists in DB after daily sync",
                 "elapsed_seconds": 0
             }
-            
+
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
                 current_step="STEP 1B/7: Draw found in DB",
                 steps_completed=1,
                 metadata=json.dumps(metadata)
             )
-            
+
         else:
             # Draw NOT in DB - validate draw time has passed before polling
             logger.info(f"[{execution_id}] 🔍 STEP 1C/7: Draw not in DB, validating draw time...")
-            
+
             # Validate that the expected draw time has passed
             # If it hasn't, skip polling and exit gracefully
             from datetime import datetime as dt_class
             current_et = DateManager.get_current_et_time()
             expected_draw_dt = dt_class.strptime(expected_draw_date, '%Y-%m-%d')
-            
+
             # Draw time is 10:59 PM ET on the draw date
             draw_time_et = DateManager.POWERBALL_TIMEZONE.localize(
                 expected_draw_dt.replace(hour=22, minute=59, second=0)
             )
-            
+
             time_until_draw = (draw_time_et - current_et).total_seconds()
-            
+
             if time_until_draw > 0:
                 # Draw hasn't happened yet - skip polling and exit gracefully
                 hours_until = time_until_draw / 3600
@@ -797,9 +797,9 @@ async def trigger_full_pipeline_automatically():
                 logger.warning(f"[{execution_id}]   Draw time: {draw_time_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
                 logger.warning(f"[{execution_id}]   Time until draw: {hours_until:.1f} hours")
                 logger.warning(f"[{execution_id}]   Pipeline will exit gracefully - scheduler will retry after draw")
-                
+
                 elapsed = (datetime.now() - start_time).total_seconds()
-                
+
                 metadata['polling_summary'] = {
                     "enabled": False,
                     "result": "skipped_future_draw",
@@ -808,7 +808,7 @@ async def trigger_full_pipeline_automatically():
                     "draw_time_et": draw_time_et.isoformat(),
                     "hours_until_draw": hours_until
                 }
-                
+
                 db.update_pipeline_execution_log(
                     execution_id=execution_id,
                     status="completed",
@@ -818,10 +818,10 @@ async def trigger_full_pipeline_automatically():
                     steps_completed=1,
                     metadata=json.dumps(metadata)
                 )
-                
+
                 active_pipeline_execution_id = None
                 logger.info(f"[{execution_id}] 🚀 PIPELINE STATUS: COMPLETED (graceful exit - draw not ready)")
-                
+
                 return {
                     'success': True,
                     'status': 'completed',
@@ -831,22 +831,22 @@ async def trigger_full_pipeline_automatically():
                     'hours_until_draw': hours_until,
                     'elapsed_seconds': elapsed
                 }
-            
+
             # Draw time has passed - proceed with polling
             logger.info(f"[{execution_id}] ✅ Draw time validation passed - draw {expected_draw_date} should be available")
             logger.info(f"[{execution_id}]   Draw was {abs(time_until_draw) / 3600:.1f} hours ago")
             logger.info(f"[{execution_id}]   Starting adaptive polling...")
             logger.info(f"[{execution_id}]   Strategy: NC Lottery Scraping → MUSL API → NC CSV (3-layer fallback)")
-            
+
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
                 current_step="STEP 1C/7: Adaptive Polling",
                 steps_completed=0,
                 metadata=json.dumps(metadata)
             )
-            
+
             polling_start = datetime.now()
-            
+
             try:
                 # Define callback function to update pipeline status during polling
                 def update_polling_status(exec_id, status_msg):
@@ -856,23 +856,23 @@ async def trigger_full_pipeline_automatically():
                         current_step=status_msg,
                         metadata=json.dumps(metadata)
                     )
-                
+
                 # Execute unified adaptive polling with status updates
                 polling_result = realtime_draw_polling_unified(
                     expected_draw_date=expected_draw_date,
                     execution_id=execution_id,
                     update_status_callback=update_polling_status
                 )
-                
+
                 polling_elapsed = (datetime.now() - polling_start).total_seconds()
-                
+
                 # Check if polling succeeded
                 if not polling_result['success']:
                     # Polling timeout - HALT PIPELINE
                     error_detail = f"Polling timeout after {polling_elapsed/60:.1f} minutes"
                     logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
                     logger.error(f"[{execution_id}] ❌ STEP 1C TIMEOUT: {error_detail}")
-                    
+
                     elapsed = (datetime.now() - start_time).total_seconds()
                     db.update_pipeline_execution_log(
                         execution_id=execution_id,
@@ -883,7 +883,7 @@ async def trigger_full_pipeline_automatically():
                         elapsed_seconds=elapsed,
                         metadata=json.dumps(metadata)
                     )
-                    
+
                     active_pipeline_execution_id = None
                     return {
                         'success': False,
@@ -893,11 +893,11 @@ async def trigger_full_pipeline_automatically():
                         'error': error_detail,
                         'elapsed_seconds': elapsed
                     }
-                
+
                 # Polling SUCCESS - extract draw data
                 draw_data = polling_result['draw_data']
                 data_source = polling_result['source']
-                
+
                 logger.info(
                     f"[{execution_id}] ✅ STEP 1C Complete: Data fetched from {data_source.upper()} "
                     f"after {polling_result['attempts']} attempts ({polling_elapsed:.1f}s / {polling_elapsed/60:.1f}min)"
@@ -906,7 +906,7 @@ async def trigger_full_pipeline_automatically():
                     f"[{execution_id}]   Draw {expected_draw_date}: "
                     f"[{draw_data['n1']}, {draw_data['n2']}, {draw_data['n3']}, {draw_data['n4']}, {draw_data['n5']}] + PB {draw_data['pb']}"
                 )
-                
+
                 # Update metadata with polling summary
                 metadata['polling_summary'] = {
                     "enabled": True,
@@ -917,19 +917,19 @@ async def trigger_full_pipeline_automatically():
                     "started_at": polling_start.isoformat(),
                     "completed_at": datetime.now().isoformat()
                 }
-                
+
                 db.update_pipeline_execution_log(
                     execution_id=execution_id,
                     current_step="STEP 1C/7: Polling complete",
                     steps_completed=1,
                     metadata=json.dumps(metadata)
                 )
-                
+
             except Exception as e:
                 # STEP 1C POLLING EXCEPTION - HALT PIPELINE
                 logger.error(f"[{execution_id}] 🚨 STEP 1C POLLING EXCEPTION: {e}")
                 logger.exception("Full traceback:")
-                
+
                 elapsed = (datetime.now() - start_time).total_seconds()
                 db.update_pipeline_execution_log(
                     execution_id=execution_id,
@@ -939,7 +939,7 @@ async def trigger_full_pipeline_automatically():
                     error=f"STEP 1C EXCEPTION: {str(e)}",
                     elapsed_seconds=elapsed
                 )
-                
+
                 return {
                     'success': False,
                     'execution_id': execution_id,
@@ -955,43 +955,43 @@ async def trigger_full_pipeline_automatically():
             current_step="STEP 2/7: Database insert",
             steps_completed=1
         )
-        
+
         try:
             # Only insert if draw came from polling (not from DB)
             if data_source != 'database':
                 # Insert the fetched draw (convert to DataFrame first)
                 from src.database import bulk_insert_draws
                 import pandas as pd
-                
+
                 # Filter to only include columns that exist in powerball_draws table
                 # (remove 'multiplier' and 'source' which are metadata fields)
                 required_columns = ['draw_date', 'n1', 'n2', 'n3', 'n4', 'n5', 'pb']
                 draw_record = {k: draw_data[k] for k in required_columns if k in draw_data}
-                
+
                 draw_df = pd.DataFrame([draw_record])
                 inserted_count = bulk_insert_draws(draw_df)
-                
+
                 logger.info(f"[{execution_id}] ✅ STEP 2 Complete: Inserted {inserted_count} draw(s) into database")
             else:
                 # Draw was already in DB, skip insert
                 inserted_count = 0
                 logger.info(f"[{execution_id}] ✅ STEP 2 Complete: Draw already in database (skipped insert)")
-            
+
             # Update metadata
             metadata['inserted_draws'] = inserted_count
-            
+
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
                 steps_completed=2,
                 metadata=json.dumps(metadata)
             )
-            
+
         except Exception as e:
             # EXCEPTION DURING STEP 2 - HALT PIPELINE
             logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
             logger.error(f"[{execution_id}] ❌ STEP 2 EXCEPTION: {e}")
             logger.exception("Full traceback:")
-            
+
             elapsed = (datetime.now() - start_time).total_seconds()
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
@@ -1001,7 +1001,7 @@ async def trigger_full_pipeline_automatically():
                 error=f"FAILED: STEP 2 EXCEPTION - {str(e)}",
                 elapsed_seconds=elapsed
             )
-            
+
             active_pipeline_execution_id = None
             return {
                 'success': False,
@@ -1019,23 +1019,23 @@ async def trigger_full_pipeline_automatically():
             current_step="STEP 3/6: Analytics update",
             steps_completed=2  # STEP 1 (polling) + STEP 2 (insert) = 2 steps completed before this
         )
-        
+
         try:
             from src.analytics_engine import update_analytics
             analytics_success = update_analytics()
-            
+
             if not analytics_success:
                 logger.warning(f"[{execution_id}] Analytics update returned False")
-            
+
             # VALIDATION GATE 2
             validation_result = validate_step_2_analytics(execution_id)
-            
+
             if not validation_result['success']:
                 # CRITICAL FAILURE - HALT PIPELINE
                 error_detail = validation_result['error']
                 logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
                 logger.error(f"[{execution_id}] ❌ STEP 3 VALIDATION FAILED: {error_detail}")
-                
+
                 elapsed = (datetime.now() - start_time).total_seconds()
                 db.update_pipeline_execution_log(
                     execution_id=execution_id,
@@ -1045,7 +1045,7 @@ async def trigger_full_pipeline_automatically():
                     error=f"FAILED: STEP 3 VALIDATION - {error_detail}",
                     elapsed_seconds=elapsed
                 )
-                
+
                 active_pipeline_execution_id = None
                 return {
                     'success': False,
@@ -1055,19 +1055,19 @@ async def trigger_full_pipeline_automatically():
                     'error': error_detail,
                     'elapsed_seconds': elapsed
                 }
-            
+
             # Success - continue
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
                 steps_completed=3
             )
-            
+
         except Exception as e:
             # EXCEPTION DURING STEP 3 - HALT PIPELINE
             logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
             logger.error(f"[{execution_id}] ❌ STEP 3 EXCEPTION: {e}")
             logger.exception("Full traceback:")
-            
+
             elapsed = (datetime.now() - start_time).total_seconds()
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
@@ -1077,7 +1077,7 @@ async def trigger_full_pipeline_automatically():
                 error=f"FAILED: STEP 3 EXCEPTION - {str(e)}",
                 elapsed_seconds=elapsed
             )
-            
+
             active_pipeline_execution_id = None
             return {
                 'success': False,
@@ -1096,56 +1096,56 @@ async def trigger_full_pipeline_automatically():
             current_step="STEP 4/7: Evaluation of pending predictions",
             steps_completed=3
         )
-        
+
         try:
             # Get ONLY draws that have UNEVALUATED predictions (not all draws)
             # This prevents the pipeline from processing thousands of historical draws
             from src.database import get_db_connection
-            
+
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 # Get draws with PENDING/UNEVALUATED predictions only (evaluated = 0)
                 cursor.execute("""
                     SELECT DISTINCT draw_date
-                    FROM generated_tickets 
+                    FROM generated_tickets
                     WHERE evaluated = 0
                     ORDER BY draw_date DESC
                     LIMIT 100
                 """)
                 draws_with_pending = cursor.fetchall()
-            
+
             logger.info(f"[{execution_id}] Found {len(draws_with_pending)} draws with pending predictions to evaluate")
-            
+
             evaluated_count = 0
             error_count = 0
-            
+
             # Process only draws with pending predictions (timeout: 5 mins max for this step)
             step_start = datetime.now()
             step_timeout = 300  # 5 minutes
-            
+
             for draw_tuple in draws_with_pending:
                 draw_date = draw_tuple[0]
-                
+
                 # Check timeout
                 step_elapsed = (datetime.now() - step_start).total_seconds()
                 if step_elapsed > step_timeout:
                     logger.warning(f"[{execution_id}] ⏱️ STEP 4 TIMEOUT: {step_elapsed/60:.1f}min - halting remaining evaluations")
                     break
-                
+
                 try:
                     # Evaluate predictions for this draw
                     await evaluate_predictions_for_draw(draw_date)
                     evaluated_count += 1
                     if evaluated_count <= 5:  # Log first 5
                         logger.info(f"[{execution_id}]   ✅ Evaluated {draw_date}")
-                    
+
                 except Exception as e:
                     error_count += 1
                     if error_count <= 3:  # Log first 3 errors
                         logger.warning(f"[{execution_id}]   ⚠️ Error evaluating {draw_date}: {e}")
-            
+
             step_elapsed = (datetime.now() - step_start).total_seconds()
-            
+
             # Summary
             logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluation summary")
             logger.info(f"[{execution_id}]   Draws with pending predictions: {len(draws_with_pending)}")
@@ -1153,7 +1153,7 @@ async def trigger_full_pipeline_automatically():
             logger.info(f"[{execution_id}]   Elapsed time: {step_elapsed:.1f}s")
             if error_count > 0:
                 logger.warning(f"[{execution_id}]   Errors encountered: {error_count}")
-            
+
             # VALIDATION GATE 3 (informational)
             validation_result = {
                 'success': True,
@@ -1161,13 +1161,13 @@ async def trigger_full_pipeline_automatically():
                 'error_count': error_count,
                 'step_duration_seconds': step_elapsed
             }
-            
+
             # Success - continue
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
                 steps_completed=4
             )
-            
+
         except Exception as e:
             # EXCEPTION DURING STEP 4 - LOG BUT CONTINUE (still non-critical for pipeline flow)
             logger.warning(f"[{execution_id}] ⚠️ STEP 4 EXCEPTION (continuing): {e}")
@@ -1185,21 +1185,21 @@ async def trigger_full_pipeline_automatically():
             current_step="STEP 5/7: Adaptive learning",
             steps_completed=4
         )
-        
+
         try:
             step_start = datetime.now()
             await adaptive_learning_update()
             step_elapsed = (datetime.now() - step_start).total_seconds()
             logger.info(f"[{execution_id}] ✅ Strategy weights updated via Bayesian learning ({step_elapsed:.1f}s)")
-            
+
             # VALIDATION GATE 4
             validation_result = validate_step_4_adaptive_learning(execution_id)
-            
+
             if not validation_result['success']:
                 # CRITICAL FAILURE - HALT PIPELINE
                 error_detail = validation_result['error']
                 logger.error(f"[{execution_id}] 🚨 PIPELINE HALTED at STEP 5: {error_detail}")
-                
+
                 elapsed = (datetime.now() - start_time).total_seconds()
                 db.update_pipeline_execution_log(
                     execution_id=execution_id,
@@ -1209,7 +1209,7 @@ async def trigger_full_pipeline_automatically():
                     error=f"STEP 5 VALIDATION FAILED: {error_detail}",
                     elapsed_seconds=elapsed
                 )
-                
+
                 active_pipeline_execution_id = None
                 return {
                     'success': False,
@@ -1218,19 +1218,19 @@ async def trigger_full_pipeline_automatically():
                     'error': error_detail,
                     'elapsed_seconds': elapsed
                 }
-            
+
             # Success - continue
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
                 steps_completed=5
             )
-            
+
         except Exception as e:
             # EXCEPTION DURING STEP 5 - HALT PIPELINE
             logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
             logger.error(f"[{execution_id}] ❌ STEP 5 EXCEPTION: {e}")
             logger.exception("Full traceback:")
-            
+
             elapsed = (datetime.now() - start_time).total_seconds()
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
@@ -1240,7 +1240,7 @@ async def trigger_full_pipeline_automatically():
                 error=f"FAILED: STEP 5 EXCEPTION - {str(e)}",
                 elapsed_seconds=elapsed
             )
-            
+
             active_pipeline_execution_id = None
             return {
                 'success': False,
@@ -1258,7 +1258,7 @@ async def trigger_full_pipeline_automatically():
             current_step="STEP 6/7: Prediction generation",
             steps_completed=5
         )
-        
+
         try:
             import gc
             from src.prediction_engine import UnifiedPredictionEngine
@@ -1268,7 +1268,7 @@ async def trigger_full_pipeline_automatically():
 
             # Get next draw date early (before generation)
             next_draw = DateManager.calculate_next_drawing_date()
-            
+
             # Delete old predictions for this draw BEFORE generating new ones
             # This prevents duplicate accumulation
             with db.get_db_connection() as conn:
@@ -1276,7 +1276,7 @@ async def trigger_full_pipeline_automatically():
                 cursor.execute("DELETE FROM generated_tickets WHERE draw_date = ?", (next_draw,))
                 deleted_count = cursor.rowcount
                 conn.commit()
-            
+
             if deleted_count > 0:
                 logger.info(f"[{execution_id}] Deleted {deleted_count} old predictions for {next_draw}")
 
@@ -1285,44 +1285,44 @@ async def trigger_full_pipeline_automatically():
             total_saved = 0
             strategy_dist = {}
             batch_size = 100  # Save every 100 tickets
-            
+
             for batch_num in range(5):
                 batch_tickets = []
-                
+
                 # Generate 100 tickets per batch
                 for _ in range(20):  # 20 sets of 5 = 100 tickets
                     tickets = engine.generate_tickets(5)
                     batch_tickets.extend(tickets)
-                    
+
                     # Track strategy distribution
                     for ticket in tickets:
                         strategy = ticket['strategy']
                         strategy_dist[strategy] = strategy_dist.get(strategy, 0) + 1
-                
+
                 # Save this batch to database immediately (don't hold in memory)
                 batch_saved = save_generated_tickets(batch_tickets, next_draw)
                 total_saved += batch_saved
-                
+
                 logger.info(f"[{execution_id}] Batch {batch_num + 1}/5: Saved {batch_saved} tickets ({total_saved}/500 total)")
-                
+
                 # Clear batch from memory immediately
                 del batch_tickets
-                
+
                 # Force garbage collection every 100 tickets to prevent memory bloat
                 gc.collect()
-            
+
             logger.info(f"[{execution_id}] Generated and saved {total_saved} tickets for {next_draw}")
             logger.info(f"[{execution_id}] Strategy distribution: {strategy_dist}")
-            
+
             # VALIDATION GATE 5
             expected_count = 500
             validation_result = validate_step_5_prediction(total_saved, expected_count, execution_id)
-            
+
             if not validation_result['success']:
                 # CRITICAL FAILURE - HALT PIPELINE
                 error_detail = validation_result['error']
                 logger.error(f"[{execution_id}] 🚨 PIPELINE HALTED at STEP 6: {error_detail}")
-                
+
                 elapsed = (datetime.now() - start_time).total_seconds()
                 db.update_pipeline_execution_log(
                     execution_id=execution_id,
@@ -1334,7 +1334,7 @@ async def trigger_full_pipeline_automatically():
                     target_draw_date=next_draw,
                     elapsed_seconds=elapsed
                 )
-                
+
                 active_pipeline_execution_id = None
                 return {
                     'success': False,
@@ -1343,13 +1343,13 @@ async def trigger_full_pipeline_automatically():
                     'error': error_detail,
                     'elapsed_seconds': elapsed
                 }
-            
+
             # ========== PIPELINE COMPLETED SUCCESSFULLY ==========
             elapsed = (datetime.now() - start_time).total_seconds()
-            
+
             # Extract data_source from metadata and normalize names
             final_data_source = metadata.get('polling_summary', {}).get('source', 'UNKNOWN')
-            
+
             # Normalize source names for frontend display
             source_mapping = {
                 'database': 'CSV',
@@ -1359,7 +1359,7 @@ async def trigger_full_pipeline_automatically():
                 'csv': 'CSV'
             }
             final_data_source = source_mapping.get(final_data_source.lower(), final_data_source.upper())
-            
+
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
                 status="completed",
@@ -1372,13 +1372,13 @@ async def trigger_full_pipeline_automatically():
                 elapsed_seconds=elapsed,
                 data_source=final_data_source
             )
-            
+
             logger.info(f"[{execution_id}] 🎉 ========== PIPELINE STATUS: COMPLETED ==========")
             logger.info(f"[{execution_id}] ✅ All 5 steps executed successfully in {elapsed:.2f}s")
             logger.info(f"[{execution_id}] 📊 Generated {total_saved} tickets for draw {next_draw}")
             logger.info(f"[{execution_id}] 📡 Data source: {final_data_source}")
             logger.info(f"[{execution_id}] =====================================")
-            
+
             active_pipeline_execution_id = None  # Clear tracking on completion
             return {
                 'success': True,
@@ -1395,7 +1395,7 @@ async def trigger_full_pipeline_automatically():
             logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
             logger.error(f"[{execution_id}] ❌ PIPELINE EXCEPTION: {e}")
             logger.exception("Full traceback:")
-            
+
             elapsed = (datetime.now() - start_time).total_seconds()
             db.update_pipeline_execution_log(
                 execution_id=execution_id,
@@ -1405,7 +1405,7 @@ async def trigger_full_pipeline_automatically():
                 error=f"FAILED: PIPELINE EXCEPTION - {str(e)}",
                 elapsed_seconds=elapsed
             )
-            
+
             active_pipeline_execution_id = None
             return {
                 'success': False,
@@ -1422,7 +1422,7 @@ async def trigger_full_pipeline_automatically():
         logger.error(f"[{execution_id}] 🚨 PIPELINE STATUS: FAILED")
         logger.error(f"[{execution_id}] ❌ TOP-LEVEL EXCEPTION after {elapsed:.2f}s")
         logger.exception("Full pipeline error:")
-        
+
         # Final update: failed
         db.update_pipeline_execution_log(
             execution_id=execution_id,
@@ -1600,7 +1600,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
-    
+
     # Recover any stale pipelines from previous runs
     try:
         recover_stale_pipelines()
@@ -1617,14 +1617,14 @@ async def lifespan(app: FastAPI):
     # - Job #2: Real-time Unified Polling at 11:05 PM ET on drawing days
     # - Removed: Legacy smart polling and maintenance retry jobs
     # ============================================================================
-    
+
     # Job #1: DAILY FULL SYNC - Runs at 6:00 AM ET every day
     # Purpose: Safety net that ensures database completeness
     # - Fetches historical draws from NC Lottery CSV
     # - Finds and inserts any missing draws
     # - Catches draws missed by real-time polling (network outages, service downtime)
     # NOTE: run_daily_full_sync() is defined at module level for APScheduler serialization
-    
+
     scheduler.add_job(
         func=run_daily_full_sync,
         trigger="cron",
@@ -1803,7 +1803,7 @@ async def get_scheduler_health():
                 "current_time_utc": datetime.now(pytz.UTC).isoformat(),
                 "current_time_et": datetime.now(pytz.UTC).astimezone(pytz.timezone('America/New_York')).isoformat()
             }
-        
+
         jobs = scheduler.get_jobs()
 
         # Compute current times
@@ -1843,11 +1843,11 @@ async def get_scheduler_health():
             }
 
         job_by_id = {j.id: j for j in jobs}
-        
+
         # v4.0 jobs
         daily_sync_summary = summarize_job(job_by_id.get("daily_full_sync"))
         post_draw_summary = summarize_job(job_by_id.get("post_drawing_pipeline"))
-        
+
         # Legacy jobs (removed in v4.0)
         retry_summary = summarize_job(job_by_id.get("maintenance_data_retry"))
 
@@ -2013,8 +2013,8 @@ async def get_system_stats():
 
         # Get predictions with matches
         cursor.execute("""
-            SELECT COUNT(*) FROM generated_tickets 
-            WHERE evaluated = 1 
+            SELECT COUNT(*) FROM generated_tickets
+            WHERE evaluated = 1
             AND matches_wb > 0
         """)
         winning_predictions = cursor.fetchone()[0]
@@ -2026,7 +2026,7 @@ async def get_system_stats():
         try:
             from src.google_analytics_service import get_ga_service
             ga_service = get_ga_service()
-            
+
             if ga_service.is_enabled():
                 # Get GA4 traffic stats (last 7 days)
                 ga_traffic = ga_service.get_traffic_stats(days_back=7)
@@ -2034,7 +2034,7 @@ async def get_system_stats():
                 ga_realtime = ga_service.get_realtime_stats()
                 # Get device breakdown
                 ga_devices = ga_service.get_device_breakdown()
-                
+
                 ga_stats = {
                     "enabled": True,
                     "unique_visitors_7d": ga_traffic.get("unique_visitors", 0),
@@ -2083,34 +2083,34 @@ async def get_system_stats():
 async def get_google_analytics_stats(days_back: int = 7):
     """
     Get Google Analytics 4 statistics (traffic, sessions, devices)
-    
+
     Args:
         days_back: Number of days to look back (default 7, max 90)
-    
+
     Returns:
         GA4 metrics including traffic, real-time data, and daily breakdown
     """
     try:
         from src.google_analytics_service import get_ga_service
-        
+
         # Validate days_back
         if days_back < 1 or days_back > 90:
             raise HTTPException(status_code=400, detail="days_back must be between 1 and 90")
-        
+
         ga_service = get_ga_service()
-        
+
         if not ga_service.is_enabled():
             return {
                 "enabled": False,
                 "message": "Google Analytics integration not configured. Set GA4_PROPERTY_ID and GA4_CREDENTIALS_PATH environment variables."
             }
-        
+
         # Fetch all GA4 data
         traffic_stats = ga_service.get_traffic_stats(days_back=days_back)
         realtime_stats = ga_service.get_realtime_stats()
         daily_breakdown = ga_service.get_daily_breakdown(days_back=days_back)
         device_breakdown = ga_service.get_device_breakdown()
-        
+
         return {
             "enabled": True,
             "period_days": days_back,
@@ -2132,7 +2132,7 @@ async def get_google_analytics_stats(days_back: int = 7):
             "devices": device_breakdown.get("devices", {}),
             "timestamp": datetime.now().isoformat()
         }
-        
+
     except Exception as e:
         logger.error(f"Error fetching Google Analytics data: {e}")
         raise HTTPException(
@@ -2185,7 +2185,7 @@ async def get_system_overview():
                 branch = None
                 commit_message = None
                 commit_date_iso = None
-                
+
                 if os.path.exists(head_path):
                     with open(head_path, 'r', encoding='utf-8') as f:
                         head_content = f.read().strip()
@@ -2201,7 +2201,7 @@ async def get_system_overview():
                         full_hash = head_content
                     if full_hash:
                         short_hash = full_hash[:7]
-                        
+
                         # Try to get commit message and date using git cat-file (works with packed objects)
                         try:
                             cat_file_output = subprocess.check_output(
@@ -2248,7 +2248,7 @@ async def get_system_overview():
                                         commit_date_iso = dt.isoformat()
                             except Exception as obj_err:
                                 logger.debug(f"Loose object parse failed: {obj_err}")
-                
+
                 if short_hash or full_hash or branch:
                     git_info.update({
                         'commit_hash': short_hash,

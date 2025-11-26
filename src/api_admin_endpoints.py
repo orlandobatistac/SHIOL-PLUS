@@ -98,6 +98,54 @@ def toggle_premium(user_id: int, admin: dict = Depends(require_admin_access)):
     return {"success": True, "premium_status": status}
 
 
+@router.post("/pipeline/force-run", summary="Force manual pipeline execution", responses={
+    200: {"description": "Pipeline executed successfully"},
+    403: {"description": "Admin required"},
+    500: {"description": "Pipeline execution failed"}
+})
+async def force_pipeline_run(admin: dict = Depends(require_admin_access)):
+    """
+    Force manual execution of the full pipeline. Admin only.
+
+    Useful for:
+    - Recovery from failed pipeline executions
+    - Manual execution after missed draws
+    - Testing and debugging
+
+    Returns:
+    - success: Whether pipeline started successfully
+    - execution_id: Unique ID for this pipeline run
+    - status: Current status of execution
+    - message: Human-readable status message
+    """
+    try:
+        logger.info(f"🔧 [admin] Manual pipeline execution requested by admin {admin['id']} ({admin['username']})")
+
+        # Import here to avoid circular dependency
+        from src.api import trigger_full_pipeline_automatically
+
+        # Execute pipeline
+        result = await trigger_full_pipeline_automatically()
+
+        logger.info(f"🔧 [admin] Manual pipeline completed: {result.get('status')}")
+
+        return {
+            "success": True,
+            "message": "Pipeline ejecutado manualmente",
+            "execution_id": result.get('execution_id'),
+            "status": result.get('status'),
+            "steps_completed": result.get('steps_completed'),
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"🔧 [admin] Manual pipeline execution failed: {e}")
+        logger.exception("Full traceback:")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Pipeline execution failed: {str(e)}"
+        )
+
+
 @router.get("/pipeline/execution-logs", summary="Get pipeline execution logs", response_model=dict, responses={
     200: {"description": "Pipeline execution logs with statistics"},
     403: {"description": "Admin required"}
@@ -111,23 +159,23 @@ def get_pipeline_logs(
 ):
     """
     Returns pipeline execution logs with optional filters. Admin only.
-    
+
     Query parameters:
     - limit: Maximum number of logs to return (default: 20, max: 100)
     - status: Filter by status ('running', 'completed', 'failed', 'timeout')
     - start_date: Filter logs after this date (YYYY-MM-DD)
     - end_date: Filter logs before this date (YYYY-MM-DD)
-    
+
     Returns:
     - logs: Array of execution records sorted by start_time DESC
     - statistics: Summary statistics (total runs, success rate, avg duration, etc.)
     """
     from src.database import get_pipeline_execution_logs, get_pipeline_execution_statistics
-    
+
     # Enforce max limit
     if limit > 100:
         limit = 100
-    
+
     # Validate status if provided
     valid_statuses = ['running', 'completed', 'failed', 'timeout']
     if status and status not in valid_statuses:
@@ -135,7 +183,7 @@ def get_pipeline_logs(
             status_code=400,
             detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
         )
-    
+
     try:
         logs = get_pipeline_execution_logs(
             limit=limit,
@@ -143,9 +191,9 @@ def get_pipeline_logs(
             start_date=start_date,
             end_date=end_date
         )
-        
+
         statistics = get_pipeline_execution_statistics()
-        
+
         return {
             "success": True,
             "logs": logs,
@@ -157,7 +205,7 @@ def get_pipeline_logs(
                 "end_date": end_date
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to retrieve pipeline execution logs: {e}")
         raise HTTPException(
@@ -183,7 +231,7 @@ async def _run_pipeline_in_background():
 })
 async def trigger_pipeline(
     background_tasks: BackgroundTasks,
-    async_run: bool = True, 
+    async_run: bool = True,
     admin: dict = Depends(require_admin_access)
 ):
     """
@@ -192,14 +240,14 @@ async def trigger_pipeline(
     Params:
     - async_run: If True (default), returns immediately after scheduling the run.
                  If False, waits for the pipeline to finish and returns the result.
-    
+
     Note: Using FastAPI BackgroundTasks to ensure response is sent before pipeline starts.
     This prevents nginx 504 Gateway Timeout errors on long-running pipelines.
     """
     try:
         # Lazy import to avoid circular import with src.api including this router
         from src.api import trigger_full_pipeline_automatically
-        
+
         if async_run:
             # Use BackgroundTasks to ensure response is sent BEFORE pipeline starts
             # This prevents 504 Gateway Timeout from nginx
