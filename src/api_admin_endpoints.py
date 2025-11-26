@@ -325,18 +325,18 @@ async def regenerate_predictions_for_draw(
 ):
     """
     Regenerate predictions for a specific draw date. Admin only.
-    
+
     This endpoint:
     1. Deletes existing tickets for the draw_date
     2. Generates new predictions using historical data BEFORE the draw
     3. Evaluates predictions against official results (if available)
-    
+
     Returns immediately (202 Accepted) and executes in background.
-    
+
     Params:
     - draw_date: Target draw date in YYYY-MM-DD format (e.g., "2025-11-23")
     - tickets: Number of tickets to generate (default: 500)
-    
+
     Returns:
     - success: Whether regeneration started successfully
     - message: Human-readable status message
@@ -345,64 +345,64 @@ async def regenerate_predictions_for_draw(
     import uuid
     from datetime import datetime
     import re
-    
+
     # Validate draw_date format
     if not re.match(r'^\d{4}-\d{2}-\d{2}$', draw_date):
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Invalid draw_date format. Use YYYY-MM-DD (e.g., 2025-11-23)"
         )
-    
+
     # Validate tickets count
     if tickets < 1 or tickets > 10000:
         raise HTTPException(
             status_code=400,
             detail="tickets must be between 1 and 10000"
         )
-    
+
     try:
         logger.info(f"🔧 [admin] Regenerate predictions requested by admin {admin['id']} ({admin['username']}) for draw_date={draw_date}, tickets={tickets}")
-        
+
         execution_hint = str(uuid.uuid4())[:8]
         timestamp = datetime.now().isoformat()
-        
+
         async def run_regeneration():
             try:
                 from src.database import get_db_connection
                 from src.strategy_generators import StrategyManager
                 from src.prediction_evaluator import PredictionEvaluator
-                
+
                 logger.info(f"🔧 [admin] Starting regeneration (hint: {execution_hint})")
-                
+
                 # Step 1: Delete existing tickets
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute("SELECT COUNT(*) FROM generated_tickets WHERE draw_date = ?", (draw_date,))
                     existing_count = cursor.fetchone()[0]
-                    
+
                     if existing_count > 0:
                         cursor.execute("DELETE FROM generated_tickets WHERE draw_date = ?", (draw_date,))
                         conn.commit()
                         logger.info(f"🗑️  Deleted {existing_count} existing tickets for {draw_date}")
-                
+
                 # Step 2: Generate new predictions (using historical data BEFORE draw_date)
                 logger.info(f"🎲 Generating {tickets} predictions for {draw_date}")
                 manager = StrategyManager(max_date=draw_date)
                 new_tickets = manager.generate_balanced_tickets(total=tickets)
-                
+
                 # Insert new tickets
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
                     inserted = 0
-                    
+
                     for ticket in new_tickets:
                         wb = ticket['white_balls']
                         pb = ticket['powerball']
-                        
+
                         # Validate ranges
                         if not all(1 <= n <= 69 for n in wb) or not (1 <= pb <= 26):
                             continue
-                        
+
                         cursor.execute("""
                             INSERT INTO generated_tickets (
                                 draw_date, strategy_used, n1, n2, n3, n4, n5, powerball, confidence_score
@@ -415,17 +415,17 @@ async def regenerate_predictions_for_draw(
                             ticket.get('confidence', 0.5)
                         ))
                         inserted += 1
-                    
+
                     conn.commit()
-                
+
                 logger.success(f"✅ Inserted {inserted} tickets for {draw_date}")
-                
+
                 # Step 3: Evaluate predictions (if draw exists)
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute("SELECT COUNT(*) FROM powerball_draws WHERE draw_date = ?", (draw_date,))
                     draw_exists = cursor.fetchone()[0] > 0
-                
+
                 if draw_exists:
                     logger.info(f"📊 Evaluating predictions for {draw_date}")
                     evaluator = PredictionEvaluator()
@@ -433,18 +433,18 @@ async def regenerate_predictions_for_draw(
                     logger.success(f"✅ Evaluation complete: {result.get('total_wins', 0)} wins, ${result.get('total_winnings', 0):,.2f}")
                 else:
                     logger.warning(f"⏭️  Skipping evaluation (no official results for {draw_date} yet)")
-                
+
                 logger.info(f"🔧 [admin] Regeneration completed (hint: {execution_hint})")
-                
+
             except Exception as e:
                 logger.error(f"🔧 [admin] Regeneration failed (hint: {execution_hint}): {e}")
                 logger.exception("Full traceback:")
-        
+
         # Schedule regeneration in background
         background_tasks.add_task(run_regeneration)
-        
+
         logger.info(f"🔧 [admin] Regeneration queued for background execution (hint: {execution_hint})")
-        
+
         return {
             "success": True,
             "message": f"Regeneration started for draw {draw_date}",
@@ -455,9 +455,151 @@ async def regenerate_predictions_for_draw(
             "timestamp": timestamp,
             "note": "Regeneration is executing in the background. Check logs in a few seconds."
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to start regeneration: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to start regeneration: {str(e)}")
+
+
+# ============================================================================
+# PENDING DRAWS ENDPOINTS (Pipeline v6.1 - 3 Layer Architecture)
+# ============================================================================
+
+@router.get("/pending-draws", summary="Get pending draws count and list", responses={
+    200: {"description": "Pending draws information"},
+    403: {"description": "Admin required"}
+})
+def get_pending_draws_info(admin: dict = Depends(require_admin_access)):
+    """
+    Returns pending draws information for the v6.1 3-layer architecture.
+
+    - pending: Count of draws waiting for Layer 2 retry
+    - completed: Count of draws successfully completed
+    - failed_permanent: Count of draws that failed all layers
+    - draws: List of pending draw records
+    """
+    from src.database import get_pending_draws, get_pending_draws_count
+
+    counts = get_pending_draws_count()
+    pending_list = get_pending_draws(status='pending')
+
+    return {
+        "pending": counts.get('pending', 0),
+        "completed": counts.get('completed', 0),
+        "failed_permanent": counts.get('failed_permanent', 0),
+        "draws": pending_list
+    }
+
+
+@router.post("/pending-draws/{draw_date}/retry", summary="Force retry a pending draw", responses={
+    200: {"description": "Retry initiated"},
+    404: {"description": "Draw not found"},
+    403: {"description": "Admin required"}
+})
+async def force_retry_pending_draw(
+    draw_date: str,
+    background_tasks: BackgroundTasks,
+    admin: dict = Depends(require_admin_access)
+):
+    """
+    Force retry a specific pending draw immediately using Layer 3 recovery.
+    This bypasses the normal Layer 2 scheduling.
+    """
+    from src.database import get_pending_draws
+    from src.loader import poll_draw_layer3
+
+    # Check if draw exists in pending_draws
+    pending = get_pending_draws(status='pending')
+    matching = [d for d in pending if d['draw_date'] == draw_date]
+
+    if not matching:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draw {draw_date} not found in pending draws"
+        )
+
+    async def run_emergency_retry():
+        from src.api import _execute_pipeline_steps
+        from src.database import mark_pending_draw_completed, mark_pending_draw_failed
+        from datetime import datetime
+        import uuid
+
+        logger.info(f"🔧 [admin] Force retrying pending draw {draw_date}")
+
+        polling_result = poll_draw_layer3(draw_date, max_retries_per_source=3)
+
+        if polling_result['success']:
+            # Execute pipeline
+            execution_id = str(uuid.uuid4())[:8]
+            start_time = datetime.now()
+
+            metadata = {
+                "trigger": "admin_force_retry",
+                "version": "v6.1-3layer",
+                "layer": 3
+            }
+
+            from src.database import insert_pipeline_execution_log
+            insert_pipeline_execution_log(
+                execution_id=execution_id,
+                start_time=start_time.isoformat(),
+                metadata=str(metadata)
+            )
+
+            await _execute_pipeline_steps(
+                execution_id=execution_id,
+                draw_data=polling_result['draw_data'],
+                data_source=polling_result['source'],
+                expected_draw_date=draw_date,
+                start_time=start_time,
+                metadata=metadata,
+                layer=3
+            )
+
+            mark_pending_draw_completed(draw_date, layer=3)
+            logger.success(f"🔧 [admin] Force retry SUCCESS for {draw_date}")
+        else:
+            mark_pending_draw_failed(draw_date, "Admin force retry failed - all sources unavailable")
+            logger.error(f"🔧 [admin] Force retry FAILED for {draw_date}")
+
+    background_tasks.add_task(run_emergency_retry)
+
+    return {
+        "success": True,
+        "message": f"Force retry initiated for {draw_date}",
+        "status": "processing"
+    }
+
+
+@router.delete("/pending-draws/{draw_date}", summary="Clear a pending draw", responses={
+    200: {"description": "Draw cleared"},
+    404: {"description": "Draw not found"},
+    403: {"description": "Admin required"}
+})
+def clear_pending_draw(draw_date: str, admin: dict = Depends(require_admin_access)):
+    """
+    Mark a pending draw as failed_permanent to stop retry attempts.
+    Use this when you know a draw will never be available.
+    """
+    from src.database import mark_pending_draw_failed, get_pending_draws
+
+    pending = get_pending_draws(status='pending')
+    matching = [d for d in pending if d['draw_date'] == draw_date]
+
+    if not matching:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Draw {draw_date} not found in pending draws"
+        )
+
+    mark_pending_draw_failed(draw_date, "Manually cleared by admin")
+
+    logger.info(f"🔧 [admin] Cleared pending draw {draw_date}")
+
+    return {
+        "success": True,
+        "message": f"Draw {draw_date} marked as failed_permanent",
+        "draw_date": draw_date
+    }

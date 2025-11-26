@@ -1122,3 +1122,250 @@ def daily_full_sync_job() -> Dict:
             'execution_time': elapsed,
             'error': str(e)
         }
+
+
+# ============================================================================
+# PIPELINE v6.1 - 3 LAYER POLLING FUNCTIONS
+# ============================================================================
+
+def poll_draw_layer1(expected_draw_date: str, max_attempts: int = 10, interval_seconds: int = 60) -> Dict:
+    """
+    LAYER 1 POLLING: Primary post-draw polling using ONLY powerball.com.
+
+    This is the fastest, most direct source. Runs immediately after draw time (11:15 PM ET).
+
+    Strategy:
+    - Single source: powerball.com only (fastest updates)
+    - 10 attempts × 60s = 10 minutes maximum
+    - If fails, draw is marked as pending for Layer 2
+
+    Args:
+        expected_draw_date: Draw date to poll for (YYYY-MM-DD format)
+        max_attempts: Maximum polling attempts (default 10)
+        interval_seconds: Seconds between attempts (default 60)
+
+    Returns:
+        Dict with polling results:
+        {
+            'success': bool,
+            'draw_data': Dict or None,
+            'source': 'powerball_official' or None,
+            'attempts': int,
+            'elapsed_seconds': float,
+            'result': 'success' | 'max_attempts_reached'
+        }
+    """
+    import time
+    from datetime import datetime
+    from src.date_utils import DateManager
+
+    start_time = datetime.now()
+    current_et = DateManager.get_current_et_time()
+
+    logger.info("=" * 80)
+    logger.info("🔵 [LAYER 1] STARTING PRIMARY POLLING - powerball.com ONLY")
+    logger.info(f"🔵 [LAYER 1] Target draw date: {expected_draw_date}")
+    logger.info(f"🔵 [LAYER 1] Started at: {current_et.strftime('%Y-%m-%d %H:%M:%S ET')}")
+    logger.info(f"🔵 [LAYER 1] Max attempts: {max_attempts} ({max_attempts * interval_seconds / 60:.0f} min max)")
+    logger.info("=" * 80)
+
+    for attempt in range(1, max_attempts + 1):
+        elapsed_seconds = (datetime.now() - start_time).total_seconds()
+
+        logger.info(f"🔵 [LAYER 1] Attempt {attempt}/{max_attempts} ({elapsed_seconds/60:.1f} min elapsed)")
+
+        try:
+            result = scrape_powerball_official(expected_draw_date)
+            if result:
+                elapsed = (datetime.now() - start_time).total_seconds()
+                logger.info("=" * 80)
+                logger.info(f"✅ [LAYER 1] SUCCESS! Draw found via powerball.com")
+                logger.info(f"✅ [LAYER 1] Numbers: [{result['n1']}, {result['n2']}, {result['n3']}, {result['n4']}, {result['n5']}] + PB {result['pb']}")
+                logger.info(f"✅ [LAYER 1] Found after {attempt} attempts in {elapsed/60:.1f} minutes")
+                logger.info("=" * 80)
+
+                return {
+                    'success': True,
+                    'draw_data': result,
+                    'source': 'powerball_official',
+                    'attempts': attempt,
+                    'elapsed_seconds': elapsed,
+                    'result': 'success'
+                }
+        except Exception as e:
+            logger.warning(f"🔵 [LAYER 1] Error on attempt {attempt}: {str(e)[:80]}")
+
+        # Wait before next attempt (except after last attempt)
+        if attempt < max_attempts:
+            logger.info(f"🔵 [LAYER 1] Waiting {interval_seconds}s before next attempt...")
+            time.sleep(interval_seconds)
+
+    # Max attempts reached
+    elapsed = (datetime.now() - start_time).total_seconds()
+    logger.warning("=" * 80)
+    logger.warning(f"⚠️ [LAYER 1] MAX ATTEMPTS REACHED ({max_attempts})")
+    logger.warning(f"⚠️ [LAYER 1] Draw {expected_draw_date} not found on powerball.com")
+    logger.warning(f"⚠️ [LAYER 1] Elapsed: {elapsed/60:.1f} minutes")
+    logger.warning(f"⚠️ [LAYER 1] Draw will be marked as PENDING for Layer 2 retry")
+    logger.warning("=" * 80)
+
+    return {
+        'success': False,
+        'draw_data': None,
+        'source': None,
+        'attempts': max_attempts,
+        'elapsed_seconds': elapsed,
+        'result': 'max_attempts_reached'
+    }
+
+
+def poll_draw_layer2(expected_draw_date: str) -> Dict:
+    """
+    LAYER 2 POLLING: Multi-source retry for pending draws.
+
+    Runs every 15 minutes after Layer 1 fails. Tries all sources in order.
+
+    Strategy:
+    - Try sources in order: powerball.com → MUSL API → NC Lottery CSV
+    - Single attempt per source (fast check)
+    - Called repeatedly by scheduler until success or Layer 3
+
+    Args:
+        expected_draw_date: Draw date to poll for (YYYY-MM-DD format)
+
+    Returns:
+        Dict with polling results:
+        {
+            'success': bool,
+            'draw_data': Dict or None,
+            'source': str or None,
+            'result': 'success' | 'not_available'
+        }
+    """
+    from datetime import datetime
+
+    logger.info("-" * 60)
+    logger.info(f"🟡 [LAYER 2] Retry polling for {expected_draw_date}")
+    logger.info("-" * 60)
+
+    # Define sources in priority order
+    sources = [
+        ('powerball_official', scrape_powerball_official),
+        ('musl_api', fetch_single_draw_musl),
+        ('nc_lottery_csv', fetch_single_draw_nclottery_csv),
+    ]
+
+    for source_name, source_func in sources:
+        try:
+            logger.info(f"🟡 [LAYER 2] Trying {source_name}...")
+            result = source_func(expected_draw_date)
+
+            if result:
+                logger.info(f"✅ [LAYER 2] SUCCESS via {source_name}!")
+                logger.info(f"✅ [LAYER 2] Numbers: [{result['n1']}, {result['n2']}, {result['n3']}, {result['n4']}, {result['n5']}] + PB {result['pb']}")
+
+                return {
+                    'success': True,
+                    'draw_data': result,
+                    'source': source_name,
+                    'result': 'success'
+                }
+        except Exception as e:
+            logger.warning(f"🟡 [LAYER 2] {source_name} error: {str(e)[:60]}")
+
+    logger.info(f"🟡 [LAYER 2] Draw {expected_draw_date} not available yet on any source")
+
+    return {
+        'success': False,
+        'draw_data': None,
+        'source': None,
+        'result': 'not_available'
+    }
+
+
+def poll_draw_layer3(expected_draw_date: str, max_retries_per_source: int = 3) -> Dict:
+    """
+    LAYER 3 POLLING: Emergency recovery with maximum effort.
+
+    Runs at 6:00 AM ET for any draws still pending. Uses all sources with retries.
+
+    Strategy:
+    - Try ALL sources with multiple retries each
+    - Last chance before marking as failed_permanent
+    - Maximum effort to recover the draw
+
+    Args:
+        expected_draw_date: Draw date to poll for (YYYY-MM-DD format)
+        max_retries_per_source: Retries per source (default 3)
+
+    Returns:
+        Dict with polling results:
+        {
+            'success': bool,
+            'draw_data': Dict or None,
+            'source': str or None,
+            'total_attempts': int,
+            'result': 'success' | 'all_sources_failed'
+        }
+    """
+    import time
+    from datetime import datetime
+
+    logger.info("=" * 80)
+    logger.info(f"🔴 [LAYER 3] EMERGENCY RECOVERY for {expected_draw_date}")
+    logger.info(f"🔴 [LAYER 3] Maximum effort: {max_retries_per_source} retries per source")
+    logger.info("=" * 80)
+
+    sources = [
+        ('powerball_official', scrape_powerball_official),
+        ('musl_api', fetch_single_draw_musl),
+        ('nc_lottery_csv', fetch_single_draw_nclottery_csv),
+    ]
+
+    total_attempts = 0
+
+    for source_name, source_func in sources:
+        logger.info(f"🔴 [LAYER 3] Trying {source_name} ({max_retries_per_source} attempts)...")
+
+        for retry in range(1, max_retries_per_source + 1):
+            total_attempts += 1
+
+            try:
+                result = source_func(expected_draw_date)
+
+                if result:
+                    logger.info("=" * 80)
+                    logger.info(f"✅ [LAYER 3] RECOVERED via {source_name}!")
+                    logger.info(f"✅ [LAYER 3] Numbers: [{result['n1']}, {result['n2']}, {result['n3']}, {result['n4']}, {result['n5']}] + PB {result['pb']}")
+                    logger.info(f"✅ [LAYER 3] Total attempts: {total_attempts}")
+                    logger.info("=" * 80)
+
+                    return {
+                        'success': True,
+                        'draw_data': result,
+                        'source': source_name,
+                        'total_attempts': total_attempts,
+                        'result': 'success'
+                    }
+
+            except Exception as e:
+                logger.warning(f"🔴 [LAYER 3] {source_name} attempt {retry} error: {str(e)[:60]}")
+
+            # Small delay between retries
+            if retry < max_retries_per_source:
+                time.sleep(5)
+
+    # All sources failed
+    logger.error("=" * 80)
+    logger.error(f"❌ [LAYER 3] ALL SOURCES FAILED for {expected_draw_date}")
+    logger.error(f"❌ [LAYER 3] Total attempts: {total_attempts}")
+    logger.error(f"❌ [LAYER 3] Draw will be marked as FAILED_PERMANENT")
+    logger.error("=" * 80)
+
+    return {
+        'success': False,
+        'draw_data': None,
+        'source': None,
+        'total_attempts': total_attempts,
+        'result': 'all_sources_failed'
+    }

@@ -217,7 +217,7 @@ def update_pipeline_execution(execution_id: str, update_data: Dict[str, Any]) ->
             params.append(execution_id)
 
             query = f"""
-                UPDATE pipeline_executions 
+                UPDATE pipeline_executions
                 SET {', '.join(update_fields)}
                 WHERE execution_id = ?
             """
@@ -245,7 +245,7 @@ def get_pipeline_execution_history(limit: int = 20) -> List[Dict[str, Any]]:
 
             cursor.execute(
                 """
-                SELECT 
+                SELECT
                     execution_id, status, start_time, end_time,
                     trigger_type, trigger_source, current_step,
                     steps_completed, total_steps, num_predictions,
@@ -290,7 +290,7 @@ def get_pipeline_execution_by_id(execution_id: str) -> Optional[Dict[str, Any]]:
 
             cursor.execute(
                 """
-                SELECT 
+                SELECT
                     execution_id, status, start_time, end_time,
                     trigger_type, trigger_source, current_step,
                     steps_completed, total_steps, num_predictions,
@@ -545,13 +545,29 @@ def create_analytics_tables():
 
         # Migration: Update total_steps default for existing rows
         cursor.execute("""
-            UPDATE pipeline_execution_logs 
-            SET total_steps = 7 
+            UPDATE pipeline_execution_logs
+            SET total_steps = 7
             WHERE total_steps = 5
         """)
         rows_updated = cursor.rowcount
         if rows_updated > 0:
             logger.info(f"Updated total_steps from 5 to 7 for {rows_updated} existing pipeline logs")
+
+        # Table 6: Pending draws - tracks draws waiting for results (Pipeline v6.1 - 3 Layer Architecture)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pending_draws (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                draw_date TEXT UNIQUE NOT NULL,
+                status TEXT DEFAULT 'pending',
+                attempts INTEGER DEFAULT 0,
+                last_attempt_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                completed_at TEXT,
+                completed_by_layer INTEGER,
+                error_message TEXT,
+                CHECK (status IN ('pending', 'completed', 'failed_permanent'))
+            )
+        """)
 
         # Create indexes for performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cooccurrence_significant ON cooccurrences(is_significant)")
@@ -559,6 +575,8 @@ def create_analytics_tables():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_generated_tickets_strategy ON generated_tickets(strategy_used)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_logs_status ON pipeline_execution_logs(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_pipeline_logs_start_time ON pipeline_execution_logs(start_time DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pending_draws_status ON pending_draws(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pending_draws_draw_date ON pending_draws(draw_date)")
 
         conn.commit()
         conn.close()
@@ -593,7 +611,7 @@ def create_pb_era_triggers():
             WHEN NEW.pb_is_current = 0 AND NEW.pb_era = 'unknown'
             BEGIN
                 UPDATE powerball_draws
-                SET 
+                SET
                     pb_is_current = CASE WHEN NEW.pb BETWEEN 1 AND 26 THEN 1 ELSE 0 END,
                     pb_era = CASE
                         WHEN NEW.pb BETWEEN 1 AND 26 THEN '2015-now (1-26)'
@@ -614,7 +632,7 @@ def create_pb_era_triggers():
             FOR EACH ROW
             BEGIN
                 UPDATE powerball_draws
-                SET 
+                SET
                     pb_is_current = CASE WHEN NEW.pb BETWEEN 1 AND 26 THEN 1 ELSE 0 END,
                     pb_era = CASE
                         WHEN NEW.pb BETWEEN 1 AND 26 THEN '2015-now (1-26)'
@@ -1054,10 +1072,10 @@ def get_latest_draw_date() -> Optional[str]:
 def bulk_insert_draws(df: pd.DataFrame) -> int:
     """
     Insert or replace a batch of draw data into the database from a DataFrame.
-    
+
     Args:
         df: DataFrame with columns [draw_date, n1, n2, n3, n4, n5, pb]
-        
+
     Returns:
         Number of rows inserted/updated
     """
@@ -1082,10 +1100,10 @@ def bulk_insert_draws(df: pd.DataFrame) -> int:
 def _upsert_draws(df: pd.DataFrame) -> int:
     """
     Slower, row-by-row insert/replace for handling duplicates.
-    
+
     Args:
         df: DataFrame with columns [draw_date, n1, n2, n3, n4, n5, pb]
-        
+
     Returns:
         Number of rows upserted
     """
@@ -1109,7 +1127,7 @@ def _upsert_draws(df: pd.DataFrame) -> int:
 
 def get_all_draws(max_date: str = None) -> pd.DataFrame:
     """Retrieve all historical draw data from the database.
-    
+
     Args:
         max_date: Optional date limit (YYYY-MM-DD). Only returns draws before this date.
                   Used to prevent data leakage when generating historical predictions.
@@ -1173,7 +1191,7 @@ def save_prediction_log(prediction_data: Dict[str, Any], allow_simulation: bool 
         numbers = sorted(int(n) for n in numbers)
 
         # Decide draw_date - accept both draw_date and target_draw_date for backward compatibility
-        draw_date = (sanitized.get('draw_date') or sanitized.get('target_draw_date') or 
+        draw_date = (sanitized.get('draw_date') or sanitized.get('target_draw_date') or
                     prediction_data.get('draw_date') or prediction_data.get('target_draw_date'))
         if not draw_date:
             try:
@@ -1717,7 +1735,7 @@ def get_draw_analytics(draw_date: str, limit: int = 50) -> Dict[str, Any]:
         for w in winning_predictions_list:
             pid = w.get('id')
             w['generation_rank'] = rank_map.get(pid)
-        
+
         # Also prepare top predictions by confidence (for reference)
         cursor.execute(
             """
@@ -1790,7 +1808,7 @@ def get_analytics_summary(days_back: int = 30) -> Dict[str, Any]:
 
         cursor.execute(
             """
-            SELECT 
+            SELECT
                 COUNT(*) as total_predictions,
                 COUNT(CASE WHEN prize_won > 0 THEN 1 END) as winning_predictions,
                 COALESCE(SUM(COALESCE(prize_won, 0)), 0) as total_prize,
@@ -1892,17 +1910,17 @@ def get_evaluated_predictions_count(execution_id: str) -> int:
 
             # Count evaluated predictions for this execution timeframe
             cursor.execute("""
-                SELECT COUNT(*) 
-                FROM generated_tickets 
-                WHERE evaluated = 1 
+                SELECT COUNT(*)
+                FROM generated_tickets
+                WHERE evaluated = 1
                 AND draw_date IS NOT NULL
                 AND prize_won IS NOT NULL
                 AND created_at >= (
-                    SELECT start_time FROM pipeline_executions 
+                    SELECT start_time FROM pipeline_executions
                     WHERE execution_id = ?
                 )
                 AND created_at <= COALESCE((
-                    SELECT end_time FROM pipeline_executions 
+                    SELECT end_time FROM pipeline_executions
                     WHERE execution_id = ?
                 ), datetime('now'))
             """, (execution_id, execution_id))
@@ -1923,17 +1941,17 @@ def get_evaluated_predictions_for_execution(execution_id: str) -> Optional[Dict[
 
             # Get predictions that were evaluated for this execution
             cursor.execute("""
-                SELECT 
+                SELECT
                     n1, n2, n3, n4, n5, pb, prize_won, matches_regular, matches_powerball, draw_date
-                FROM generated_tickets 
-                WHERE evaluated = 1 
+                FROM generated_tickets
+                WHERE evaluated = 1
                 AND draw_date IS NOT NULL
                 AND created_at >= (
-                    SELECT start_time FROM pipeline_executions 
+                    SELECT start_time FROM pipeline_executions
                     WHERE execution_id = ?
                 )
                 AND created_at <= COALESCE((
-                    SELECT end_time FROM pipeline_executions 
+                    SELECT end_time FROM pipeline_executions
                     WHERE execution_id = ?
                 ), datetime('now'))
                 ORDER BY prize_won DESC
@@ -2014,7 +2032,7 @@ def get_predictions_grouped_by_date(limit_dates: int = 25) -> List[Dict]:
                     SUM(CASE WHEN pl.evaluated = 1 THEN pl.prize_won ELSE 0 END) as total_prizes
                 FROM powerball_draws pd
                 INNER JOIN generated_tickets pl ON pl.draw_date = pd.draw_date
-                WHERE pl.created_at IS NOT NULL 
+                WHERE pl.created_at IS NOT NULL
                     AND pl.strategy_used NOT IN ('fallback', 'test', 'simulated', 'default')
                     AND pl.dataset_hash NOT IN ('simulated', 'test', 'fallback', 'default')
                     AND pl.confidence_score > 0
@@ -2370,7 +2388,7 @@ def migrate_config_from_file() -> bool:
             ]
 
             cursor.executemany("""
-                INSERT OR IGNORE INTO predictions_log 
+                INSERT OR IGNORE INTO predictions_log
                 (created_at, n1, n2, n3, n4, n5, pb, confidence_score, strategy_used, dataset_hash, json_details_path, draw_date)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, sample_predictions)
@@ -2719,7 +2737,7 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
             # Try login as email first, then username
             cursor.execute("""
                 SELECT id, email, username, password_hash, is_premium, premium_expires_at, is_active, created_at, login_count, is_admin
-                FROM users 
+                FROM users
                 WHERE (email = ? OR username = ?) AND is_active = TRUE
             """, (login.lower().strip(), login.strip()))
 
@@ -2754,7 +2772,7 @@ def authenticate_user(login: str, password: str) -> Optional[Dict[str, Any]]:
 
             # Update login statistics
             cursor.execute("""
-                UPDATE users 
+                UPDATE users
                 SET last_login = CURRENT_TIMESTAMP, login_count = login_count + 1
                 WHERE id = ?
             """, (user_id,))
@@ -2803,7 +2821,7 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
 
             cursor.execute("""
                 SELECT id, email, username, is_premium, premium_expires_at, created_at, last_login, login_count, is_admin
-                FROM users 
+                FROM users
                 WHERE id = ? AND is_active = TRUE
             """, (user_id,))
 
@@ -2838,7 +2856,7 @@ def upgrade_user_to_premium(user_id: int, expiry_date: datetime) -> bool:
             cursor = conn.cursor()
 
             cursor.execute("""
-                UPDATE users 
+                UPDATE users
                 SET is_premium = TRUE, premium_expires_at = ?
                 WHERE id = ? AND is_active = TRUE
             """, (expiry_date.isoformat(), user_id))
@@ -2868,7 +2886,7 @@ def get_user_stats() -> Dict[str, int]:
 
             # Premium users
             cursor.execute("""
-                SELECT COUNT(*) FROM users 
+                SELECT COUNT(*) FROM users
                 WHERE is_premium = TRUE AND is_active = TRUE
                 AND (premium_expires_at IS NULL OR premium_expires_at > CURRENT_TIMESTAMP)
             """)
@@ -2876,8 +2894,8 @@ def get_user_stats() -> Dict[str, int]:
 
             # Users created in last 30 days
             cursor.execute("""
-                SELECT COUNT(*) FROM users 
-                WHERE is_active = TRUE 
+                SELECT COUNT(*) FROM users
+                WHERE is_active = TRUE
                 AND created_at > datetime('now', '-30 days')
             """)
             new_users = cursor.fetchone()[0]
@@ -2901,33 +2919,33 @@ def get_user_stats() -> Dict[str, int]:
 
 def update_user_password(user_id: int, new_password_hash: str) -> bool:
     """Update user password with bcrypt hash.
-    
+
     Args:
         user_id: User ID
         new_password_hash: New bcrypt password hash
-        
+
     Returns:
         True if successful, False otherwise
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
-                UPDATE users 
+                UPDATE users
                 SET password_hash = ?
                 WHERE id = ?
             """, (new_password_hash, user_id))
-            
+
             conn.commit()
-            
+
             if cursor.rowcount > 0:
                 logger.info(f"Password updated for user ID: {user_id}")
                 return True
             else:
                 logger.warning(f"User not found for password update: {user_id}")
                 return False
-                
+
     except sqlite3.Error as e:
         logger.error(f"Database error updating password: {e}")
         return False
@@ -2935,43 +2953,43 @@ def update_user_password(user_id: int, new_password_hash: str) -> bool:
 
 def update_user_email(user_id: int, new_email: str) -> bool:
     """Update user email address.
-    
+
     Args:
         user_id: User ID
         new_email: New email address
-        
+
     Returns:
         True if successful, False if email already exists or error
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Check if email already exists
             cursor.execute("""
                 SELECT id FROM users WHERE email = ? AND id != ?
             """, (new_email.lower().strip(), user_id))
-            
+
             if cursor.fetchone():
                 logger.warning(f"Email already exists: {new_email}")
                 return False
-            
+
             # Update email
             cursor.execute("""
-                UPDATE users 
+                UPDATE users
                 SET email = ?
                 WHERE id = ?
             """, (new_email.lower().strip(), user_id))
-            
+
             conn.commit()
-            
+
             if cursor.rowcount > 0:
                 logger.info(f"Email updated for user ID: {user_id}")
                 return True
             else:
                 logger.warning(f"User not found for email update: {user_id}")
                 return False
-                
+
     except sqlite3.IntegrityError as e:
         logger.error(f"Email uniqueness constraint violated: {e}")
         return False
@@ -2982,28 +3000,28 @@ def update_user_email(user_id: int, new_email: str) -> bool:
 
 def delete_user_account(user_id: int) -> bool:
     """Delete user account and all associated data.
-    
+
     Cascades deletion to:
     - predictions table
     - premium_passes table
     - Any other user-related data
-    
+
     Args:
         user_id: User ID
-        
+
     Returns:
         True if successful, False otherwise
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # First verify user exists
             cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
             if not cursor.fetchone():
                 logger.warning(f"User not found for deletion: {user_id}")
                 return False
-            
+
             # Delete related data first (optional tables)
             try:
                 cursor.execute("DELETE FROM predictions WHERE user_id = ?", (user_id,))
@@ -3012,7 +3030,7 @@ def delete_user_account(user_id: int) -> bool:
             except sqlite3.OperationalError:
                 # Table may not exist in current schema; skip safely
                 logger.info("predictions table doesn't exist, skipping")
-            
+
             # Delete premium passes if table exists
             try:
                 cursor.execute("DELETE FROM premium_passes WHERE user_id = ?", (user_id,))
@@ -3021,20 +3039,20 @@ def delete_user_account(user_id: int) -> bool:
             except sqlite3.OperationalError:
                 # Table doesn't exist, skip
                 logger.info("premium_passes table doesn't exist, skipping")
-            
+
             # Delete user
             cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
             deleted_users = cursor.rowcount
-            
+
             conn.commit()
-            
+
             if deleted_users > 0:
                 logger.info(f"User account deleted successfully: {user_id}")
                 return True
             else:
                 logger.error(f"Failed to delete user: {user_id}")
                 return False
-                
+
     except sqlite3.Error as e:
         logger.error(f"Database error deleting user account: {e}")
         return False
@@ -3109,12 +3127,12 @@ def toggle_user_premium(user_id: int) -> str:
 def insert_pipeline_execution_log(execution_id: str, start_time: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
     """
     Insert a new pipeline execution log with 'running' status.
-    
+
     Args:
         execution_id: Unique execution identifier (8-char hex)
         start_time: Start timestamp in ISO format
         metadata: Optional dictionary with execution metadata (converted to JSON)
-    
+
     Returns:
         bool: True if inserted successfully
     """
@@ -3124,7 +3142,7 @@ def insert_pipeline_execution_log(execution_id: str, start_time: str, metadata: 
             metadata_json = json.dumps(metadata, cls=NumpyEncoder) if metadata else None
             cursor.execute(
                 """
-                INSERT INTO pipeline_execution_logs 
+                INSERT INTO pipeline_execution_logs
                 (execution_id, start_time, status, current_step, steps_completed, metadata)
                 VALUES (?, ?, 'running', NULL, 0, ?)
                 """,
@@ -3154,7 +3172,7 @@ def update_pipeline_execution_log(
 ) -> bool:
     """
     Update an existing pipeline execution log.
-    
+
     Args:
         execution_id: Execution ID to update
         status: New status ('running', 'completed', 'failed', 'timeout')
@@ -3168,18 +3186,18 @@ def update_pipeline_execution_log(
         elapsed_seconds: Total elapsed time in seconds
         metadata: JSON string with additional metadata
         data_source: Data source used (MUSL_API, NY_STATE_API, CSV, etc.)
-    
+
     Returns:
         bool: True if updated successfully
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Build dynamic UPDATE query
             updates = []
             params = []
-            
+
             if status is not None:
                 updates.append("status = ?")
                 params.append(status)
@@ -3213,24 +3231,24 @@ def update_pipeline_execution_log(
             if data_source is not None:
                 updates.append("data_source = ?")
                 params.append(data_source)
-            
+
             if not updates:
                 logger.warning(f"No updates provided for execution {execution_id}")
                 return False
-            
+
             params.append(execution_id)
             query = f"UPDATE pipeline_execution_logs SET {', '.join(updates)} WHERE execution_id = ?"
-            
+
             cursor.execute(query, params)
             conn.commit()
-            
+
             if cursor.rowcount > 0:
                 logger.debug(f"Pipeline log updated: {execution_id} ({', '.join(updates)})")
                 return True
             else:
                 logger.warning(f"No pipeline log found with execution_id: {execution_id}")
                 return False
-                
+
     except sqlite3.Error as e:
         logger.error(f"Failed to update pipeline execution log: {e}")
         return False
@@ -3244,13 +3262,13 @@ def get_pipeline_execution_logs(
 ) -> List[Dict[str, Any]]:
     """
     Retrieve pipeline execution logs with optional filters.
-    
+
     Args:
         limit: Maximum number of logs to return (default: 20)
         status: Filter by status ('running', 'completed', 'failed', 'timeout')
         start_date: Filter logs after this date (YYYY-MM-DD)
         end_date: Filter logs before this date (YYYY-MM-DD)
-    
+
     Returns:
         List of log dictionaries sorted by start_time DESC
         Each log includes:
@@ -3262,10 +3280,10 @@ def get_pipeline_execution_logs(
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             query = "SELECT * FROM pipeline_execution_logs WHERE 1=1"
             params = []
-            
+
             if status:
                 query += " AND status = ?"
                 params.append(status)
@@ -3275,18 +3293,18 @@ def get_pipeline_execution_logs(
             if end_date:
                 query += " AND start_time <= ?"
                 params.append(end_date)
-            
+
             query += " ORDER BY start_time DESC LIMIT ?"
             params.append(limit)
-            
+
             cursor.execute(query, params)
             rows = cursor.fetchall()
-            
+
             columns = [desc[0] for desc in cursor.description]
             logs = []
             for row in rows:
                 log_dict = dict(zip(columns, row))
-                
+
                 # Parse metadata JSON if exists
                 if log_dict.get('metadata'):
                     try:
@@ -3295,16 +3313,16 @@ def get_pipeline_execution_logs(
                     except (json.JSONDecodeError, TypeError, AttributeError) as e:
                         logger.warning(f"Failed to parse metadata JSON for execution {log_dict.get('execution_id')}: {e}")
                         log_dict['metadata'] = None
-                
+
                 # Use data_source from table column directly (already in log_dict)
                 # If NULL, fall back to 'UNKNOWN'
                 if not log_dict.get('data_source'):
                     log_dict['data_source'] = 'UNKNOWN'
-                
+
                 logs.append(log_dict)
-            
+
             return logs
-            
+
     except sqlite3.Error as e:
         logger.error(f"Failed to retrieve pipeline execution logs: {e}")
         return []
@@ -3313,40 +3331,40 @@ def get_pipeline_execution_logs(
 def get_pipeline_execution_statistics() -> Dict[str, Any]:
     """
     Get statistics about pipeline executions.
-    
+
     Returns:
         Dictionary with statistics (total runs, success rate, avg duration, etc.)
     """
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Total executions
             cursor.execute("SELECT COUNT(*) FROM pipeline_execution_logs")
             total_runs = cursor.fetchone()[0]
-            
+
             # Completed vs failed
             cursor.execute("SELECT status, COUNT(*) FROM pipeline_execution_logs GROUP BY status")
             status_counts = dict(cursor.fetchall())
-            
+
             # Average duration for completed runs
             cursor.execute("""
-                SELECT AVG(CAST(elapsed_seconds AS REAL)), 
-                       MIN(CAST(elapsed_seconds AS REAL)), 
+                SELECT AVG(CAST(elapsed_seconds AS REAL)),
+                       MIN(CAST(elapsed_seconds AS REAL)),
                        MAX(CAST(elapsed_seconds AS REAL))
-                FROM pipeline_execution_logs 
+                FROM pipeline_execution_logs
                 WHERE status = 'completed' AND elapsed_seconds IS NOT NULL
             """)
             duration_stats = cursor.fetchone() or (None, None, None)
-            
+
             # Last execution
             cursor.execute("""
                 SELECT execution_id, start_time, status, elapsed_seconds
-                FROM pipeline_execution_logs 
+                FROM pipeline_execution_logs
                 ORDER BY start_time DESC LIMIT 1
             """)
             last_execution = cursor.fetchone()
-            
+
             return {
                 "total_runs": total_runs,
                 "status_breakdown": status_counts,
@@ -3360,11 +3378,11 @@ def get_pipeline_execution_statistics() -> Dict[str, Any]:
                     "elapsed_seconds": last_execution[3]
                 } if last_execution else None,
                 "success_rate": (
-                    status_counts.get('completed', 0) / total_runs * 100 
+                    status_counts.get('completed', 0) / total_runs * 100
                     if total_runs > 0 else 0.0
                 )
             }
-            
+
     except sqlite3.Error as e:
         logger.error(f"Failed to retrieve pipeline execution statistics: {e}")
         # Return valid empty structure instead of empty dict
@@ -3379,6 +3397,223 @@ def get_pipeline_execution_statistics() -> Dict[str, Any]:
         }
 
 
+# ============================================================================
+# PENDING DRAWS MANAGEMENT (Pipeline v6.1 - 3 Layer Architecture)
+# ============================================================================
+
+def insert_pending_draw(draw_date: str) -> bool:
+    """
+    Insert a new pending draw into the tracking table.
+
+    Args:
+        draw_date: The draw date to track (YYYY-MM-DD format)
+
+    Returns:
+        True if inserted successfully, False if already exists or error
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR IGNORE INTO pending_draws (draw_date, status, attempts, created_at)
+                VALUES (?, 'pending', 0, datetime('now'))
+            """, (draw_date,))
+            conn.commit()
+
+            if cursor.rowcount > 0:
+                logger.info(f"📋 Pending draw created: {draw_date}")
+                return True
+            else:
+                logger.debug(f"Pending draw already exists: {draw_date}")
+                return False
+
+    except sqlite3.Error as e:
+        logger.error(f"Failed to insert pending draw {draw_date}: {e}")
+        return False
+
+
+def get_pending_draws(status: str = 'pending') -> List[Dict[str, Any]]:
+    """
+    Get all pending draws with the specified status.
+
+    Args:
+        status: Filter by status ('pending', 'completed', 'failed_permanent')
+
+    Returns:
+        List of pending draw records
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, draw_date, status, attempts, last_attempt_at,
+                       created_at, completed_at, completed_by_layer, error_message
+                FROM pending_draws
+                WHERE status = ?
+                ORDER BY draw_date DESC
+            """, (status,))
+
+            rows = cursor.fetchall()
+            columns = ['id', 'draw_date', 'status', 'attempts', 'last_attempt_at',
+                      'created_at', 'completed_at', 'completed_by_layer', 'error_message']
+
+            return [dict(zip(columns, row)) for row in rows]
+
+    except sqlite3.Error as e:
+        logger.error(f"Failed to get pending draws: {e}")
+        return []
+
+
+def update_pending_draw(
+    draw_date: str,
+    status: Optional[str] = None,
+    increment_attempts: bool = False,
+    completed_by_layer: Optional[int] = None,
+    error_message: Optional[str] = None
+) -> bool:
+    """
+    Update a pending draw record.
+
+    Args:
+        draw_date: The draw date to update
+        status: New status ('pending', 'completed', 'failed_permanent')
+        increment_attempts: If True, increment the attempts counter
+        completed_by_layer: Which layer completed the draw (1, 2, or 3)
+        error_message: Error message if failed
+
+    Returns:
+        True if updated successfully, False otherwise
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            updates = ["last_attempt_at = datetime('now')"]
+            params = []
+
+            if status:
+                updates.append("status = ?")
+                params.append(status)
+
+            if increment_attempts:
+                updates.append("attempts = attempts + 1")
+
+            if completed_by_layer:
+                updates.append("completed_by_layer = ?")
+                updates.append("completed_at = datetime('now')")
+                params.append(completed_by_layer)
+
+            if error_message:
+                updates.append("error_message = ?")
+                params.append(error_message)
+
+            params.append(draw_date)
+
+            query = f"UPDATE pending_draws SET {', '.join(updates)} WHERE draw_date = ?"
+            cursor.execute(query, params)
+            conn.commit()
+
+            if cursor.rowcount > 0:
+                logger.debug(f"Updated pending draw {draw_date}: status={status}")
+                return True
+            return False
+
+    except sqlite3.Error as e:
+        logger.error(f"Failed to update pending draw {draw_date}: {e}")
+        return False
+
+
+def mark_pending_draw_completed(draw_date: str, layer: int) -> bool:
+    """
+    Mark a pending draw as completed by a specific layer.
+
+    Args:
+        draw_date: The draw date that was completed
+        layer: Which layer completed it (1, 2, or 3)
+
+    Returns:
+        True if marked successfully
+    """
+    return update_pending_draw(
+        draw_date=draw_date,
+        status='completed',
+        completed_by_layer=layer
+    )
+
+
+def mark_pending_draw_failed(draw_date: str, error_message: str) -> bool:
+    """
+    Mark a pending draw as permanently failed.
+
+    Args:
+        draw_date: The draw date that failed
+        error_message: Description of why it failed
+
+    Returns:
+        True if marked successfully
+    """
+    return update_pending_draw(
+        draw_date=draw_date,
+        status='failed_permanent',
+        error_message=error_message
+    )
+
+
+def get_pending_draws_count() -> Dict[str, int]:
+    """
+    Get count of pending draws by status.
+
+    Returns:
+        Dict with counts: {'pending': N, 'completed': N, 'failed_permanent': N}
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT status, COUNT(*) as count
+                FROM pending_draws
+                GROUP BY status
+            """)
+
+            result = {'pending': 0, 'completed': 0, 'failed_permanent': 0}
+            for row in cursor.fetchall():
+                result[row[0]] = row[1]
+
+            return result
+
+    except sqlite3.Error as e:
+        logger.error(f"Failed to get pending draws count: {e}")
+        return {'pending': 0, 'completed': 0, 'failed_permanent': 0}
+
+
+def cleanup_old_pending_draws(days_to_keep: int = 30) -> int:
+    """
+    Remove completed pending draws older than specified days.
+
+    Args:
+        days_to_keep: Keep records for this many days
+
+    Returns:
+        Number of records deleted
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM pending_draws
+                WHERE status = 'completed'
+                AND completed_at < datetime('now', ?)
+            """, (f'-{days_to_keep} days',))
+            conn.commit()
+
+            deleted = cursor.rowcount
+            if deleted > 0:
+                logger.info(f"🧹 Cleaned up {deleted} old pending draw records")
+            return deleted
+
+    except sqlite3.Error as e:
+        logger.error(f"Failed to cleanup pending draws: {e}")
+        return 0
 
 
 

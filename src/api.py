@@ -16,7 +16,13 @@ import sys
 
 from src.predictor import Predictor
 from src.intelligent_generator import IntelligentGenerator, DeterministicGenerator
-from src.loader import realtime_draw_polling_unified, daily_full_sync_job
+from src.loader import (
+    realtime_draw_polling_unified,
+    daily_full_sync_job,
+    poll_draw_layer1,
+    poll_draw_layer2,
+    poll_draw_layer3
+)
 import src.database as db
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -1584,6 +1590,549 @@ def run_daily_full_sync():
     except Exception as e:
         logger.error(f"🔄 [scheduler] Daily sync exception: {e}", exc_info=True)
 
+
+# ============================================================================
+# PIPELINE v6.1 - 3 LAYER ARCHITECTURE FUNCTIONS
+# ============================================================================
+
+async def trigger_pipeline_layer1():
+    """
+    LAYER 1: Primary post-draw pipeline execution.
+
+    Runs at 11:15 PM ET on drawing days (Mon/Wed/Sat).
+    Uses ONLY powerball.com for fastest results.
+
+    If Layer 1 fails to get the draw, it creates a pending_draw record
+    for Layer 2 to retry.
+    """
+    global active_pipeline_execution_id
+    from src.loader import poll_draw_layer1
+    from src.date_utils import DateManager
+
+    logger.info("=" * 80)
+    logger.info("🔵 [LAYER 1] STARTING PRIMARY PIPELINE EXECUTION")
+    logger.info("=" * 80)
+
+    execution_id = str(uuid.uuid4())[:8]
+    active_pipeline_execution_id = execution_id
+    start_time = datetime.now()
+
+    # Determine expected draw date
+    last_draw_in_db = db.get_latest_draw_date()
+    expected_draw_date = DateManager.get_expected_draw_for_pipeline(last_draw_in_db)
+
+    if not expected_draw_date:
+        logger.error(f"[{execution_id}] Could not determine expected draw date")
+        active_pipeline_execution_id = None
+        return {'success': False, 'error': 'Could not determine expected draw date'}
+
+    logger.info(f"[{execution_id}] Expected draw: {expected_draw_date}")
+
+    # Initialize pipeline log
+    metadata = {
+        "trigger": "layer1_scheduled",
+        "version": "v6.1-3layer",
+        "layer": 1
+    }
+
+    db.insert_pipeline_execution_log(
+        execution_id=execution_id,
+        start_time=start_time.isoformat(),
+        metadata=json.dumps(metadata)
+    )
+
+    db.update_pipeline_execution_log(
+        execution_id=execution_id,
+        current_step="LAYER 1: Polling powerball.com",
+        target_draw_date=expected_draw_date
+    )
+
+    # LAYER 1 POLLING: Only powerball.com, 10 attempts × 60s
+    polling_result = poll_draw_layer1(expected_draw_date, max_attempts=10, interval_seconds=60)
+
+    if not polling_result['success']:
+        # Layer 1 failed - create pending draw for Layer 2
+        logger.warning(f"[{execution_id}] Layer 1 failed - creating pending draw for Layer 2")
+
+        db.insert_pending_draw(expected_draw_date)
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            status="completed",
+            current_step="✅ LAYER 1 COMPLETE (pending for Layer 2)",
+            end_time=datetime.now().isoformat(),
+            elapsed_seconds=elapsed,
+            metadata=json.dumps({
+                **metadata,
+                "polling_result": "pending_for_layer2",
+                "attempts": polling_result['attempts']
+            })
+        )
+
+        active_pipeline_execution_id = None
+        return {
+            'success': True,
+            'status': 'pending_for_layer2',
+            'execution_id': execution_id,
+            'draw_date': expected_draw_date,
+            'message': 'Draw not found - pending for Layer 2 retry'
+        }
+
+    # LAYER 1 SUCCESS - Execute full pipeline
+    draw_data = polling_result['draw_data']
+    data_source = polling_result['source']
+
+    logger.info(f"[{execution_id}] Layer 1 SUCCESS - executing pipeline steps...")
+
+    # Execute STEP 2-6 (same as before)
+    result = await _execute_pipeline_steps(
+        execution_id=execution_id,
+        draw_data=draw_data,
+        data_source=data_source,
+        expected_draw_date=expected_draw_date,
+        start_time=start_time,
+        metadata=metadata,
+        layer=1
+    )
+
+    active_pipeline_execution_id = None
+    return result
+
+
+async def retry_pending_draws_layer2():
+    """
+    LAYER 2: Retry pending draws using multi-source polling.
+
+    Runs every 15 minutes after drawing time until 6 AM.
+    Tries all sources: powerball.com → MUSL API → NC Lottery CSV
+    """
+    from src.loader import poll_draw_layer2
+
+    # Get all pending draws
+    pending = db.get_pending_draws(status='pending')
+
+    if not pending:
+        logger.debug("🟡 [LAYER 2] No pending draws to retry")
+        return {'success': True, 'message': 'No pending draws'}
+
+    logger.info(f"🟡 [LAYER 2] Found {len(pending)} pending draw(s) to retry")
+
+    results = []
+
+    for draw_record in pending:
+        draw_date = draw_record['draw_date']
+        attempts = draw_record['attempts']
+
+        logger.info(f"🟡 [LAYER 2] Retrying {draw_date} (attempt #{attempts + 1})")
+
+        # Increment attempt counter
+        db.update_pending_draw(draw_date, increment_attempts=True)
+
+        # Try multi-source polling
+        polling_result = poll_draw_layer2(draw_date)
+
+        if polling_result['success']:
+            # SUCCESS - Execute pipeline and mark completed
+            logger.info(f"🟡 [LAYER 2] SUCCESS for {draw_date} via {polling_result['source']}")
+
+            execution_id = str(uuid.uuid4())[:8]
+            start_time = datetime.now()
+
+            metadata = {
+                "trigger": "layer2_retry",
+                "version": "v6.1-3layer",
+                "layer": 2,
+                "retry_attempt": attempts + 1
+            }
+
+            db.insert_pipeline_execution_log(
+                execution_id=execution_id,
+                start_time=start_time.isoformat(),
+                metadata=json.dumps(metadata)
+            )
+
+            # Execute pipeline steps
+            result = await _execute_pipeline_steps(
+                execution_id=execution_id,
+                draw_data=polling_result['draw_data'],
+                data_source=polling_result['source'],
+                expected_draw_date=draw_date,
+                start_time=start_time,
+                metadata=metadata,
+                layer=2
+            )
+
+            # Mark as completed by Layer 2
+            db.mark_pending_draw_completed(draw_date, layer=2)
+
+            results.append({
+                'draw_date': draw_date,
+                'success': True,
+                'source': polling_result['source'],
+                'layer': 2
+            })
+        else:
+            # Still not available - will retry next cycle
+            logger.info(f"🟡 [LAYER 2] {draw_date} still not available (attempt #{attempts + 1})")
+            results.append({
+                'draw_date': draw_date,
+                'success': False,
+                'attempts': attempts + 1
+            })
+
+    return {
+        'success': True,
+        'processed': len(pending),
+        'results': results
+    }
+
+
+async def emergency_recovery_layer3():
+    """
+    LAYER 3: Emergency recovery at 6 AM ET.
+
+    Last chance to recover any pending draws. Uses all sources with maximum retries.
+    If all fail, marks the draw as failed_permanent but still generates predictions
+    for the next draw.
+    """
+    from src.loader import poll_draw_layer3
+    from src.date_utils import DateManager
+
+    # Get all pending draws
+    pending = db.get_pending_draws(status='pending')
+
+    if not pending:
+        logger.info("🔴 [LAYER 3] No pending draws - running daily sync only")
+        run_daily_full_sync()
+        return {'success': True, 'message': 'No pending draws, daily sync completed'}
+
+    logger.info("=" * 80)
+    logger.info(f"🔴 [LAYER 3] EMERGENCY RECOVERY for {len(pending)} pending draw(s)")
+    logger.info("=" * 80)
+
+    results = []
+
+    for draw_record in pending:
+        draw_date = draw_record['draw_date']
+
+        logger.info(f"🔴 [LAYER 3] Maximum effort recovery for {draw_date}")
+
+        # Try all sources with multiple retries
+        polling_result = poll_draw_layer3(draw_date, max_retries_per_source=3)
+
+        if polling_result['success']:
+            # SUCCESS - Execute pipeline and mark completed
+            logger.info(f"🔴 [LAYER 3] RECOVERED {draw_date} via {polling_result['source']}")
+
+            execution_id = str(uuid.uuid4())[:8]
+            start_time = datetime.now()
+
+            metadata = {
+                "trigger": "layer3_emergency",
+                "version": "v6.1-3layer",
+                "layer": 3,
+                "total_attempts": polling_result['total_attempts']
+            }
+
+            db.insert_pipeline_execution_log(
+                execution_id=execution_id,
+                start_time=start_time.isoformat(),
+                metadata=json.dumps(metadata)
+            )
+
+            # Execute pipeline steps
+            result = await _execute_pipeline_steps(
+                execution_id=execution_id,
+                draw_data=polling_result['draw_data'],
+                data_source=polling_result['source'],
+                expected_draw_date=draw_date,
+                start_time=start_time,
+                metadata=metadata,
+                layer=3
+            )
+
+            # Mark as completed by Layer 3
+            db.mark_pending_draw_completed(draw_date, layer=3)
+
+            results.append({
+                'draw_date': draw_date,
+                'success': True,
+                'source': polling_result['source'],
+                'layer': 3
+            })
+        else:
+            # PERMANENT FAILURE - Mark as failed and alert
+            logger.error(f"🔴 [LAYER 3] PERMANENT FAILURE for {draw_date}")
+
+            db.mark_pending_draw_failed(
+                draw_date,
+                error_message=f"All sources failed after {polling_result['total_attempts']} attempts"
+            )
+
+            results.append({
+                'draw_date': draw_date,
+                'success': False,
+                'error': 'All sources failed permanently'
+            })
+
+    # Run daily sync as final cleanup
+    logger.info("🔴 [LAYER 3] Running daily sync for completeness...")
+    run_daily_full_sync()
+
+    # Generate predictions for next draw even if some failed
+    next_draw = DateManager.calculate_next_drawing_date()
+    logger.info(f"🔴 [LAYER 3] Generating predictions for next draw: {next_draw}")
+
+    try:
+        await _generate_predictions_only(next_draw)
+    except Exception as e:
+        logger.error(f"🔴 [LAYER 3] Failed to generate predictions: {e}")
+
+    return {
+        'success': True,
+        'processed': len(pending),
+        'results': results
+    }
+
+
+async def _execute_pipeline_steps(
+    execution_id: str,
+    draw_data: dict,
+    data_source: str,
+    expected_draw_date: str,
+    start_time: datetime,
+    metadata: dict,
+    layer: int
+) -> dict:
+    """
+    Execute pipeline steps 2-6 (shared by all layers).
+
+    Steps:
+    - STEP 2: Insert draw into database
+    - STEP 3: Update analytics
+    - STEP 4: Evaluate previous predictions
+    - STEP 5: Adaptive learning update
+    - STEP 6: Generate new predictions
+    """
+    from src.analytics_engine import update_analytics
+    from src.strategy_generators import StrategyManager
+    from src.date_utils import DateManager
+    import gc
+
+    try:
+        # ========== STEP 2: INSERT DRAW ==========
+        logger.info(f"[{execution_id}] STEP 2: Inserting draw into database...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step=f"LAYER {layer} STEP 2: Database insert",
+            steps_completed=1
+        )
+
+        from src.database import bulk_insert_draws
+        import pandas as pd
+
+        required_columns = ['draw_date', 'n1', 'n2', 'n3', 'n4', 'n5', 'pb']
+        draw_record = {k: draw_data[k] for k in required_columns if k in draw_data}
+        draw_df = pd.DataFrame([draw_record])
+        inserted_count = bulk_insert_draws(draw_df)
+
+        logger.info(f"[{execution_id}] ✅ STEP 2 Complete: Inserted {inserted_count} draw(s)")
+
+        # ========== STEP 3: ANALYTICS ==========
+        logger.info(f"[{execution_id}] STEP 3: Updating analytics...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step=f"LAYER {layer} STEP 3: Analytics update",
+            steps_completed=2
+        )
+
+        analytics_result = update_analytics()
+        logger.info(f"[{execution_id}] ✅ STEP 3 Complete: Analytics updated")
+
+        # ========== STEP 4: EVALUATE PREDICTIONS ==========
+        logger.info(f"[{execution_id}] STEP 4: Evaluating predictions...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step=f"LAYER {layer} STEP 4: Evaluation",
+            steps_completed=3
+        )
+
+        eval_result = evaluate_predictions_for_draw(expected_draw_date)
+        logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluated {eval_result.get('evaluated', 0)} predictions")
+
+        # ========== STEP 5: ADAPTIVE LEARNING ==========
+        logger.info(f"[{execution_id}] STEP 5: Adaptive learning update...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step=f"LAYER {layer} STEP 5: Adaptive learning",
+            steps_completed=4
+        )
+
+        adaptive_result = adaptive_learning_update()
+        logger.info(f"[{execution_id}] ✅ STEP 5 Complete: Weights updated")
+
+        # ========== STEP 6: GENERATE PREDICTIONS ==========
+        next_draw = DateManager.calculate_next_drawing_date()
+        logger.info(f"[{execution_id}] STEP 6: Generating predictions for {next_draw}...")
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            current_step=f"LAYER {layer} STEP 6: Generating predictions",
+            steps_completed=5,
+            target_draw_date=next_draw
+        )
+
+        manager = StrategyManager()
+        total_saved = 0
+
+        # Generate in batches to avoid memory issues
+        for batch_num in range(5):
+            batch_tickets = manager.generate_balanced_tickets(count=100)
+            batch_saved = save_generated_tickets(batch_tickets, next_draw)
+            total_saved += batch_saved
+            logger.info(f"[{execution_id}] Batch {batch_num + 1}/5: Saved {batch_saved} tickets")
+            gc.collect()
+
+        logger.info(f"[{execution_id}] ✅ STEP 6 Complete: Generated {total_saved} predictions")
+
+        # ========== PIPELINE COMPLETE ==========
+        elapsed = (datetime.now() - start_time).total_seconds()
+
+        # Normalize source name
+        source_mapping = {
+            'powerball_official': 'POWERBALL',
+            'musl_api': 'MUSL_API',
+            'nc_lottery_csv': 'CSV',
+            'database': 'DATABASE'
+        }
+        final_source = source_mapping.get(data_source, data_source.upper())
+
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            status="completed",
+            current_step=f"✅ LAYER {layer} COMPLETED",
+            steps_completed=6,
+            total_steps=6,
+            end_time=datetime.now().isoformat(),
+            total_tickets_generated=total_saved,
+            target_draw_date=next_draw,
+            elapsed_seconds=elapsed,
+            data_source=final_source
+        )
+
+        logger.info(f"[{execution_id}] 🎉 LAYER {layer} PIPELINE COMPLETED in {elapsed:.2f}s")
+
+        return {
+            'success': True,
+            'status': 'completed',
+            'execution_id': execution_id,
+            'layer': layer,
+            'elapsed_seconds': elapsed,
+            'tickets_generated': total_saved,
+            'target_draw': next_draw
+        }
+
+    except Exception as e:
+        logger.error(f"[{execution_id}] Pipeline exception: {e}", exc_info=True)
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            status="failed",
+            current_step=f"❌ LAYER {layer} FAILED",
+            end_time=datetime.now().isoformat(),
+            error=str(e),
+            elapsed_seconds=elapsed
+        )
+
+        return {
+            'success': False,
+            'execution_id': execution_id,
+            'layer': layer,
+            'error': str(e)
+        }
+
+
+async def _generate_predictions_only(next_draw: str) -> int:
+    """
+    Generate predictions for the next draw without requiring a completed draw.
+    Used by Layer 3 when draws fail but we still need predictions.
+    """
+    from src.strategy_generators import StrategyManager
+    import gc
+
+    logger.info(f"🎯 Generating predictions for {next_draw} (standalone)")
+
+    manager = StrategyManager()
+    total_saved = 0
+
+    for batch_num in range(5):
+        batch_tickets = manager.generate_balanced_tickets(count=100)
+        batch_saved = save_generated_tickets(batch_tickets, next_draw)
+        total_saved += batch_saved
+        gc.collect()
+
+    logger.info(f"🎯 Generated {total_saved} predictions for {next_draw}")
+    return total_saved
+
+
+# ============================================================================
+# SCHEDULER JOB WRAPPERS (must be module-level sync functions)
+# ============================================================================
+
+def run_pipeline_layer1():
+    """
+    Wrapper for Layer 1 pipeline - runs async function in event loop.
+    MUST be module-level function for APScheduler serialization.
+    """
+    import asyncio
+    try:
+        logger.info("🔵 [scheduler] Starting Layer 1 Pipeline...")
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If already in async context, create task
+            asyncio.create_task(trigger_pipeline_layer1())
+        else:
+            loop.run_until_complete(trigger_pipeline_layer1())
+    except Exception as e:
+        logger.error(f"🔵 [scheduler] Layer 1 exception: {e}", exc_info=True)
+
+
+def run_layer2_retry():
+    """
+    Wrapper for Layer 2 retry - runs async function in event loop.
+    MUST be module-level function for APScheduler serialization.
+    """
+    import asyncio
+    try:
+        logger.info("🟡 [scheduler] Starting Layer 2 Retry...")
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(retry_pending_draws_layer2())
+        else:
+            loop.run_until_complete(retry_pending_draws_layer2())
+    except Exception as e:
+        logger.error(f"🟡 [scheduler] Layer 2 exception: {e}", exc_info=True)
+
+
+def run_layer3_emergency():
+    """
+    Wrapper for Layer 3 emergency recovery - runs async function in event loop.
+    MUST be module-level function for APScheduler serialization.
+    """
+    import asyncio
+    try:
+        logger.info("🔴 [scheduler] Starting Layer 3 Emergency Recovery...")
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(emergency_recovery_layer3())
+        else:
+            loop.run_until_complete(emergency_recovery_layer3())
+    except Exception as e:
+        logger.error(f"🔴 [scheduler] Layer 3 exception: {e}", exc_info=True)
+
+
 # ============================================================================
 
 @asynccontextmanager
@@ -1610,63 +2159,78 @@ async def lifespan(app: FastAPI):
     # Pipeline orchestrator removed - deprecated system that caused inconsistent results
 
     # ============================================================================
-    # SCHEDULER CONFIGURATION - Unified Adaptive Polling System (v4.0)
+    # SCHEDULER CONFIGURATION - Pipeline v6.1 - 3 Layer Architecture
     # ============================================================================
-    # NEW ARCHITECTURE (November 2025):
-    # - Job #1: Daily Full Sync at 6:00 AM ET (safety net for completeness)
-    # - Job #2: Real-time Unified Polling at 11:05 PM ET on drawing days
-    # - Removed: Legacy smart polling and maintenance retry jobs
+    # NEW ARCHITECTURE (November 2025 v6.1):
+    # - Layer 1: Primary polling at 11:15 PM ET (powerball.com only, 10 min max)
+    # - Layer 2: Retry every 15 min for pending draws (all sources)
+    # - Layer 3: Emergency recovery at 6:00 AM ET (max effort + daily sync)
     # ============================================================================
 
-    # Job #1: DAILY FULL SYNC - Runs at 6:00 AM ET every day
-    # Purpose: Safety net that ensures database completeness
-    # - Fetches historical draws from NC Lottery CSV
-    # - Finds and inserts any missing draws
-    # - Catches draws missed by real-time polling (network outages, service downtime)
-    # NOTE: run_daily_full_sync() is defined at module level for APScheduler serialization
-
+    # JOB #1: LAYER 1 - Primary Post-Draw Pipeline (11:15 PM ET on drawing days)
+    # Purpose: Fast polling using powerball.com only
+    # - 11:15 PM = 16 minutes after 10:59 PM draw (gives time for results to post)
+    # - 10 attempts × 60s = 10 minutes maximum
+    # - If fails, creates pending_draw for Layer 2
     scheduler.add_job(
-        func=run_daily_full_sync,
+        func=run_pipeline_layer1,
         trigger="cron",
-        hour=6,                       # 6:00 AM ET
-        minute=0,
-        timezone="America/New_York",  # EXPLICIT TIMEZONE
-        id="daily_full_sync",
-        name="Daily Full Sync 6:00 AM ET (safety net)",
+        day_of_week="mon,wed,sat",   # Powerball drawing days
+        hour=23,                      # 11:15 PM ET
+        minute=15,
+        timezone="America/New_York",
+        id="layer1_post_draw",
+        name="Layer 1: Post-Draw Pipeline 11:15 PM ET",
         max_instances=1,
         coalesce=True,
         replace_existing=True
     )
 
-    # Job #2: REAL-TIME UNIFIED POLLING - Runs at 11:05 PM ET on drawing days
-    # Purpose: Fetch new draw via 3-layer fallback and execute full pipeline
-    # - 11:05 PM = 6 minutes after 10:59 PM draw
-    # - Unified adaptive polling (NC Scraping → MUSL → NC CSV)
-    # - Short timeout (2.5 min) prevents systemd SIGKILL
-    # - Retries every 5 minutes via misfire_grace_time until 6 AM Daily Sync
+    # JOB #2: LAYER 2 - Retry Pending Draws (every 15 min, drawing nights only)
+    # Purpose: Multi-source retry for draws that Layer 1 couldn't fetch
+    # - Runs from 11:30 PM to 5:45 AM on drawing nights
+    # - Tries all sources: powerball.com → MUSL API → NC CSV
     scheduler.add_job(
-        func=trigger_full_pipeline_automatically,
+        func=run_layer2_retry,
         trigger="cron",
-        day_of_week="mon,wed,sat",   # Powerball drawing days (Monday, Wednesday, Saturday)
-        hour=23,                      # 11:05 PM ET (6 minutes after 10:59 PM draw)
-        minute=5,
-        timezone="America/New_York",  # EXPLICIT TIMEZONE
-        id="post_drawing_pipeline",
-        name="Real-time Unified Polling 11:05 PM ET (auto-retry)",
-        max_instances=1,              # Prevent overlapping executions
-        coalesce=False,               # DON'T merge - we want retries!
-        misfire_grace_time=25200,     # 7 hours (11:05 PM → 6:05 AM) - allows retries
-        replace_existing=True         # Update job on restart instead of duplicating
+        day_of_week="mon,tue,wed,thu,sat,sun",  # Nights after draws
+        hour="23,0,1,2,3,4,5",                   # 11 PM to 5 AM
+        minute="30,45,0,15",                     # Every 15 min
+        timezone="America/New_York",
+        id="layer2_retry",
+        name="Layer 2: Retry Pending Draws (every 15 min)",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True
     )
 
-    # REMOVED Jobs:
-    # - maintenance_data_update: Redundant with Daily Full Sync
-    # - maintenance_data_retry: Redundant with adaptive polling timeout
+    # JOB #3: LAYER 3 - Emergency Recovery + Daily Sync (6:00 AM ET)
+    # Purpose: Last chance recovery for any pending draws, plus daily sync
+    # - Maximum effort: all sources with 3 retries each
+    # - If all fail, marks as failed_permanent but still generates predictions
+    # - Runs daily sync as final cleanup
+    scheduler.add_job(
+        func=run_layer3_emergency,
+        trigger="cron",
+        hour=6,                       # 6:00 AM ET
+        minute=0,
+        timezone="America/New_York",
+        id="layer3_emergency",
+        name="Layer 3: Emergency Recovery + Daily Sync 6:00 AM ET",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True
+    )
+
+    # DEPRECATED Jobs (removed in v6.1):
+    # - daily_full_sync: Now integrated into Layer 3
+    # - post_drawing_pipeline: Replaced by Layer 1
+    # - maintenance_data_update: Replaced by Layer 2
 
     # Start scheduler after configuration
     try:
         scheduler.start()
-        logger.info("✅ Scheduler started successfully with persistent jobstore (SQLite)")
+        logger.info("✅ Scheduler started with Pipeline v6.1 - 3 Layer Architecture")
         logger.info(f"📁 Jobstore location: {scheduler_db_path}")
 
         # Record scheduler start time for uptime metrics
