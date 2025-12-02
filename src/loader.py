@@ -815,11 +815,12 @@ def realtime_draw_polling_unified(expected_draw_date: str, execution_id: str = N
     start_time = datetime.now()
 
     # SIMPLE POLLING CONFIGURATION
-    # Strategy: Max attempts instead of timeout
-    # - 50 attempts × 30s = 1,500s = 25 minutes maximum
-    # - Scheduler retries every 5 minutes if fails (misfire_grace_time 7 hours)
+    # Strategy: Short polling window + scheduler retries
+    # - 4 attempts × 30s = 120s = 2 minutes maximum
+    # - CRITICAL: Must be < systemd timeout (180s) to avoid SIGKILL
+    # - If draw not available, exit gracefully → scheduler retries in 5 min
     # - Daily Full Sync at 6 AM as final safety net
-    max_attempts = 50  # Maximum polling attempts
+    max_attempts = 4  # Maximum polling attempts (2 min total)
     interval_seconds = 30  # Fixed interval between attempts
     max_duration_minutes = (max_attempts * interval_seconds) / 60
 
