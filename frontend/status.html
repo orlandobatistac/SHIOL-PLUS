@@ -778,6 +778,43 @@
             return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
         }
 
+        function formatMetadata(metadata) {
+            // Format metadata object into readable key-value pairs
+            if (!metadata) return '';
+            
+            const formatValue = (value) => {
+                if (value === null || value === undefined) return 'null';
+                if (typeof value === 'object' && !Array.isArray(value)) {
+                    return JSON.stringify(value, null, 2);
+                }
+                if (Array.isArray(value)) {
+                    return value.length > 0 ? value.join(', ') : '[]';
+                }
+                return String(value);
+            };
+            
+            const lines = [];
+            for (const [key, value] of Object.entries(metadata)) {
+                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const formattedValue = formatValue(value);
+                
+                // Add emoji based on key
+                let emoji = '•';
+                if (key.includes('trigger')) emoji = '⚡';
+                else if (key.includes('version')) emoji = '🏷️';
+                else if (key.includes('draw')) emoji = '🎱';
+                else if (key.includes('source')) emoji = '📡';
+                else if (key.includes('time') || key.includes('elapsed')) emoji = '⏱️';
+                else if (key.includes('ticket')) emoji = '🎫';
+                else if (key.includes('error')) emoji = '❌';
+                else if (key.includes('success') || key.includes('complete')) emoji = '✅';
+                
+                lines.push(`${emoji} <span class="text-cyan-400">${formattedKey}:</span> ${formattedValue}`);
+            }
+            
+            return lines.join('\n');
+        }
+
         async function loadPipelineLogs() {
             try {
                 // Get status filter
@@ -865,9 +902,13 @@
                     } else if (dataSource === 'CSV') {
                         sourceBadge = '<span class="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300 font-semibold">📄 CSV</span>';
                     } else if (dataSource === 'SCRAPING') {
-                        sourceBadge = '<span class="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-300 font-semibold">�️ Scraping</span>';
+                        sourceBadge = '<span class="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-300 font-semibold">🕷️ Scraping</span>';
+                    } else if (dataSource === 'POWERBALL' || dataSource === 'powerball_official') {
+                        sourceBadge = '<span class="text-xs px-2 py-1 rounded bg-pink-500/20 text-pink-300 font-semibold">🎱 Powerball</span>';
+                    } else if (dataSource === 'DATABASE' || dataSource === 'database') {
+                        sourceBadge = '<span class="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-300 font-semibold">💾 Database</span>';
                     } else {
-                        sourceBadge = '<span class="text-xs px-2 py-1 rounded bg-gray-500/20 text-gray-400">? Unknown</span>';
+                        sourceBadge = `<span class="text-xs px-2 py-1 rounded bg-gray-500/20 text-gray-400">📡 ${dataSource}</span>`;
                     }
 
                     // Progress indicator
@@ -925,8 +966,9 @@
                     }
 
                     const metadataHtml = log.metadata ? `
-                        <div class="mt-2 p-2 bg-white/5 rounded text-xs text-gray-400">
-                            <strong>Metadata:</strong> ${JSON.stringify(log.metadata, null, 2)}
+                        <div class="mt-2 p-3 bg-white/5 rounded text-xs">
+                            <strong class="text-gray-300">📋 Metadata:</strong>
+                            <pre class="mt-2 text-gray-400 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">${formatMetadata(log.metadata)}</pre>
                         </div>
                     ` : '';
 
