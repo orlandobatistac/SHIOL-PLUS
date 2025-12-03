@@ -2399,16 +2399,16 @@ async def lifespan(app: FastAPI):
 
     # JOB #1: SMART POLLING - Unified Draw Polling (draw nights only)
     # Purpose: Poll all 4 sources with diagnostics until draw is found
-    # - Starts at 11:15 PM ET (16 min after 10:59 PM draw)
+    # - Starts at 11:05 PM ET (6 min after 10:59 PM draw)
     # - Runs every 5 min for first hour (aggressive capture)
     # - Each run: single check of 4 sources (scheduler handles retries)
-    # Schedule: 11:15, 11:20, 11:25, 11:30, 11:35, 11:40, 11:45, 11:50, 11:55 PM
+    # Schedule: 11:05, 11:10, 11:15, 11:20, 11:25, 11:30, 11:35, 11:40, 11:45, 11:50, 11:55 PM
     scheduler.add_job(
         func=run_smart_polling,
         trigger="cron",
         day_of_week="mon,wed,sat",    # Powerball drawing days only
         hour="23",                     # 11 PM hour only (first runs)
-        minute="15,20,25,30,35,40,45,50,55",  # Every 5 min starting 11:15 PM
+        minute="5,10,15,20,25,30,35,40,45,50,55",  # Every 5 min starting 11:05 PM
         timezone="America/New_York",
         id="smart_polling",
         name="Smart Polling v7.0 (every 5 min on draw nights)",
