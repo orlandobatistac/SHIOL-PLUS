@@ -54,4 +54,4 @@ scikit-image
 
 # Visualization (Development)
 matplotlib==3.8.2
-plotly==5.17.0
+plotly==5.17.0brotli>=1.0.0

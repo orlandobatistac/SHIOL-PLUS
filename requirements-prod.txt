@@ -52,4 +52,4 @@ Pillow==12.0.0
 # - google-cloud-vision (replaced by Gemini)
 # - scikit-image (image processing - ~200MB)
 # 
-# Estimated savings: ~1.2GB while maintaining ML pipeline functionality
+# Estimated savings: ~1.2GB while maintaining ML pipeline functionalitybrotli>=1.0.0
