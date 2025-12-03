@@ -1069,6 +1069,40 @@ def get_latest_draw_date() -> Optional[str]:
         return None
 
 
+def get_draw_by_date(draw_date: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve a specific draw by date.
+    
+    Args:
+        draw_date: Date in YYYY-MM-DD format
+        
+    Returns:
+        Dict with draw data or None if not found
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT draw_date, n1, n2, n3, n4, n5, pb FROM powerball_draws WHERE draw_date = ?",
+                (draw_date,)
+            )
+            result = cursor.fetchone()
+            if result:
+                return {
+                    'draw_date': result[0],
+                    'n1': result[1],
+                    'n2': result[2],
+                    'n3': result[3],
+                    'n4': result[4],
+                    'n5': result[5],
+                    'pb': result[6]
+                }
+            return None
+    except sqlite3.Error as e:
+        logger.error(f"Failed to get draw by date {draw_date}: {e}")
+        return None
+
+
 def bulk_insert_draws(df: pd.DataFrame) -> int:
     """
     Insert or replace a batch of draw data into the database from a DataFrame.
