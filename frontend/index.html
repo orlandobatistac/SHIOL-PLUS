@@ -245,7 +245,7 @@
                         AI Insights for Next Drawing
                     </h2>
                     <p class="text-sm text-white/70 mt-2">
-                        200 AI-generated insights for <span id="predictions-draw-date" class="text-white/90 font-medium">Next Drawing</span>
+                        <span id="predictions-count">0</span> AI-generated insights for <span id="predictions-draw-date" class="text-white/90 font-medium">Next Drawing</span>
                     </p>
                     <p class="text-xs text-white/60 mt-1">
                         Last updated: <span id="predictions-timestamp">Loading...</span>
@@ -1605,7 +1605,7 @@
                             .classList.remove("hidden");
 
                         const response = await fetch(
-                            `${API_BASE_URL}/public/predictions/latest?limit=200`,
+                            `${API_BASE_URL}/public/predictions/latest?limit=1000`,
                         );
                         if (!response.ok)
                             throw new Error("Failed to fetch predictions");
@@ -1630,6 +1630,12 @@
                         // Update totals and timestamp
                         document.getElementById("total-available").textContent =
                             allPredictions.length;
+                        
+                        // Update predictions count in header
+                        const predictionsCountEl = document.getElementById("predictions-count");
+                        if (predictionsCountEl) {
+                            predictionsCountEl.textContent = allPredictions.length;
+                        }
 
                         // Update draw date
                         if (allPredictions.length > 0 && allPredictions[0].draw_date) {

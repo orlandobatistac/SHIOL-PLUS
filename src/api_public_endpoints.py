@@ -287,13 +287,19 @@ async def get_public_grouped_history():
         raise HTTPException(status_code=500, detail=f"Error getting history: {str(e)}")
 
 @public_frontend_router.get("/api/v1/public/predictions/latest")
-async def get_public_latest_predictions(request: Request, limit: int = Query(default=200, le=800)):
-    """Get latest AI predictions for public access"""
+async def get_public_latest_predictions(request: Request, limit: int = Query(default=1000, le=1000)):
+    """Get AI predictions for the next drawing date"""
     try:
         from src.database import get_db_connection
+        from src.date_utils import DateManager
         import time
 
         start_time = time.time()
+        
+        # Calculate the next drawing date
+        next_draw_date = DateManager.calculate_next_drawing_date()
+        logger.info(f"Fetching predictions for next draw: {next_draw_date}")
+        
         conn = get_db_connection()
 
         if not conn:
@@ -302,9 +308,8 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
 
         cursor = conn.cursor()
 
-        # Query latest predictions
-        # ✅ FIXED: Changed from predictions_log to generated_tickets
-        # Added column aliases for frontend compatibility
+        # Query predictions for the NEXT DRAW DATE specifically
+        # Returns ALL predictions for that date (not limited to 200)
         try:
             cursor.execute("""
                 SELECT
@@ -316,9 +321,10 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
                     confidence_score as score_total,
                     created_at
                 FROM generated_tickets
-                ORDER BY created_at DESC
+                WHERE draw_date = ?
+                ORDER BY confidence_score DESC, created_at DESC
                 LIMIT ?
-            """, (limit,))
+            """, (next_draw_date, limit))
 
             predictions = cursor.fetchall()
         except Exception as query_error:
@@ -329,11 +335,11 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
         conn.close()
 
         elapsed = time.time() - start_time
-        logger.info(f"Latest predictions query completed in {elapsed:.3f}s, found {len(predictions) if predictions else 0} predictions")
+        logger.info(f"Predictions query for {next_draw_date} completed in {elapsed:.3f}s, found {len(predictions) if predictions else 0} predictions")
 
         if not predictions:
-            logger.warning("No predictions found in database")
-            return {"predictions": [], "count": 0, "status": "no_data"}
+            logger.warning(f"No predictions found for next draw {next_draw_date}")
+            return {"predictions": [], "count": 0, "status": "no_data", "draw_date": next_draw_date}
 
         # Format predictions for frontend
         predictions_list = []
