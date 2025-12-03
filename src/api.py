@@ -267,6 +267,49 @@ async def evaluate_predictions_for_draw(draw_date: str):
                 except Exception as ex:
                     logger.warning(f"Commit failed after processing prediction {pred_id}: {ex}")
 
+            # Update strategy_performance with aggregated results
+            try:
+                # Get strategy-level stats from evaluated predictions
+                cursor.execute("""
+                    SELECT strategy_used, 
+                           COUNT(*) as plays,
+                           SUM(CASE WHEN prize_won > 0 THEN 1 ELSE 0 END) as wins,
+                           SUM(prize_won) as total_prize
+                    FROM generated_tickets 
+                    WHERE draw_date = ? AND evaluated = 1
+                    GROUP BY strategy_used
+                """, (draw_date,))
+                
+                strategy_stats = cursor.fetchall()
+                
+                for strategy_name, plays, wins, total_prize in strategy_stats:
+                    # Update total_plays and total_wins (increment, not replace)
+                    cursor.execute("""
+                        UPDATE strategy_performance 
+                        SET total_plays = total_plays + ?,
+                            total_wins = total_wins + ?,
+                            win_rate = CASE 
+                                WHEN (total_plays + ?) > 0 
+                                THEN CAST((total_wins + ?) AS REAL) / (total_plays + ?)
+                                ELSE 0.0 
+                            END,
+                            roi = CASE 
+                                WHEN (total_plays + ?) > 0 
+                                THEN (COALESCE(roi * total_plays, 0) + ?) / (total_plays + ?)
+                                ELSE 0.0 
+                            END,
+                            last_updated = CURRENT_TIMESTAMP
+                        WHERE strategy_name = ?
+                    """, (plays, wins, plays, wins, plays, plays, total_prize or 0, plays, strategy_name))
+                    
+                    logger.debug(f"Updated {strategy_name}: +{plays} plays, +{wins} wins, +${total_prize or 0:.2f}")
+                
+                conn.commit()
+                logger.info(f"Strategy performance updated for {len(strategy_stats)} strategies")
+                
+            except Exception as ex:
+                logger.error(f"Failed to update strategy_performance: {ex}")
+
             # Final safety commit (most work committed per-iteration already)
             conn.commit()
             logger.info(f"Evaluated {len(preds)} predictions for draw {draw_date}")
