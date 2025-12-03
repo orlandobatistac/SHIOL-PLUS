@@ -309,7 +309,7 @@ class AIGuidedStrategy(BaseStrategy):
         try:
             from src.predictor import Predictor
             self._predictor = Predictor()
-            
+
             # Verify model is loaded
             if self._predictor.model is not None:
                 # PRE-COMPUTE probabilities once during initialization (OPTIMIZATION)
@@ -334,9 +334,9 @@ class AIGuidedStrategy(BaseStrategy):
         if self._cached_wb_probs is not None and self._cached_pb_probs is not None:
             try:
                 wb_probs, pb_probs = self._cached_wb_probs, self._cached_pb_probs
-                
+
                 logger.debug(f"{self.name}: Using cached ML probabilities")
-                
+
                 # Generate tickets using cached ML probabilities
                 for _ in range(count):
                     try:
@@ -347,17 +347,17 @@ class AIGuidedStrategy(BaseStrategy):
                             replace=False,
                             p=wb_probs
                         ).tolist())
-                        
+
                         # Sample powerball using ML probabilities
                         powerball = int(np.random.choice(range(1, 27), p=pb_probs))
-                        
+
                         tickets.append({
                             'white_balls': white_balls,
                             'powerball': powerball,
                             'strategy': self.name,
                             'confidence': 0.85  # Higher confidence since using ML
                         })
-                        
+
                     except Exception as e:
                         logger.error(f"{self.name}: Error generating ticket with ML probs: {e}")
                         # Fallback to random for this ticket
@@ -369,10 +369,10 @@ class AIGuidedStrategy(BaseStrategy):
                             'strategy': self.name,
                             'confidence': 0.50
                         })
-                
+
                 logger.debug(f"{self.name}: Generated {len(tickets)} tickets using cached ML probabilities")
                 return tickets
-                
+
             except Exception as e:
                 logger.error(f"{self.name}: Cached probability sampling failed: {e}, using fallback")
                 # Continue to fallback below
@@ -380,7 +380,7 @@ class AIGuidedStrategy(BaseStrategy):
         # Fallback: Use IntelligentGenerator (frequency-based)
         try:
             from src.intelligent_generator import IntelligentGenerator
-            
+
             try:
                 gen = IntelligentGenerator()
             except TypeError:
@@ -408,7 +408,7 @@ class AIGuidedStrategy(BaseStrategy):
                         'strategy': self.name,
                         'confidence': 0.50
                     })
-                    
+
         except ImportError as e:
             logger.error(f"{self.name}: Cannot import IntelligentGenerator: {e}")
             # Final fallback to pure random
@@ -466,7 +466,7 @@ class XGBoostMLStrategy(BaseStrategy):
         try:
             from src.predictor import Predictor
             self._predictor = Predictor()
-            
+
             # Verify model is loaded
             if self._predictor.model is not None:
                 # PRE-COMPUTE probabilities once during initialization (OPTIMIZATION)
@@ -491,9 +491,9 @@ class XGBoostMLStrategy(BaseStrategy):
         if self._cached_wb_probs is not None and self._cached_pb_probs is not None:
             try:
                 wb_probs, pb_probs = self._cached_wb_probs, self._cached_pb_probs
-                
+
                 logger.debug(f"{self.name}: Successfully obtained XGBoost ML probabilities")
-                
+
                 # Generate tickets using ML probabilities
                 for _ in range(count):
                     try:
@@ -504,17 +504,17 @@ class XGBoostMLStrategy(BaseStrategy):
                             replace=False,
                             p=wb_probs
                         ).tolist())
-                        
+
                         # Sample powerball using ML probabilities
                         powerball = int(np.random.choice(range(1, 27), p=pb_probs))
-                        
+
                         tickets.append({
                             'white_balls': white_balls,
                             'powerball': powerball,
                             'strategy': self.name,
                             'confidence': 0.85  # Higher confidence since using ML
                         })
-                        
+
                     except Exception as e:
                         logger.error(f"{self.name}: Error generating ticket with ML probs: {e}")
                         # Fallback to random for this ticket
@@ -526,10 +526,10 @@ class XGBoostMLStrategy(BaseStrategy):
                             'strategy': self.name,
                             'confidence': 0.50
                         })
-                
+
                 logger.debug(f"{self.name}: Generated {len(tickets)} tickets using cached XGBoost probabilities")
                 return tickets
-                
+
             except Exception as e:
                 logger.error(f"{self.name}: Cached probability sampling failed: {e}, using fallback")
                 # Continue to fallback below
@@ -564,7 +564,7 @@ class RandomForestMLStrategy(BaseStrategy):
         try:
             from src.ml_models.random_forest_model import RandomForestModel
             self._rf_model = RandomForestModel(use_pretrained=True)
-            
+
             # Verify models are loaded
             if self._rf_model.wb_models and self._rf_model.pb_model:
                 # PRE-COMPUTE probabilities once during initialization (OPTIMIZATION)
@@ -589,9 +589,9 @@ class RandomForestMLStrategy(BaseStrategy):
         if self._cached_wb_probs is not None and self._cached_pb_probs is not None:
             try:
                 wb_probs, pb_probs = self._cached_wb_probs, self._cached_pb_probs
-                
+
                 logger.debug(f"{self.name}: Using cached Random Forest probabilities")
-                
+
                 # Generate tickets using cached RF probabilities
                 for _ in range(count):
                     try:
@@ -602,17 +602,17 @@ class RandomForestMLStrategy(BaseStrategy):
                             replace=False,
                             p=wb_probs
                         ).tolist())
-                        
+
                         # Sample powerball using RF probabilities
                         powerball = int(np.random.choice(range(1, 27), p=pb_probs))
-                        
+
                         tickets.append({
                             'white_balls': white_balls,
                             'powerball': powerball,
                             'strategy': self.name,
                             'confidence': 0.80  # High confidence for RF
                         })
-                        
+
                     except Exception as e:
                         logger.error(f"{self.name}: Error generating ticket with RF probs: {e}")
                         # Fallback to random for this ticket
@@ -624,10 +624,10 @@ class RandomForestMLStrategy(BaseStrategy):
                             'strategy': self.name,
                             'confidence': 0.50
                         })
-                
+
                 logger.debug(f"{self.name}: Generated {len(tickets)} tickets using Random Forest")
                 return tickets
-                
+
             except Exception as e:
                 logger.error(f"{self.name}: RF prediction pipeline failed: {e}, using fallback")
                 # Continue to fallback below
@@ -662,7 +662,7 @@ class LSTMNeuralStrategy(BaseStrategy):
         try:
             from src.ml_models.lstm_model import LSTMModel
             self._lstm_model = LSTMModel(use_pretrained=True)
-            
+
             # Verify models are loaded
             if self._lstm_model.wb_model and self._lstm_model.pb_model:
                 # PRE-COMPUTE probabilities once during initialization (OPTIMIZATION)
@@ -687,9 +687,9 @@ class LSTMNeuralStrategy(BaseStrategy):
         if self._cached_wb_probs is not None and self._cached_pb_probs is not None:
             try:
                 wb_probs, pb_probs = self._cached_wb_probs, self._cached_pb_probs
-                
+
                 logger.debug(f"{self.name}: Using cached LSTM probabilities")
-                
+
                 # Generate tickets using LSTM probabilities
                 for _ in range(count):
                     try:
@@ -700,17 +700,17 @@ class LSTMNeuralStrategy(BaseStrategy):
                             replace=False,
                             p=wb_probs
                         ).tolist())
-                        
+
                         # Sample powerball using LSTM probabilities
                         powerball = int(np.random.choice(range(1, 27), p=pb_probs))
-                        
+
                         tickets.append({
                             'white_balls': white_balls,
                             'powerball': powerball,
                             'strategy': self.name,
                             'confidence': 0.78  # High confidence for LSTM
                         })
-                        
+
                     except Exception as e:
                         logger.error(f"{self.name}: Error generating ticket with LSTM probs: {e}")
                         # Fallback to random for this ticket
@@ -722,10 +722,10 @@ class LSTMNeuralStrategy(BaseStrategy):
                             'strategy': self.name,
                             'confidence': 0.50
                         })
-                
+
                 logger.debug(f"{self.name}: Generated {len(tickets)} tickets using LSTM")
                 return tickets
-                
+
             except Exception as e:
                 logger.error(f"{self.name}: LSTM prediction pipeline failed: {e}, using fallback")
                 # Continue to fallback below
@@ -756,11 +756,11 @@ class HybridEnsembleStrategy(BaseStrategy):
     def generate(self, count: int = 5) -> List[Dict]:
         """Generate tickets by blending XGBoost (70%) and Cooccurrence (30%)"""
         tickets = []
-        
+
         # Calculate split: 70% XGBoost, 30% Cooccurrence
         xgboost_count = int(count * 0.7)
         cooccurrence_count = count - xgboost_count
-        
+
         # Generate from XGBoost
         if xgboost_count > 0:
             xgboost_tickets = self._xgboost_strategy.generate(xgboost_count)
@@ -769,7 +769,7 @@ class HybridEnsembleStrategy(BaseStrategy):
                 ticket['strategy'] = self.name
                 ticket['confidence'] = 0.82  # Slightly higher for hybrid
             tickets.extend(xgboost_tickets)
-        
+
         # Generate from Cooccurrence
         if cooccurrence_count > 0:
             cooccurrence_tickets = self._cooccurrence_strategy.generate(cooccurrence_count)
@@ -778,7 +778,7 @@ class HybridEnsembleStrategy(BaseStrategy):
                 ticket['strategy'] = self.name
                 ticket['confidence'] = 0.82  # Slightly higher for hybrid
             tickets.extend(cooccurrence_tickets)
-        
+
         logger.debug(f"{self.name}: Generated {len(tickets)} tickets (70% XGBoost + 30% Cooccurrence)")
         return tickets
 
@@ -795,14 +795,14 @@ class IntelligentScoringStrategy(BaseStrategy):
         """Initialize the IntelligentGenerator. Returns True if successful."""
         try:
             from src.intelligent_generator import IntelligentGenerator
-            
+
             # Try initializing without parameters first
             try:
                 self._generator = IntelligentGenerator()
             except TypeError:
                 # If it requires historical data, pass it
                 self._generator = IntelligentGenerator(self.draws_df)
-            
+
             logger.info(f"{self.name}: IntelligentGenerator initialized successfully")
             return True
         except Exception as e:
@@ -819,7 +819,7 @@ class IntelligentScoringStrategy(BaseStrategy):
                 for _ in range(count):
                     try:
                         prediction = self._generator.generate_smart_play()
-                        
+
                         tickets.append({
                             'white_balls': sorted(prediction['numbers']),
                             'powerball': prediction['powerball'],
@@ -837,10 +837,10 @@ class IntelligentScoringStrategy(BaseStrategy):
                             'strategy': self.name,
                             'confidence': 0.50
                         })
-                
+
                 logger.debug(f"{self.name}: Generated {len(tickets)} tickets using IntelligentGenerator")
                 return tickets
-                
+
             except Exception as e:
                 logger.error(f"{self.name}: Intelligent scoring failed: {e}, using fallback")
                 # Continue to fallback below
@@ -863,23 +863,23 @@ class IntelligentScoringStrategy(BaseStrategy):
 class CustomInteractiveGenerator(BaseStrategy):
     """
     Generate tickets based on user-defined parameters (risk, temperature, exclusions).
-    
+
     This strategy allows interactive customization:
     - Risk level: How much to deviate from statistical norms
     - Temperature: Favor hot (recent) or cold (overdue) numbers
     - Exclusions: Numbers to avoid
     """
-    
+
     def __init__(self, max_date: str = None):
         super().__init__("custom_interactive", max_date=max_date)
         self._analytics_cache = None
-        
+
     def _get_analytics(self) -> Dict[str, Any]:
         """Get or cache analytics data for efficient generation."""
         if self._analytics_cache is None:
             try:
                 from src.analytics_engine import compute_gap_analysis, compute_temporal_frequencies
-                
+
                 # Use instance's draws_df which respects max_date
                 self._analytics_cache = {
                     'gap_analysis': compute_gap_analysis(self.draws_df),
@@ -898,9 +898,9 @@ class CustomInteractiveGenerator(BaseStrategy):
                         'powerball': np.ones(26) / 26
                     }
                 }
-        
+
         return self._analytics_cache
-    
+
     def generate_custom(
         self,
         params: Dict[str, Any],
@@ -908,7 +908,7 @@ class CustomInteractiveGenerator(BaseStrategy):
     ) -> List[Dict]:
         """
         Generate tickets based on custom parameters.
-        
+
         Args:
             params: Dict with:
                 - count: Number of tickets to generate (default 5)
@@ -916,7 +916,7 @@ class CustomInteractiveGenerator(BaseStrategy):
                 - temperature: 'hot', 'cold', 'neutral' (default 'neutral')
                 - exclude: List of numbers to exclude (default [])
             context: Optional analytics context (if not provided, will compute)
-            
+
         Returns:
             List of ticket dictionaries
         """
@@ -925,65 +925,65 @@ class CustomInteractiveGenerator(BaseStrategy):
         risk = params.get('risk', 'med').lower()
         temperature = params.get('temperature', 'neutral').lower()
         exclude = set(params.get('exclude', []))
-        
+
         logger.info(f"Generating {count} custom tickets: risk={risk}, temperature={temperature}, exclude={len(exclude)} numbers")
-        
+
         # Validate risk level
         if risk not in ['low', 'med', 'high']:
             logger.warning(f"Invalid risk level '{risk}', defaulting to 'med'")
             risk = 'med'
-        
+
         # Validate temperature
         if temperature not in ['hot', 'cold', 'neutral']:
             logger.warning(f"Invalid temperature '{temperature}', defaulting to 'neutral'")
             temperature = 'neutral'
-        
+
         # Get analytics (use provided context or compute)
         if context:
             analytics = context
         else:
             analytics = self._get_analytics()
-        
+
         tickets = []
-        
+
         for _ in range(count):
             try:
                 # Generate white balls based on parameters
                 white_balls = self._generate_white_balls(risk, temperature, exclude, analytics)
-                
+
                 # Generate powerball based on parameters
                 powerball = self._generate_powerball(risk, temperature, analytics)
-                
+
                 # Calculate confidence based on parameters
                 confidence = self._calculate_confidence(risk, temperature)
-                
+
                 tickets.append({
                     'white_balls': sorted(white_balls),
                     'powerball': powerball,
                     'strategy': self.name,
                     'confidence': confidence
                 })
-                
+
             except Exception as e:
                 logger.error(f"Error generating custom ticket: {e}, using fallback")
                 # Fallback to random
                 available = [n for n in range(1, 70) if n not in exclude]
                 if len(available) < 5:
                     available = list(range(1, 70))  # Ignore exclusions if not enough numbers
-                
+
                 white_balls = sorted(random.sample(available, 5))
                 powerball = random.randint(1, 26)
-                
+
                 tickets.append({
                     'white_balls': white_balls,
                     'powerball': powerball,
                     'strategy': self.name,
                     'confidence': 0.50
                 })
-        
+
         logger.debug(f"{self.name}: Generated {len(tickets)} custom tickets")
         return tickets
-    
+
     def _generate_white_balls(
         self,
         risk: str,
@@ -993,34 +993,34 @@ class CustomInteractiveGenerator(BaseStrategy):
     ) -> List[int]:
         """
         Generate 5 white balls based on parameters.
-        
+
         Args:
             risk: Risk level ('low', 'med', 'high')
             temperature: Temperature preference ('hot', 'cold', 'neutral')
             exclude: Set of numbers to exclude
             analytics: Analytics data with gap_analysis and temporal_frequencies
-            
+
         Returns:
             List of 5 white ball numbers (not sorted)
         """
         # Convert exclude to set if it's a list
         if isinstance(exclude, list):
             exclude = set(exclude)
-        
+
         # Filter available numbers (exclude user-specified numbers)
         available = [n for n in range(1, 70) if n not in exclude]
-        
+
         if len(available) < 5:
             logger.warning(f"Exclusions too restrictive ({len(exclude)} excluded), need at least 64 numbers available")
             # Don't ignore exclusions, instead raise error
             raise ValueError(f"Too many exclusions: {len(exclude)}. Maximum 64 numbers can be excluded (need 5 available).")
-        
+
         # Get weighting based on temperature
         if temperature == 'hot':
             # Use temporal frequencies (favor recent numbers)
             temporal_freq = analytics.get('temporal_frequencies', {}).get('white_balls', np.ones(69) / 69)
             weights = np.array([temporal_freq[n - 1] for n in available])
-            
+
         elif temperature == 'cold':
             # Use gap analysis (favor overdue numbers)
             gap_data = analytics.get('gap_analysis', {}).get('white_balls', {})
@@ -1031,11 +1031,11 @@ class CustomInteractiveGenerator(BaseStrategy):
                 weights = gaps / gaps.sum()
             else:
                 weights = np.ones(len(available)) / len(available)
-                
+
         else:  # neutral
             # Uniform distribution
             weights = np.ones(len(available)) / len(available)
-        
+
         # Adjust weights based on risk level
         if risk == 'low':
             # Low risk: Flatten the distribution (less extreme)
@@ -1044,10 +1044,10 @@ class CustomInteractiveGenerator(BaseStrategy):
             # High risk: Sharpen the distribution (more extreme)
             weights = np.power(weights, 2.0)  # Increase contrast
         # 'med' keeps weights as-is
-        
+
         # Normalize weights
         weights = weights / weights.sum()
-        
+
         # Sample without replacement
         try:
             selected = np.random.choice(
@@ -1060,7 +1060,7 @@ class CustomInteractiveGenerator(BaseStrategy):
         except Exception as e:
             logger.error(f"Error in weighted sampling: {e}, using uniform random")
             return random.sample(available, 5)
-    
+
     def _generate_powerball(
         self,
         risk: str,
@@ -1069,12 +1069,12 @@ class CustomInteractiveGenerator(BaseStrategy):
     ) -> int:
         """
         Generate powerball based on parameters.
-        
+
         Args:
             risk: Risk level ('low', 'med', 'high')
             temperature: Temperature preference ('hot', 'cold', 'neutral')
             analytics: Analytics data
-            
+
         Returns:
             Powerball number (1-26)
         """
@@ -1082,7 +1082,7 @@ class CustomInteractiveGenerator(BaseStrategy):
         if temperature == 'hot':
             temporal_freq = analytics.get('temporal_frequencies', {}).get('powerball', np.ones(26) / 26)
             weights = temporal_freq
-            
+
         elif temperature == 'cold':
             gap_data = analytics.get('gap_analysis', {}).get('powerball', {})
             gaps = np.array([gap_data.get(n, 0) for n in range(1, 27)])
@@ -1090,59 +1090,59 @@ class CustomInteractiveGenerator(BaseStrategy):
                 weights = gaps / gaps.sum()
             else:
                 weights = np.ones(26) / 26
-                
+
         else:  # neutral
             weights = np.ones(26) / 26
-        
+
         # Adjust weights based on risk level
         if risk == 'low':
             weights = np.power(weights, 0.5)
         elif risk == 'high':
             weights = np.power(weights, 2.0)
-        
+
         # Normalize
         weights = weights / weights.sum()
-        
+
         # Sample
         try:
             return int(np.random.choice(range(1, 27), p=weights))
         except Exception as e:
             logger.error(f"Error in powerball sampling: {e}, using random")
             return random.randint(1, 26)
-    
+
     def _calculate_confidence(self, risk: str, temperature: str) -> float:
         """
         Calculate confidence score based on parameters.
-        
+
         Args:
             risk: Risk level
             temperature: Temperature preference
-            
+
         Returns:
             Confidence score (0.0-1.0)
         """
         # Base confidence
         base = 0.70
-        
+
         # Temperature affects confidence
         if temperature in ['hot', 'cold']:
             base += 0.05  # Slight boost for strategic choice
-        
+
         # Risk affects confidence
         if risk == 'low':
             base += 0.05  # Conservative approach
         elif risk == 'high':
             base -= 0.10  # Risky approach
-        
+
         return min(0.95, max(0.50, base))
-    
+
     def generate(self, count: int = 5) -> List[Dict]:
         """
         Standard generate method (uses neutral parameters).
-        
+
         Args:
             count: Number of tickets to generate
-            
+
         Returns:
             List of ticket dictionaries
         """
@@ -1159,14 +1159,14 @@ class CustomInteractiveGenerator(BaseStrategy):
 class StrategyManager:
     """
     Manages all 11 strategies and selects which to use based on adaptive weights.
-    
+
     Uses Bayesian weight updating based on historical performance.
     """
 
     def __init__(self, max_date: str = None):
         """
         Initialize StrategyManager.
-        
+
         Args:
             max_date: Optional date limit (YYYY-MM-DD). Only uses historical data before this date.
                       Critical for preventing data leakage when generating historical predictions.
@@ -1201,7 +1201,7 @@ class StrategyManager:
 
         for name in self.strategies.keys():
             cursor.execute("""
-                INSERT OR IGNORE INTO strategy_performance 
+                INSERT OR IGNORE INTO strategy_performance
                 (strategy_name, current_weight, confidence)
                 VALUES (?, 0.091, 0.5)
             """, (name,))
@@ -1229,13 +1229,13 @@ class StrategyManager:
     def generate_balanced_tickets(self, total: int = 5) -> List[Dict]:
         """
         Generate tickets using weighted strategy selection.
-        
+
         Each strategy is chosen proportionally to its adaptive weight.
         Ensures 5 different Powerballs across all tickets.
-        
+
         Args:
             total: Number of tickets to generate (default 5)
-            
+
         Returns:
             List of ticket dictionaries
         """
@@ -1280,6 +1280,53 @@ class StrategyManager:
         logger.info(f"StrategyManager generated {len(all_tickets)} tickets (requested: {total})")
         return all_tickets
 
+    def generate_tickets_per_strategy(self, count_per_strategy: int = 10) -> List[Dict]:
+        """
+        Generate exactly N tickets per strategy for equal evaluation.
+        
+        Args:
+            count_per_strategy: Number of tickets to generate per strategy (default: 10)
+            
+        Returns:
+            List of tickets with exactly count_per_strategy tickets from each strategy
+        """
+        logger.info(f"StrategyManager.generate_tickets_per_strategy called with {count_per_strategy} per strategy")
+        
+        all_tickets = []
+        generated_set = set()  # Track unique combinations
+        
+        for strategy_name, strategy in self.strategies.items():
+            strategy_tickets = []
+            attempts = 0
+            max_attempts = count_per_strategy * 5  # Allow retries for duplicates
+            
+            while len(strategy_tickets) < count_per_strategy and attempts < max_attempts:
+                attempts += 1
+                try:
+                    tickets = strategy.generate(1)
+                    for ticket in tickets:
+                        # Create unique key
+                        wb = tuple(sorted(ticket['white_balls']))
+                        pb = ticket['powerball']
+                        key = (wb, pb)
+                        
+                        if key not in generated_set:
+                            generated_set.add(key)
+                            ticket['strategy'] = strategy_name
+                            strategy_tickets.append(ticket)
+                            
+                            if len(strategy_tickets) >= count_per_strategy:
+                                break
+                except Exception as e:
+                    logger.warning(f"Error generating ticket for {strategy_name}: {e}")
+            
+            logger.debug(f"{strategy_name}: Generated {len(strategy_tickets)} tickets")
+            all_tickets.extend(strategy_tickets)
+        
+        total_expected = count_per_strategy * len(self.strategies)
+        logger.info(f"StrategyManager generated {len(all_tickets)} tickets ({count_per_strategy} per strategy × {len(self.strategies)} strategies)")
+        return all_tickets
+
     def _ensure_different_powerballs(self, tickets: List[Dict]) -> List[Dict]:
         """Modify Powerballs to ensure all are unique"""
         used_pbs = set()
@@ -1300,7 +1347,7 @@ class StrategyManager:
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT strategy_name, total_plays, total_wins, win_rate, 
+            SELECT strategy_name, total_plays, total_wins, win_rate,
                    roi, current_weight, confidence
             FROM strategy_performance
             ORDER BY roi DESC
