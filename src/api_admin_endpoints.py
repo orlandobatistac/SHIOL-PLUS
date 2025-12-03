@@ -162,9 +162,9 @@ async def force_pipeline_run(
         # Create a simple wrapper to avoid import issues
         async def run_pipeline():
             try:
-                from src.api import trigger_full_pipeline_automatically
-                logger.info(f"🔧 [admin] Starting background pipeline execution (hint: {execution_hint})")
-                await trigger_full_pipeline_automatically()
+                from src.api import smart_polling_pipeline
+                logger.info(f"🔧 [admin] Starting background pipeline execution (hint: {execution_hint}, force_pipeline=True)")
+                await smart_polling_pipeline(force_pipeline=True)
                 logger.info(f"🔧 [admin] Background pipeline completed (hint: {execution_hint})")
             except Exception as e:
                 logger.error(f"🔧 [admin] Background pipeline failed (hint: {execution_hint}): {e}")
@@ -264,10 +264,11 @@ async def _run_pipeline_in_background():
     """
     Internal wrapper to run the pipeline in background.
     This ensures the HTTP response is sent before the pipeline starts.
+    Uses force_pipeline=True for manual admin runs.
     """
     try:
-        from src.api import trigger_full_pipeline_automatically
-        await trigger_full_pipeline_automatically()
+        from src.api import smart_polling_pipeline
+        await smart_polling_pipeline(force_pipeline=True)
     except Exception as e:
         logger.error(f"Background pipeline execution failed: {e}")
 
@@ -284,6 +285,10 @@ async def trigger_pipeline(
     """
     Triggers the full pipeline execution. Admin only.
 
+    Uses smart_polling_pipeline with force_pipeline=True:
+    - If draw exists: Execute pipeline steps 3-6 (analytics, eval, learning, predict)
+    - If draw NOT exists: Polling + Insert + Execute pipeline steps 2-6
+
     Params:
     - async_run: If True (default), returns immediately after scheduling the run.
                  If False, waits for the pipeline to finish and returns the result.
@@ -292,19 +297,17 @@ async def trigger_pipeline(
     This prevents nginx 504 Gateway Timeout errors on long-running pipelines.
     """
     try:
-        # Lazy import to avoid circular import with src.api including this router
-        from src.api import trigger_full_pipeline_automatically
+        from src.api import smart_polling_pipeline
 
         if async_run:
             # Use BackgroundTasks to ensure response is sent BEFORE pipeline starts
-            # This prevents 504 Gateway Timeout from nginx
             background_tasks.add_task(_run_pipeline_in_background)
-            logger.info(f"Admin {admin['id']} triggered pipeline (async via BackgroundTasks)")
-            return {"success": True, "message": "Pipeline started", "async": True}
+            logger.info(f"Admin {admin['id']} triggered pipeline (async via BackgroundTasks, force_pipeline=True)")
+            return {"success": True, "message": "Pipeline started (force_pipeline=True)", "async": True}
         else:
             # Await completion (blocks until done) - only for synchronous requests
-            result = await trigger_full_pipeline_automatically()
-            logger.info(f"Admin {admin['id']} triggered pipeline (sync)")
+            result = await smart_polling_pipeline(force_pipeline=True)
+            logger.info(f"Admin {admin['id']} triggered pipeline (sync, force_pipeline=True)")
             return {"success": True, "async": False, "result": result}
     except Exception as e:
         logger.error(f"Failed to trigger pipeline: {e}")

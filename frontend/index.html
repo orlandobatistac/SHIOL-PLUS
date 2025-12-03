@@ -9,7 +9,7 @@
           gtag('js', new Date());
           gtag('config', 'G-ZTYG2V67XT');
         </script>
-        
+
         <!-- Tailwind CSS CDN (utilities used throughout the page) -->
         <script src="https://cdn.tailwindcss.com"></script>
         <!-- Font Awesome (icons used in UI) -->
@@ -46,7 +46,7 @@
         <title>SHIOL+</title>
         <meta name="description" content="SHIOL+ Smart Outcomes Platform provides AI-powered Powerball analysis and instant ticket scanning. Get data-driven number insights and verify your tickets instantly." />
         <meta name="keywords" content="powerball analysis, AI lottery, ticket scanner, number insights, lottery predictions, powerball statistics" />
-        
+
         <!-- Open Graph / Social Media -->
         <meta property="og:type" content="website" />
         <meta property="og:title" content="SHIOL+ | Smart Outcomes Platform" />
@@ -64,14 +64,14 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <h3 class="text-amber-200 font-bold text-xs sm:text-sm md:text-base mb-1 sm:mb-2">IMPORTANT DISCLAIMER</h3>
-                        
+
                         <!-- Mobile Version (very short) -->
                         <div class="block sm:hidden text-white/80 text-[11px] leading-tight space-y-1">
                             <p>
                                 <strong class="text-amber-200">SHIOL+</strong> is an educational project. <span class="text-amber-100 font-semibold">DO NOT use for real gambling.</span> All predictions are experimental and not financial advice.
                             </p>
                         </div>
-                        
+
                         <!-- Desktop Version (condensed) -->
                         <div class="hidden sm:block text-white/80 text-xs sm:text-sm space-y-1.5 sm:space-y-2">
                             <p>
@@ -82,8 +82,8 @@
                             </p>
                         </div>
                     </div>
-                    <button 
-                        id="close-disclaimer-banner" 
+                    <button
+                        id="close-disclaimer-banner"
                         class="flex-shrink-0 text-white/60 hover:text-white transition-colors p-1"
                         aria-label="Close disclaimer"
                     >
@@ -735,7 +735,7 @@
                                                 type="number"
                                                 id="play-1-num-1"
                                                 min="1"
-                                               
+
                                                 placeholder="1-69"
                                                 class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                                             />
@@ -743,7 +743,7 @@
                                                 type="number"
                                                 id="play-1-num-2"
                                                 min="1"
-                                               
+
                                                 placeholder="1-69"
                                                 class="px-2 py-1 text-center border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                                             />
@@ -1342,7 +1342,7 @@
                                     <p>No winning insights for this draw.</p>
                                 </div>
                         </div>
-                        
+
                             <!-- Strategy Breakdown Section -->
                             <div id="modal-strategy-section" class="hidden mt-6">
                                 <div class="flex items-center justify-between mb-4">
@@ -1419,7 +1419,7 @@
                 // Disclaimer banner management (temporary dismiss, reappears on refresh)
                 const disclaimerBanner = document.getElementById('disclaimer-banner');
                 const closeDisclaimerBtn = document.getElementById('close-disclaimer-banner');
-                
+
                 // Handle close button click - only hides until page refresh
                 if (closeDisclaimerBtn && disclaimerBanner) {
                     closeDisclaimerBtn.addEventListener('click', () => {
@@ -1460,7 +1460,7 @@
                 function updateCurrentTime() {
                     const timeElement = document.getElementById("current-time");
                     if (!timeElement) return; // Skip if element doesn't exist
-                    
+
                     const now = new Date();
                     const timeString = now.toLocaleTimeString("en-US", {
                         timeZone: "America/New_York",
@@ -1503,17 +1503,17 @@
                     try {
                         const response = await fetch(`${API_BASE_URL}/public/jackpot`);
                         if (!response.ok) throw new Error("Failed to fetch jackpot");
-                        
+
                         const data = await response.json();
-                        
+
                         const jackpotDisplay = document.getElementById("jackpot-display");
                         const nextDrawingDate = document.getElementById("next-drawing-date");
-                        
+
                         if (data.status === "success" && data.nextPrizeText) {
                             if (jackpotDisplay) {
                                 jackpotDisplay.textContent = data.nextPrizeText || "Loading...";
                             }
-                            
+
                             // Note: next-drawing-date is now handled by countdown badge
                             // No need to update it here to avoid conflicts
                         } else {
@@ -1535,11 +1535,11 @@
                     try {
                         const response = await fetch(`${API_BASE_URL}/public/winners-stats`);
                         if (!response.ok) throw new Error("Failed to fetch winners stats");
-                        
+
                         const data = await response.json();
-                        
+
                         const winnersAmount = document.getElementById("winners-amount");
-                        
+
                         if (data.status === "success") {
                             if (winnersAmount) {
                                 winnersAmount.textContent = data.formatted_amount || "$0";
@@ -1564,24 +1564,24 @@
                     try {
                         const response = await fetch(`${API_BASE_URL}/public/stats`);
                         if (!response.ok) throw new Error("Failed to fetch stats");
-                        
+
                         const data = await response.json();
-                        
+
                         if (data.status === "success") {
                             const winningSets = data.totalWinningSets || 0;
                             const prizeText = data.prizeText || "$0";
-                            
+
                             // Update stats pills in hero area
                             const winningSetsPill = document.getElementById("stats-winning-sets-pill");
                             const prizeTextPill = document.getElementById("stats-prize-text-pill");
-                            
+
                             if (winningSetsPill) winningSetsPill.textContent = winningSets;
                             if (prizeTextPill) prizeTextPill.textContent = prizeText;
                         } else {
                             // Fallback for non-success status
                             const winningSetsPill = document.getElementById("stats-winning-sets-pill");
                             const prizeTextPill = document.getElementById("stats-prize-text-pill");
-                            
+
                             if (winningSetsPill) winningSetsPill.textContent = "0";
                             if (prizeTextPill) prizeTextPill.textContent = "$0";
                         }
@@ -1590,7 +1590,7 @@
                         // Fallback for errors
                         const winningSetsPill = document.getElementById("stats-winning-sets-pill");
                         const prizeTextPill = document.getElementById("stats-prize-text-pill");
-                        
+
                         if (winningSetsPill) winningSetsPill.textContent = "0";
                         if (prizeTextPill) prizeTextPill.textContent = "$0";
                     }
@@ -1630,7 +1630,7 @@
                         // Update totals and timestamp
                         document.getElementById("total-available").textContent =
                             allPredictions.length;
-                        
+
                         // Update predictions count in header
                         const predictionsCountEl = document.getElementById("predictions-count");
                         if (predictionsCountEl) {
@@ -1650,7 +1650,7 @@
                                     day: 'numeric',
                                     timeZone: 'America/New_York'
                                 });
-                                
+
                                 const drawDateElement = document.getElementById('predictions-draw-date');
                                 if (drawDateElement) {
                                     drawDateElement.textContent = formattedDrawDate;
@@ -1771,12 +1771,12 @@
                         const pred = allPredictions[i];
                         const rank = i + 1;
                         const isLocked = pred.access_type === 'locked';
-                        
+
                         // Mobile: render into list container, not table
                         if (isMobile) {
                             const cardDiv = document.createElement("div");
                             cardDiv.className = `prediction-card bg-canvas-card rounded-lg border border-white/5 p-4 space-y-3 ${isLocked ? 'locked-prediction' : ''}`;
-                            
+
                             // Header: rank badge + status/lock with bottom divider
                             const rankHTML = `
                                 <div class="flex items-center justify-between border-b border-white/5 pb-2">
@@ -1789,13 +1789,13 @@
                                     ${isLocked ? '<i class="fas fa-lock text-white/40 text-lg"></i>' : '<i class="fas fa-chevron-right text-white/30 text-lg"></i>'}
                                 </div>
                             `;
-                            
+
                             // Numbers row
                             const numberBalls = [pred.n1, pred.n2, pred.n3, pred.n4, pred.n5]
                                 .filter((n) => n)
                                 .map((num) => `<span class=\"num-chip text-xs w-7 h-7\">${num}</span>`)
                                 .join("");
-                            
+
                             const numbersHTML = `
                                 <div class="flex items-center justify-center gap-1.5 flex-wrap ${isLocked ? 'blur-sm opacity-70' : ''}">
                                     ${numberBalls}
@@ -1803,7 +1803,7 @@
                                     <span class="num-chip powerball-chip text-xs w-7 h-7">${pred.pb}</span>
                                 </div>
                             `;
-                            
+
                             // Meta row: Confidence value (or dash for locked)
                             const confVal = (typeof pred.confidence_score === 'number') ? pred.confidence_score : ((typeof pred.confidence === 'number') ? pred.confidence : null);
                             const confPct = confVal !== null ? `${Math.round(confVal * 100)}%` : '—';
@@ -1813,9 +1813,9 @@
                                     <span class="text-xs text-white/80">${confPct}</span>
                                 </div>
                             `;
-                            
+
                             cardDiv.innerHTML = rankHTML + numbersHTML + metaHTML;
-                            
+
                             if (isLocked) {
                                 cardDiv.addEventListener('click', openUpgradeModal);
                                 cardDiv.style.cursor = 'pointer';
@@ -1827,11 +1827,11 @@
                                 });
                                 cardDiv.style.cursor = 'pointer';
                             }
-                            
+
                             list.appendChild(cardDiv);
                             continue;
                         }
-                        
+
                         // Desktop: Apply base classes and locked class if needed
                         let rowClasses = "hover:bg-canvas-surface/50 transition-colors";
                         if (isLocked) {
@@ -1852,25 +1852,25 @@
                         // Create numbers cell - simplified, just apply blur when locked
                         const numbersCell = document.createElement("td");
                         numbersCell.className = "px-4 py-3 whitespace-nowrap";
-                        
+
                         // Create numbers container with conditional blur
                         const numbersContainer = document.createElement("div");
                         numbersContainer.className = "flex items-center space-x-1";
-                        
+
                         // Apply blur effect to locked predictions
                         if (isLocked) {
                             numbersContainer.style.filter = "blur(6px)";
                             numbersContainer.style.opacity = "0.7";
                         }
-                        
+
                         // Generate number balls HTML with dark theme
                         const numberBalls = [pred.n1, pred.n2, pred.n3, pred.n4, pred.n5]
                             .filter((n) => n)
-                            .map((num) => 
+                            .map((num) =>
                                 `<span class="num-chip">${num}</span>`
                             )
                             .join("");
-                        
+
                         numbersContainer.innerHTML = `
                             ${numberBalls}
                             <div class="w-2"></div>
@@ -1878,25 +1878,25 @@
                                 ${pred.pb}
                             </span>
                         `;
-                        
+
                         numbersCell.appendChild(numbersContainer);
 
                         // Create status cell - simplified design
                         const statusCell = document.createElement("td");
                         statusCell.className = "px-4 py-3 whitespace-nowrap";
-                        
+
                         if (isLocked) {
                             // Locked: simple lock icon
                             const lockButton = document.createElement("button");
                             lockButton.className = "text-white/40 hover:text-white/60 transition-colors duration-200 cursor-pointer text-lg";
                             lockButton.innerHTML = '<i class="fas fa-lock"></i>';
                             lockButton.title = "Click to upgrade to Premium";
-                            
+
                             // Add click handler for upgrade modal
                             lockButton.addEventListener('click', function() {
                                 openUpgradeModal();
                             });
-                            
+
                             statusCell.appendChild(lockButton);
                         } else {
                             // Unlocked: simple green text
@@ -1996,7 +1996,7 @@
                         drawsCurrentlyShown = 0;
 
                         // Update total count
-                        document.getElementById("draws-total-available").textContent = 
+                        document.getElementById("draws-total-available").textContent =
                             allDraws.length;
 
                         // Show initial draws
@@ -2059,7 +2059,7 @@
                         let prizeDisplay = '';
                         let prizeClass = '';
                         const totalPrize = draw.total_prize || 0;
-                        
+
                         if (totalPrize >= 100000000) {
                             prizeDisplay = '💰 JACKPOT!';
                             prizeClass = 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-white font-bold px-3 py-1 rounded-full shadow-lg text-xs';
@@ -2079,7 +2079,7 @@
 
                         // Check if draw has predictions (new field from v5.0)
                         // Badge debajo de la fecha, más pequeño
-                        const noPredictionsBadge = !draw.has_predictions 
+                        const noPredictionsBadge = !draw.has_predictions
                             ? '<span class="bg-yellow-500/20 text-yellow-400 text-[9px] px-1.5 py-0.5 rounded-full font-medium">No predictions</span>'
                             : '';
 
@@ -2108,7 +2108,7 @@
                                 <span class="${prizeClass} text-xs">${prizeDisplay}</span>
                             </div>
                         </div>
-                        
+
                         <!-- Desktop: horizontal layout -->
                         <div class="hidden sm:flex items-center justify-between">
                             <div class="flex items-center space-x-3">
@@ -2338,7 +2338,7 @@
                 );
                 const list = document.getElementById("modal-predictions-list");
                 const isMobile = window.innerWidth < 640;
-                
+
                 tbody.innerHTML = "";
                 if (list) list.innerHTML = "";
 
@@ -2352,7 +2352,7 @@
                             <span class="text-sm">Try again with the next drawing!</span>
                         </div>
                     `;
-                    
+
                     if (isMobile && list) {
                         list.innerHTML = emptyMsg;
                     } else {
@@ -2392,7 +2392,7 @@
                         pred.n4,
                         pred.n5,
                     ].filter((n) => n);
-                    
+
                     const matchesText = `${pred.matches_main || 0}${pred.matches_powerball ? "+PB" : ""}`;
                     const prizeAmount = pred.prize_info
                         ? pred.prize_info.amount
@@ -2404,7 +2404,7 @@
 
                     // Highlight Powerball if it matches
                     const pbMatch = pred.pb === winningPowerball;
-                    
+
                     // Mobile: card layout
                     if (isMobile && list) {
                         const numbersHtml = numbers
@@ -2417,11 +2417,11 @@
                                 }
                             })
                             .join("");
-                        
-                        const powerballHtml = pbMatch 
+
+                        const powerballHtml = pbMatch
                             ? `<span class="num-chip powerball-chip text-xs w-7 h-7" style="background: #00e0ff; color: #0a0c14;">${pred.pb}</span>`
                             : `<span class="num-chip powerball-chip text-xs w-7 h-7">${pred.pb}</span>`;
-                        
+
                         const cardDiv = document.createElement("div");
                         cardDiv.className = "bg-canvas-card rounded-lg border border-white/5 p-4 space-y-3";
                         cardDiv.innerHTML = `
@@ -2460,8 +2460,8 @@
                                 }
                             })
                             .join("");
-                        
-                        const powerballHtml = pbMatch 
+
+                        const powerballHtml = pbMatch
                             ? `<span class="num-chip" style="background: #00e0ff; color: #0a0c14;">${pred.pb}</span>`
                             : `<span class="num-chip powerball-chip">${pred.pb}</span>`;
 
@@ -2700,18 +2700,18 @@
             // Initialize on page load
             document.addEventListener("DOMContentLoaded", () => {
                 registerVisit();
-                
+
                 // Initialize countdown badge in jackpot card
                 if (window.CountdownUtils) {
                     const countdownHero = document.getElementById('countdown-hero');
                     const nextDrawingDateEl = document.getElementById('next-drawing-date');
-                    
+
                     if (countdownHero) {
                         function updateCountdownBadges() {
                             const nextDrawingDate = CountdownUtils.getNextDrawingDate();
                             const now = new Date();
                             const timeDiff = nextDrawingDate.getTime() - now.getTime();
-                            
+
                             // Update countdown
                             if (timeDiff > 0) {
                                 const countdownText = CountdownUtils.formatCountdown(timeDiff, 'minimal');
@@ -2719,12 +2719,12 @@
                             } else {
                                 countdownHero.textContent = 'Drawing Soon!';
                             }
-                            
+
                             // Update draw date display (simple format)
                             if (nextDrawingDateEl) {
-                                const options = { 
-                                    weekday: 'short', 
-                                    month: 'short', 
+                                const options = {
+                                    weekday: 'short',
+                                    month: 'short',
                                     day: 'numeric',
                                     hour: 'numeric',
                                     minute: '2-digit',
@@ -2735,7 +2735,7 @@
                                 nextDrawingDateEl.textContent = `${formattedDate} ET`;
                             }
                         }
-                        
+
                         updateCountdownBadges();
                         setInterval(updateCountdownBadges, 1000);
                     }
@@ -2754,7 +2754,7 @@
         <script src="js/account-settings-modal.js"></script>
         <script src="js/demo-mode.js"></script>
         <script src="js/public.js"></script>
-        
+
         <!-- Unregister Service Worker (PWA Removed) -->
         <script>
         if ('serviceWorker' in navigator) {
@@ -2784,17 +2784,17 @@
                             <i class="fas fa-times text-lg"></i>
                         </button>
                     </div>
-                    
+
                     <!-- Admin Required Context Message -->
                     <div id="login-admin-context" class="hidden mb-4 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-4 py-3 rounded-md text-sm">
                         <i class="fas fa-shield-alt mr-2"></i>
                         Sign in as administrator to access system status panel
                     </div>
-                    
+
                     <form id="login-form" class="space-y-4">
                         <div id="login-error" class="hidden bg-canvas-accent2/10 border border-canvas-accent2/30 text-canvas-accent2 px-4 py-3 rounded-md text-sm">
                         </div>
-                        
+
                         <div>
                             <label for="login-email" class="block text-sm font-medium text-white/80 mb-2">
                                 Email or Username
@@ -2807,7 +2807,7 @@
                                 placeholder="Enter your email or username"
                             />
                         </div>
-                        
+
                         <div>
                             <label for="login-password" class="block text-sm font-medium text-white/80 mb-2">
                                 Password
@@ -2821,7 +2821,7 @@
                                 placeholder="Enter your password"
                             />
                         </div>
-                        
+
                         <div class="flex items-center">
                             <input
                                 type="checkbox"
@@ -2832,7 +2832,7 @@
                                 Remember me
                             </label>
                         </div>
-                        
+
                         <button
                             type="submit"
                             id="login-submit"
@@ -2841,7 +2841,7 @@
                             <span id="login-submit-text">Login</span>
                             <i id="login-spinner" class="fas fa-spinner fa-spin ml-2 hidden"></i>
                         </button>
-                        
+
                         <!-- Demo Credentials -->
                         <div class="text-center text-xs text-white/50 space-y-0.5">
                             <p class="font-medium text-white/60">Demo:</p>
@@ -2849,10 +2849,10 @@
                             <p>Pass: <span class="font-mono text-white/70">Demo2025!</span></p>
                         </div>
                     </form>
-                    
+
                     <div class="mt-6 text-center">
                         <p class="text-sm text-white/60">
-                            Don't have an account? 
+                            Don't have an account?
                             <button id="switch-to-register" class="text-canvas-accent hover:text-canvas-accent/80 font-medium transition-colors">
                                 Register here
                             </button>
@@ -2941,11 +2941,11 @@
                         <div class="text-center mb-4">
                             <h4 class="text-lg font-semibold text-white">Create Your Premium Account</h4>
                         </div>
-                        
+
                         <form id="register-form" class="space-y-4">
                             <div id="register-error" class="hidden bg-canvas-accent2/10 border border-canvas-accent2/30 text-canvas-accent2 px-4 py-3 rounded-md text-sm">
                             </div>
-                            
+
                             <div>
                                 <label for="register-email" class="block text-sm font-medium text-white/80 mb-2">
                                     Email Address
@@ -2958,7 +2958,7 @@
                                     placeholder="Enter your email"
                                 />
                             </div>
-                            
+
                             <div>
                                 <label for="register-username" class="block text-sm font-medium text-white/80 mb-2">
                                     Username
@@ -2973,7 +2973,7 @@
                                     placeholder="Choose a username (3-20 characters)"
                                 />
                             </div>
-                            
+
                             <div>
                                 <label for="register-password" class="block text-sm font-medium text-white/80 mb-2">
                                     Password
@@ -2988,7 +2988,7 @@
                                     placeholder="Create a password (min 6 characters)"
                                 />
                             </div>
-                            
+
                             <!-- Terms and Privacy Checkbox -->
                             <div class="mt-4">
                                 <label class="flex items-start text-sm text-white/80 cursor-pointer">
@@ -2999,9 +2999,9 @@
                                         class="mt-1 mr-2 w-4 h-4 text-canvas-accent bg-canvas-surface border-canvas-line rounded focus:ring-2 focus:ring-canvas-accent cursor-pointer"
                                     />
                                     <span>
-                                        I agree to the 
-                                        <a href="/terms" target="_blank" rel="noopener noreferrer" class="text-canvas-accent hover:underline font-medium">Terms of Service</a> 
-                                        and 
+                                        I agree to the
+                                        <a href="/terms" target="_blank" rel="noopener noreferrer" class="text-canvas-accent hover:underline font-medium">Terms of Service</a>
+                                        and
                                         <a href="/privacy" target="_blank" rel="noopener noreferrer" class="text-canvas-accent hover:underline font-medium">Privacy Policy</a>
                                     </span>
                                 </label>
@@ -3022,19 +3022,19 @@
                             <span id="register-premium-text">Upgrade to Premium – $9.99/year</span>
                             <i id="register-premium-spinner" class="fas fa-spinner fa-spin ml-2 hidden"></i>
                         </button>
-                        
+
                         <div class="text-center text-xs text-white/50 mb-3 mt-2">
                             <i class="fas fa-lock mr-1"></i>
                             Secure payment · 200 AI insights · Cancel anytime
                         </div>
-                        
+
                         <!-- Divider -->
                         <div class="flex items-center my-4">
                             <div class="flex-1 border-t border-canvas-line"></div>
                             <span class="px-3 text-sm text-white/40">or</span>
                             <div class="flex-1 border-t border-canvas-line"></div>
                         </div>
-                        
+
                         <!-- Free Account Button (Secondary) -->
                         <button
                             type="button"
@@ -3045,10 +3045,10 @@
                             <span id="register-free-text">Create Free Account (5 AI insights)</span>
                             <i id="register-free-spinner" class="fas fa-spinner fa-spin ml-2 hidden"></i>
                         </button>
-                        
+
                         <div class="mt-4 text-center">
                             <p class="text-sm text-white/60">
-                                Already have an account? 
+                                Already have an account?
                                 <button id="switch-to-login" class="text-canvas-accent hover:text-canvas-accent/80 font-medium">
                                     Login here
                                 </button>
@@ -3060,7 +3060,7 @@
         </div>
 
         <!-- Footer -->
-        
+
         <!--#include virtual="/includes/footer.html" -->
     </body>
 </html>

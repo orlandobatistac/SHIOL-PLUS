@@ -3,10 +3,14 @@
 Manual pipeline trigger for SHIOL-PLUS.
 
 This script initializes the database (idempotent) and then invokes the
-enhanced end-to-end pipeline defined in src/api.py.
+smart_polling_pipeline with force_pipeline=True.
 
 Usage:
     python scripts/run_pipeline.py
+
+Behavior:
+- If draw exists in DB: Execute pipeline steps 3-6 (analytics, eval, learning, predict)
+- If draw NOT exists: Polling all sources + Insert + Execute pipeline steps 2-6
 """
 import os
 import sys
@@ -40,15 +44,17 @@ def main() -> int:
         # Mark execution source for observability
         os.environ.setdefault("PIPELINE_EXECUTION_SOURCE", "manual_script")
 
-        # Import the pipeline entry and execute
-        from src.api import trigger_full_pipeline_automatically
+        # Import the smart polling pipeline and execute with force_pipeline=True
+        from src.api import smart_polling_pipeline
 
-        logger.info("Starting manual pipeline run...")
-        result = asyncio.run(trigger_full_pipeline_automatically())
+        logger.info("Starting manual pipeline run (force_pipeline=True)...")
+        result = asyncio.run(smart_polling_pipeline(force_pipeline=True))
 
         success = bool(result and result.get("success", False))
         if success:
-            logger.info(f"Pipeline completed successfully (id={result.get('execution_id')}, elapsed={result.get('elapsed_seconds')}s)")
+            logger.info(f"Pipeline completed successfully (id={result.get('execution_id')}, elapsed={result.get('elapsed_seconds', 'N/A')}s)")
+            logger.info(f"Tickets generated: {result.get('tickets_generated', 'N/A')}")
+            logger.info(f"Target draw: {result.get('target_draw', 'N/A')}")
             return 0
         else:
             logger.error(f"Pipeline reported failure: {result}")

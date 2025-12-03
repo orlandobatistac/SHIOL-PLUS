@@ -295,11 +295,11 @@ async def get_public_latest_predictions(request: Request, limit: int = Query(def
         import time
 
         start_time = time.time()
-        
+
         # Calculate the next drawing date
         next_draw_date = DateManager.calculate_next_drawing_date()
         logger.info(f"Fetching predictions for next draw: {next_draw_date}")
-        
+
         conn = get_db_connection()
 
         if not conn:
