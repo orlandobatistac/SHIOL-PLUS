@@ -1319,7 +1319,7 @@ async def _execute_pipeline_steps_without_insert(
             cursor.execute("DELETE FROM generated_tickets WHERE draw_date = ?", (next_draw,))
             deleted_count = cursor.rowcount
             conn.commit()
-        
+
         if deleted_count > 0:
             logger.info(f"[{execution_id}] Deleted {deleted_count} old predictions for {next_draw}")
 
@@ -1475,7 +1475,7 @@ async def smart_polling_pipeline(force_pipeline: bool = False):
         if force_pipeline:
             # Manual run: execute pipeline even though draw exists
             logger.info(f"[{execution_id}] Draw {expected_draw_date} exists, but force_pipeline=True → executing pipeline")
-            
+
             # Build draw_data from existing draw
             draw_data = {
                 'draw_date': existing_draw['draw_date'],
@@ -1486,7 +1486,7 @@ async def smart_polling_pipeline(force_pipeline: bool = False):
                 'n5': existing_draw['n5'],
                 'pb': existing_draw['pb']
             }
-            
+
             # Initialize pipeline log
             metadata = {
                 "trigger": "manual_force_pipeline",
@@ -1494,13 +1494,13 @@ async def smart_polling_pipeline(force_pipeline: bool = False):
                 "expected_draw": expected_draw_date,
                 "draw_already_existed": True
             }
-            
+
             db.insert_pipeline_execution_log(
                 execution_id=execution_id,
                 start_time=start_time.isoformat(),
                 metadata=json.dumps(metadata)
             )
-            
+
             # Execute pipeline steps 3-6 (skip insert since draw exists)
             result = await _execute_pipeline_steps_without_insert(
                 execution_id=execution_id,
@@ -1510,7 +1510,7 @@ async def smart_polling_pipeline(force_pipeline: bool = False):
                 start_time=start_time,
                 metadata=metadata
             )
-            
+
             active_pipeline_execution_id = None
             return result
         else:

@@ -293,16 +293,16 @@ async def trigger_pipeline(
     - async_run: If True (default), returns immediately after scheduling the run.
                  If False, waits for the pipeline to finish and returns the result.
 
-    Note: Using FastAPI BackgroundTasks to ensure response is sent before pipeline starts.
-    This prevents nginx 504 Gateway Timeout errors on long-running pipelines.
+    Note: Using asyncio.create_task() for true async execution.
     """
+    import asyncio
     try:
         from src.api import smart_polling_pipeline
 
         if async_run:
-            # Use BackgroundTasks to ensure response is sent BEFORE pipeline starts
-            background_tasks.add_task(_run_pipeline_in_background)
-            logger.info(f"Admin {admin['id']} triggered pipeline (async via BackgroundTasks, force_pipeline=True)")
+            # Use asyncio.create_task for true background execution
+            asyncio.create_task(_run_pipeline_in_background())
+            logger.info(f"Admin {admin['id']} triggered pipeline (async via create_task, force_pipeline=True)")
             return {"success": True, "message": "Pipeline started (force_pipeline=True)", "async": True}
         else:
             # Await completion (blocks until done) - only for synchronous requests
