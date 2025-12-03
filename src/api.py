@@ -1149,7 +1149,7 @@ async def _execute_pipeline_steps(
         )
 
         eval_result = await evaluate_predictions_for_draw(expected_draw_date)
-        logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluated {eval_result.get('evaluated', 0)} predictions")
+        logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluation {'succeeded' if eval_result else 'skipped (no predictions)'}")
 
         # ========== STEP 5: ADAPTIVE LEARNING ==========
         logger.info(f"[{execution_id}] STEP 5: Adaptive learning update...")
@@ -1290,11 +1290,10 @@ async def _execute_pipeline_steps_without_insert(
         )
 
         eval_result = await evaluate_predictions_for_draw(expected_draw_date)
-        logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluated {eval_result.get('evaluated', 0)} predictions")
+        logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluation {'succeeded' if eval_result else 'skipped (no predictions)'}")
 
         # ========== STEP 5: ADAPTIVE LEARNING ==========
         logger.info(f"[{execution_id}] STEP 5/6: Adaptive learning update...")
-        db.update_pipeline_execution_log(
             execution_id=execution_id,
             current_step="STEP 5/6: Adaptive learning",
             steps_completed=4
