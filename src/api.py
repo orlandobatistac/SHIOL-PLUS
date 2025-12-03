@@ -1174,13 +1174,15 @@ async def _execute_pipeline_steps(
 
         manager = StrategyManager()
 
-        # Generate 110 tickets (10 per each of 11 strategies) - Equal distribution for evaluation
-        batch_tickets = manager.generate_tickets_per_strategy(count_per_strategy=10)
+        # Generate 110 tickets distributed by adaptive weights
+        # Strategies with higher win rates get more tickets
+        # This allows the system to naturally phase out underperforming strategies
+        batch_tickets = manager.generate_balanced_tickets(total=110)
         total_saved = save_generated_tickets(batch_tickets, next_draw)
         logger.info(f"[{execution_id}] Saved {total_saved} tickets for {next_draw}")
         gc.collect()
 
-        logger.info(f"[{execution_id}] ✅ STEP 6 Complete: Generated {total_saved} predictions (10 per strategy × 11 strategies)")
+        logger.info(f"[{execution_id}] ✅ STEP 6 Complete: Generated {total_saved} predictions (weighted by strategy performance)")
 
         # ========== PIPELINE COMPLETE ==========
         elapsed = (datetime.now() - start_time).total_seconds()
