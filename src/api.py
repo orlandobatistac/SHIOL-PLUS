@@ -2400,34 +2400,34 @@ async def lifespan(app: FastAPI):
     # JOB #1: SMART POLLING - Unified Draw Polling (draw nights only)
     # Purpose: Poll all 4 sources with diagnostics until draw is found
     # - Starts at 11:15 PM ET (16 min after 10:59 PM draw)
-    # - Runs every 15 min until 6 AM
+    # - Runs every 5 min for first hour (aggressive capture)
     # - Each run: single check of 4 sources (scheduler handles retries)
-    # Schedule: 11:15, 11:30, 11:45 PM then 12:00-5:45 AM every 15 min
+    # Schedule: 11:15, 11:20, 11:25, 11:30, 11:35, 11:40, 11:45, 11:50, 11:55 PM
     scheduler.add_job(
         func=run_smart_polling,
         trigger="cron",
         day_of_week="mon,wed,sat",    # Powerball drawing days only
         hour="23",                     # 11 PM hour only (first runs)
-        minute="15,30,45",             # 11:15, 11:30, 11:45 PM
+        minute="15,20,25,30,35,40,45,50,55",  # Every 5 min starting 11:15 PM
         timezone="America/New_York",
         id="smart_polling",
-        name="Smart Polling v7.0 (every 15 min on draw nights)",
+        name="Smart Polling v7.0 (every 5 min on draw nights)",
         max_instances=1,
         coalesce=True,
         replace_existing=True
     )
 
     # JOB #1B: SMART POLLING - Overnight continuation
-    # Continues polling from midnight to 6 AM if draw not found
+    # Continues polling from midnight to 6 AM if draw not found (hourly)
     scheduler.add_job(
         func=run_smart_polling,
         trigger="cron",
         day_of_week="tue,thu,sun",    # Day AFTER drawing (overnight)
-        hour="0,1,2,3,4,5",            # Midnight to 5:45 AM
-        minute="0,15,30,45",           # Every 15 min
+        hour="0,1,2,3,4,5",            # Midnight to 5:00 AM
+        minute="0",                    # Every hour on the hour
         timezone="America/New_York",
         id="smart_polling_overnight",
-        name="Smart Polling v7.0 (overnight continuation)",
+        name="Smart Polling v7.0 (hourly overnight)",
         max_instances=1,
         coalesce=True,
         replace_existing=True
