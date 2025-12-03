@@ -1173,15 +1173,12 @@ async def _execute_pipeline_steps(
         )
 
         manager = StrategyManager()
-        total_saved = 0
-
-        # Generate in batches to avoid memory issues
-        for batch_num in range(5):
-            batch_tickets = manager.generate_balanced_tickets(total=100)
-            batch_saved = save_generated_tickets(batch_tickets, next_draw)
-            total_saved += batch_saved
-            logger.info(f"[{execution_id}] Batch {batch_num + 1}/5: Saved {batch_saved} tickets")
-            gc.collect()
+        
+        # Generate 55 tickets (5 per each of 11 strategies) - OPTIMIZED for fast execution
+        batch_tickets = manager.generate_balanced_tickets(total=55)
+        total_saved = save_generated_tickets(batch_tickets, next_draw)
+        logger.info(f"[{execution_id}] Saved {total_saved} tickets for {next_draw}")
+        gc.collect()
 
         logger.info(f"[{execution_id}] ✅ STEP 6 Complete: Generated {total_saved} predictions")
 
