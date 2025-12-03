@@ -1326,13 +1326,11 @@ async def _execute_pipeline_steps_without_insert(
         manager = StrategyManager()
         total_saved = 0
 
-        # Generate in batches (3 x 100 = 300 tickets - optimized for speed)
-        for batch_num in range(3):
-            batch_tickets = manager.generate_balanced_tickets(total=100)
-            batch_saved = save_generated_tickets(batch_tickets, next_draw)
-            total_saved += batch_saved
-            logger.info(f"[{execution_id}] Batch {batch_num + 1}/3: Saved {batch_saved} tickets")
-            gc.collect()
+        # Generate 55 tickets (5 per strategy × 11 strategies) - fast for manual runs
+        batch_tickets = manager.generate_balanced_tickets(total=55)
+        total_saved = save_generated_tickets(batch_tickets, next_draw)
+        logger.info(f"[{execution_id}] Generated {total_saved} tickets")
+        gc.collect()
 
         logger.info(f"[{execution_id}] ✅ STEP 6 Complete: Generated {total_saved} predictions")
 
