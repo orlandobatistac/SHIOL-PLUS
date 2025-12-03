@@ -271,42 +271,42 @@ async def evaluate_predictions_for_draw(draw_date: str):
             try:
                 # Get strategy-level stats from evaluated predictions
                 cursor.execute("""
-                    SELECT strategy_used, 
+                    SELECT strategy_used,
                            COUNT(*) as plays,
                            SUM(CASE WHEN prize_won > 0 THEN 1 ELSE 0 END) as wins,
                            SUM(prize_won) as total_prize
-                    FROM generated_tickets 
+                    FROM generated_tickets
                     WHERE draw_date = ? AND evaluated = 1
                     GROUP BY strategy_used
                 """, (draw_date,))
-                
+
                 strategy_stats = cursor.fetchall()
-                
+
                 for strategy_name, plays, wins, total_prize in strategy_stats:
                     # Update total_plays and total_wins (increment, not replace)
                     cursor.execute("""
-                        UPDATE strategy_performance 
+                        UPDATE strategy_performance
                         SET total_plays = total_plays + ?,
                             total_wins = total_wins + ?,
-                            win_rate = CASE 
-                                WHEN (total_plays + ?) > 0 
+                            win_rate = CASE
+                                WHEN (total_plays + ?) > 0
                                 THEN CAST((total_wins + ?) AS REAL) / (total_plays + ?)
-                                ELSE 0.0 
+                                ELSE 0.0
                             END,
-                            roi = CASE 
-                                WHEN (total_plays + ?) > 0 
+                            roi = CASE
+                                WHEN (total_plays + ?) > 0
                                 THEN (COALESCE(roi * total_plays, 0) + ?) / (total_plays + ?)
-                                ELSE 0.0 
+                                ELSE 0.0
                             END,
                             last_updated = CURRENT_TIMESTAMP
                         WHERE strategy_name = ?
                     """, (plays, wins, plays, wins, plays, plays, total_prize or 0, plays, strategy_name))
-                    
+
                     logger.debug(f"Updated {strategy_name}: +{plays} plays, +{wins} wins, +${total_prize or 0:.2f}")
-                
+
                 conn.commit()
                 logger.info(f"Strategy performance updated for {len(strategy_stats)} strategies")
-                
+
             except Exception as ex:
                 logger.error(f"Failed to update strategy_performance: {ex}")
 
@@ -1366,15 +1366,15 @@ async def _execute_pipeline_steps_without_insert(
             logger.info(f"[{execution_id}] Deleted {deleted_count} old predictions for {next_draw}")
 
         manager = StrategyManager()
-        total_saved = 0
 
-        # Generate 55 tickets (5 per strategy × 11 strategies) - fast for manual runs
-        batch_tickets = manager.generate_balanced_tickets(total=55)
+        # Generate 110 tickets distributed by adaptive weights
+        # Strategies with higher win rates get more tickets
+        batch_tickets = manager.generate_balanced_tickets(total=110)
         total_saved = save_generated_tickets(batch_tickets, next_draw)
-        logger.info(f"[{execution_id}] Generated {total_saved} tickets")
+        logger.info(f"[{execution_id}] Generated {total_saved} tickets (weighted by strategy performance)")
         gc.collect()
 
-        logger.info(f"[{execution_id}] ✅ STEP 6 Complete: Generated {total_saved} predictions")
+        logger.info(f"[{execution_id}] ✅ STEP 6 Complete: Generated {total_saved} predictions (weighted distribution)")
 
         # ========== PIPELINE COMPLETE ==========
         elapsed = (datetime.now() - start_time).total_seconds()
@@ -1436,15 +1436,13 @@ async def _generate_predictions_only(next_draw: str) -> int:
     logger.info(f"🎯 Generating predictions for {next_draw} (standalone)")
 
     manager = StrategyManager()
-    total_saved = 0
 
-    for batch_num in range(5):
-        batch_tickets = manager.generate_balanced_tickets(total=100)
-        batch_saved = save_generated_tickets(batch_tickets, next_draw)
-        total_saved += batch_saved
-        gc.collect()
+    # Generate 110 tickets distributed by adaptive weights
+    batch_tickets = manager.generate_balanced_tickets(total=110)
+    total_saved = save_generated_tickets(batch_tickets, next_draw)
+    gc.collect()
 
-    logger.info(f"🎯 Generated {total_saved} predictions for {next_draw}")
+    logger.info(f"🎯 Generated {total_saved} predictions for {next_draw} (weighted distribution)")
     return total_saved
 
 
