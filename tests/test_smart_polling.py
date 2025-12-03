@@ -380,130 +380,145 @@ class TestSinglePollingAttempt:
 
 
 # ============================================================================
-# UNIT TESTS: smart_polling_check Main Function
+# UNIT TESTS: smart_polling_check Main Function (Single Check, No Retry)
 # ============================================================================
 
 class TestSmartPollingCheck:
-    """Tests for smart_polling_check main function."""
+    """Tests for smart_polling_check main function.
     
-    @patch('src.loader._single_polling_attempt')
-    def test_returns_on_first_attempt_success(self, mock_attempt):
-        """Test immediate return when first attempt succeeds."""
+    Note: smart_polling_check does NOT retry internally.
+    It checks all 4 sources ONCE and returns.
+    The SCHEDULER handles retries every 15 minutes.
+    """
+    
+    @patch('src.loader.check_powerball_official')
+    @patch('src.loader.check_nclottery_website')
+    @patch('src.loader.check_musl_api')
+    @patch('src.loader.check_nclottery_csv')
+    def test_returns_on_first_source_success(self, mock_csv, mock_musl, mock_nc, mock_pb):
+        """Test immediate return when first source succeeds."""
         from src.loader import smart_polling_check, SourceDiagnostic, SourceStatus
         
-        mock_attempt.return_value = {
-            'success': True,
-            'draw_data': {"n1": 1, "n2": 2, "n3": 3, "n4": 4, "n5": 5, "pb": 10},
-            'source': "powerball_official",
-            'diagnostics': [SourceDiagnostic(
-                source="powerball_official",
-                status=SourceStatus.SUCCESS,
-                success=True
-            )]
-        }
+        # First source succeeds
+        mock_pb.return_value = SourceDiagnostic(
+            source="powerball_official",
+            status=SourceStatus.SUCCESS,
+            success=True,
+            draw_data={"n1": 1, "n2": 2, "n3": 3, "n4": 4, "n5": 5, "pb": 10}
+        )
         
-        result = smart_polling_check("2024-01-15", max_attempts=4, delay_seconds=1)
+        result = smart_polling_check("2024-01-15")
         
         assert result['success'] is True
-        assert result['attempts'] == 1
-        mock_attempt.assert_called_once()
+        assert result['source'] == "powerball_official"
+        # Other sources should NOT be called
+        mock_nc.assert_not_called()
+        mock_musl.assert_not_called()
+        mock_csv.assert_not_called()
     
-    @patch('src.loader._single_polling_attempt')
-    @patch('src.loader.time.sleep')
-    def test_retries_on_failure(self, mock_sleep, mock_attempt):
-        """Test that function retries up to max_attempts."""
+    @patch('src.loader.check_powerball_official')
+    @patch('src.loader.check_nclottery_website')
+    @patch('src.loader.check_musl_api')
+    @patch('src.loader.check_nclottery_csv')
+    def test_tries_all_sources_when_all_fail(self, mock_csv, mock_musl, mock_nc, mock_pb):
+        """Test that all 4 sources are tried when none succeed."""
         from src.loader import smart_polling_check, SourceDiagnostic, SourceStatus
         
-        # Fail all attempts
-        mock_attempt.return_value = {
-            'success': False,
-            'draw_data': None,
-            'source': None,
-            'diagnostics': [SourceDiagnostic(
-                source="powerball_official",
-                status=SourceStatus.NOT_AVAILABLE_YET,
-                success=False
-            )]
-        }
+        # All sources fail
+        mock_pb.return_value = SourceDiagnostic(
+            source="powerball_official", status=SourceStatus.TIMEOUT, success=False)
+        mock_nc.return_value = SourceDiagnostic(
+            source="nclottery_web", status=SourceStatus.BLOCKED_IP, success=False)
+        mock_musl.return_value = SourceDiagnostic(
+            source="musl_api", status=SourceStatus.API_KEY_MISSING, success=False)
+        mock_csv.return_value = SourceDiagnostic(
+            source="nclottery_csv", status=SourceStatus.NOT_AVAILABLE_YET, success=False)
         
-        result = smart_polling_check("2024-01-15", max_attempts=3, delay_seconds=1)
+        result = smart_polling_check("2024-01-15")
         
         assert result['success'] is False
-        assert result['attempts'] == 3
-        assert mock_attempt.call_count == 3
-        # Sleep should be called between attempts (2 times for 3 attempts)
-        assert mock_sleep.call_count == 2
+        assert result['source'] is None
+        # All 4 sources should be called
+        mock_pb.assert_called_once()
+        mock_nc.assert_called_once()
+        mock_musl.assert_called_once()
+        mock_csv.assert_called_once()
+        # All 4 diagnostics should be collected
+        assert len(result['diagnostics']) == 4
     
-    @patch('src.loader._single_polling_attempt')
-    @patch('src.loader.time.sleep')
-    def test_success_on_third_attempt(self, mock_sleep, mock_attempt):
-        """Test success after multiple failed attempts."""
+    @patch('src.loader.check_powerball_official')
+    @patch('src.loader.check_nclottery_website')
+    @patch('src.loader.check_musl_api')
+    @patch('src.loader.check_nclottery_csv')
+    def test_success_on_third_source(self, mock_csv, mock_musl, mock_nc, mock_pb):
+        """Test success when third source (MUSL API) succeeds."""
         from src.loader import smart_polling_check, SourceDiagnostic, SourceStatus
         
         # First two fail, third succeeds
-        mock_attempt.side_effect = [
-            {'success': False, 'draw_data': None, 'source': None, 
-             'diagnostics': [SourceDiagnostic(source="pb", status=SourceStatus.NOT_AVAILABLE_YET, success=False)]},
-            {'success': False, 'draw_data': None, 'source': None,
-             'diagnostics': [SourceDiagnostic(source="pb", status=SourceStatus.NOT_AVAILABLE_YET, success=False)]},
-            {'success': True, 'draw_data': {"n1": 1}, 'source': "musl_api",
-             'diagnostics': [SourceDiagnostic(source="musl_api", status=SourceStatus.SUCCESS, success=True)]},
-        ]
+        mock_pb.return_value = SourceDiagnostic(
+            source="powerball_official", status=SourceStatus.TIMEOUT, success=False)
+        mock_nc.return_value = SourceDiagnostic(
+            source="nclottery_web", status=SourceStatus.BLOCKED_IP, success=False)
+        mock_musl.return_value = SourceDiagnostic(
+            source="musl_api", status=SourceStatus.SUCCESS, success=True,
+            draw_data={"n1": 1, "n2": 2, "n3": 3, "n4": 4, "n5": 5, "pb": 10})
         
-        result = smart_polling_check("2024-01-15", max_attempts=4, delay_seconds=1)
+        result = smart_polling_check("2024-01-15")
         
         assert result['success'] is True
-        assert result['attempts'] == 3
         assert result['source'] == "musl_api"
+        # CSV should NOT be called since MUSL succeeded
+        mock_csv.assert_not_called()
+        # Should have 3 diagnostics (PB, NC, MUSL)
+        assert len(result['diagnostics']) == 3
     
-    @patch('src.loader._single_polling_attempt')
-    def test_elapsed_time_tracked(self, mock_attempt):
+    @patch('src.loader.check_powerball_official')
+    @patch('src.loader.check_nclottery_website')
+    @patch('src.loader.check_musl_api')
+    @patch('src.loader.check_nclottery_csv')
+    def test_elapsed_time_tracked(self, mock_csv, mock_musl, mock_nc, mock_pb):
         """Test that elapsed time is tracked correctly."""
         from src.loader import smart_polling_check, SourceDiagnostic, SourceStatus
         
-        mock_attempt.return_value = {
-            'success': True,
-            'draw_data': {"n1": 1},
-            'source': "powerball_official",
-            'diagnostics': [SourceDiagnostic(
-                source="powerball_official",
-                status=SourceStatus.SUCCESS,
-                success=True
-            )]
-        }
+        mock_pb.return_value = SourceDiagnostic(
+            source="powerball_official", status=SourceStatus.SUCCESS, success=True,
+            draw_data={"n1": 1, "n2": 2, "n3": 3, "n4": 4, "n5": 5, "pb": 10})
         
-        result = smart_polling_check("2024-01-15", max_attempts=1, delay_seconds=0)
+        result = smart_polling_check("2024-01-15")
         
         assert 'elapsed_seconds' in result
         assert result['elapsed_seconds'] >= 0
     
-    @patch('src.loader._single_polling_attempt')
-    @patch('src.loader.time.sleep')
-    def test_all_diagnostics_collected(self, mock_sleep, mock_attempt):
-        """Test that diagnostics from all attempts are collected."""
+    @patch('src.loader.check_powerball_official')
+    @patch('src.loader.check_nclottery_website')
+    @patch('src.loader.check_musl_api')
+    @patch('src.loader.check_nclottery_csv')
+    def test_diagnostics_collected_on_failure(self, mock_csv, mock_musl, mock_nc, mock_pb):
+        """Test that diagnostics from all sources are collected when all fail."""
         from src.loader import smart_polling_check, SourceDiagnostic, SourceStatus
         
-        mock_attempt.side_effect = [
-            {'success': False, 'draw_data': None, 'source': None,
-             'diagnostics': [
-                 SourceDiagnostic(source="pb", status=SourceStatus.TIMEOUT, success=False),
-                 SourceDiagnostic(source="nc", status=SourceStatus.BLOCKED_IP, success=False),
-             ]},
-            {'success': True, 'draw_data': {"n1": 1}, 'source': "musl_api",
-             'diagnostics': [
-                 SourceDiagnostic(source="pb", status=SourceStatus.TIMEOUT, success=False),
-                 SourceDiagnostic(source="musl_api", status=SourceStatus.SUCCESS, success=True),
-             ]},
-        ]
+        mock_pb.return_value = SourceDiagnostic(
+            source="powerball_official", status=SourceStatus.TIMEOUT, success=False)
+        mock_nc.return_value = SourceDiagnostic(
+            source="nclottery_web", status=SourceStatus.BLOCKED_IP, success=False)
+        mock_musl.return_value = SourceDiagnostic(
+            source="musl_api", status=SourceStatus.API_KEY_MISSING, success=False)
+        mock_csv.return_value = SourceDiagnostic(
+            source="nclottery_csv", status=SourceStatus.WRONG_DATE, success=False)
         
-        result = smart_polling_check("2024-01-15", max_attempts=4, delay_seconds=1)
+        result = smart_polling_check("2024-01-15")
         
-        # Should have 4 diagnostics total (2 from first attempt + 2 from second)
+        assert result['success'] is False
+        # Should have all 4 diagnostics
         assert len(result['diagnostics']) == 4
+        # Verify each diagnostic has correct status
+        statuses = [d.status for d in result['diagnostics']]
+        assert SourceStatus.TIMEOUT in statuses
+        assert SourceStatus.BLOCKED_IP in statuses
 
 
 # ============================================================================
-# INTEGRATION TESTS: End-to-End Polling Flow
+# INTEGRATION TESTS: End-to-End Source Check Flow
 # ============================================================================
 
 class TestSmartPollingIntegration:
@@ -512,44 +527,52 @@ class TestSmartPollingIntegration:
     @pytest.mark.integration
     @patch('src.loader.requests.get')
     def test_full_polling_with_mocked_network(self, mock_get):
-        """Test complete polling flow with mocked network responses."""
+        """Test complete source check flow with mocked network responses."""
         from src.loader import smart_polling_check, SourceStatus
         import requests
         
         # All sources timeout
         mock_get.side_effect = requests.exceptions.Timeout("Connection timed out")
         
-        result = smart_polling_check("2024-01-15", max_attempts=2, delay_seconds=0)
+        # Single check - no retries
+        result = smart_polling_check("2024-01-15")
         
         assert result['success'] is False
-        assert result['attempts'] == 2
-        # Should have diagnostics from multiple sources per attempt
-        assert len(result['diagnostics']) > 0
+        # Should have diagnostics from all 4 sources (each tried once)
+        assert len(result['diagnostics']) == 4
         
-        # All diagnostics should show timeout
+        # All diagnostics should show timeout or similar error
         for diag in result['diagnostics']:
             if hasattr(diag, 'status'):
                 assert diag.status in [SourceStatus.TIMEOUT, SourceStatus.CONNECTION_ERROR, SourceStatus.API_KEY_MISSING]
     
     @pytest.mark.integration
-    def test_max_attempts_respects_limit(self):
-        """Test that polling respects max_attempts limit."""
-        from src.loader import smart_polling_check
+    @patch('src.loader.check_powerball_official')
+    @patch('src.loader.check_nclottery_website')
+    @patch('src.loader.check_musl_api')
+    @patch('src.loader.check_nclottery_csv')
+    def test_single_check_no_internal_retry(self, mock_csv, mock_musl, mock_nc, mock_pb):
+        """Test that smart_polling_check does NOT retry internally."""
+        from src.loader import smart_polling_check, SourceDiagnostic, SourceStatus
         
-        # Use very short delay for test speed
-        # This will make real network calls but with limited attempts
-        with patch('src.loader._single_polling_attempt') as mock_attempt:
-            mock_attempt.return_value = {
-                'success': False,
-                'draw_data': None,
-                'source': None,
-                'diagnostics': []
-            }
-            
-            result = smart_polling_check("2099-12-31", max_attempts=2, delay_seconds=0)
-            
-            assert mock_attempt.call_count == 2
-            assert result['attempts'] == 2
+        # All sources fail
+        mock_pb.return_value = SourceDiagnostic(
+            source="powerball_official", status=SourceStatus.NOT_AVAILABLE_YET, success=False)
+        mock_nc.return_value = SourceDiagnostic(
+            source="nclottery_web", status=SourceStatus.NOT_AVAILABLE_YET, success=False)
+        mock_musl.return_value = SourceDiagnostic(
+            source="musl_api", status=SourceStatus.NOT_AVAILABLE_YET, success=False)
+        mock_csv.return_value = SourceDiagnostic(
+            source="nclottery_csv", status=SourceStatus.NOT_AVAILABLE_YET, success=False)
+        
+        result = smart_polling_check("2099-12-31")
+        
+        # Each source should be called exactly ONCE (no retries)
+        assert mock_pb.call_count == 1
+        assert mock_nc.call_count == 1
+        assert mock_musl.call_count == 1
+        assert mock_csv.call_count == 1
+        assert result['success'] is False
 
 
 # ============================================================================

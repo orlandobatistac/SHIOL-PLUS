@@ -1607,7 +1607,7 @@ def run_daily_full_sync():
 async def trigger_pipeline_layer1():
     """
     DEPRECATED: Use smart_polling_pipeline() instead.
-    
+
     LAYER 1: Primary post-draw pipeline execution.
 
     Runs at 11:15 PM ET on drawing days (Mon/Wed/Sat).
@@ -1618,7 +1618,7 @@ async def trigger_pipeline_layer1():
     """
     logger.warning("⚠️ trigger_pipeline_layer1 is DEPRECATED - use smart_polling_pipeline()")
     return await smart_polling_pipeline()
-    
+
     # --- Original code below (disabled) ---
     """
     global active_pipeline_execution_id
@@ -1721,7 +1721,7 @@ async def trigger_pipeline_layer1():
 async def retry_pending_draws_layer2():
     """
     DEPRECATED: Use smart_polling_pipeline() instead.
-    
+
     LAYER 2: Retry pending draws using multi-source polling.
 
     Runs every 15 minutes after drawing time until 6 AM.
@@ -1729,7 +1729,7 @@ async def retry_pending_draws_layer2():
     """
     logger.warning("⚠️ retry_pending_draws_layer2 is DEPRECATED - use smart_polling_pipeline()")
     return await smart_polling_pipeline()
-    
+
     # --- Original code below (disabled) ---
     """
     from src.loader import poll_draw_layer2
@@ -1817,7 +1817,7 @@ async def retry_pending_draws_layer2():
 async def emergency_recovery_layer3():
     """
     DEPRECATED: Use smart_polling_pipeline() instead.
-    
+
     LAYER 3: Emergency recovery at 6 AM ET.
 
     Last chance to recover any pending draws. Uses all sources with maximum retries.
@@ -1827,7 +1827,7 @@ async def emergency_recovery_layer3():
     logger.warning("⚠️ emergency_recovery_layer3 is DEPRECATED - use smart_polling_pipeline()")
     run_daily_full_sync()
     return await smart_polling_pipeline()
-    
+
     # --- Original code below (disabled) ---
     """
     from src.loader import poll_draw_layer3
@@ -2133,56 +2133,56 @@ async def _generate_predictions_only(next_draw: str) -> int:
 async def smart_polling_pipeline():
     """
     SMART POLLING PIPELINE v7.0 - Unified polling with detailed diagnostics.
-    
+
     This replaces the old 3-layer architecture (Layer 1, 2, 3) with a single
     intelligent polling system that:
-    
+
     1. Determines expected draw date
     2. Checks all 4 sources with detailed diagnostics
     3. Logs diagnostic results for frontend visibility
     4. If draw found: executes pipeline steps 2-6
     5. If draw not found: records diagnostics and waits for next scheduler run
-    
+
     The scheduler runs this every 15 minutes on draw nights from 11:15 PM to 6 AM.
     Each run is limited to 2 minutes (4 attempts × 30s) to avoid systemd timeout.
     """
     global active_pipeline_execution_id
     from src.loader import smart_polling_check
     from src.date_utils import DateManager
-    
+
     logger.info("=" * 80)
     logger.info("🚀 [SMART POLLING] STARTING UNIFIED PIPELINE v7.0")
     logger.info("=" * 80)
-    
+
     execution_id = str(uuid.uuid4())[:8]
     active_pipeline_execution_id = execution_id
     start_time = datetime.now()
-    
+
     # Determine expected draw date
     last_draw_in_db = db.get_latest_draw_date()
     expected_draw_date = DateManager.get_expected_draw_for_pipeline(last_draw_in_db)
-    
+
     if not expected_draw_date:
         logger.error(f"[{execution_id}] Could not determine expected draw date")
         active_pipeline_execution_id = None
         return {'success': False, 'error': 'Could not determine expected draw date'}
-    
+
     logger.info(f"[{execution_id}] Expected draw: {expected_draw_date}")
-    
+
     # Check if draw already exists in database
     existing_draw = db.get_draw_by_date(expected_draw_date)
     if existing_draw:
         logger.info(f"[{execution_id}] Draw {expected_draw_date} already in database - skipping polling")
         active_pipeline_execution_id = None
         return {
-            'success': True, 
+            'success': True,
             'status': 'already_exists',
             'message': f'Draw {expected_draw_date} already processed'
         }
-    
+
     # Create or update pending_draw record
     db.insert_pending_draw(expected_draw_date)
-    
+
     # Initialize pipeline log with diagnostic metadata
     metadata = {
         "trigger": "smart_polling_scheduled",
@@ -2190,28 +2190,25 @@ async def smart_polling_pipeline():
         "expected_draw": expected_draw_date,
         "source_diagnostics": []  # Will be populated with check results
     }
-    
+
     db.insert_pipeline_execution_log(
         execution_id=execution_id,
         start_time=start_time.isoformat(),
         metadata=json.dumps(metadata)
     )
-    
+
     db.update_pipeline_execution_log(
         execution_id=execution_id,
-        current_step="STEP 1/6: Getting Draw (Smart Polling)",
+        current_step="STEP 1/6: Getting Draw",
         target_draw_date=expected_draw_date
     )
-    
-    # ========== STEP 1: SMART POLLING WITH DIAGNOSTICS ==========
-    logger.info(f"[{execution_id}] STEP 1: Smart Polling for {expected_draw_date}...")
-    
-    polling_result = smart_polling_check(
-        expected_draw_date,
-        max_attempts=4,
-        delay_seconds=30
-    )
-    
+
+    # ========== STEP 1: CHECK ALL SOURCES ONCE ==========
+    logger.info(f"[{execution_id}] STEP 1: Checking sources for {expected_draw_date}...")
+
+    # Single check of all 4 sources (no internal retry - scheduler handles retries)
+    polling_result = smart_polling_check(expected_draw_date)
+
     # Store diagnostics in metadata for frontend visibility
     # diagnostics can be SourceDiagnostic objects or dicts
     diagnostics_list = []
@@ -2229,37 +2226,37 @@ async def smart_polling_pipeline():
                 "status": getattr(d, 'status', 'unknown'),
                 "message": getattr(d, 'diagnostic_message', str(d))
             })
-    
+
     metadata["source_diagnostics"] = diagnostics_list
-    metadata["total_attempts"] = polling_result.get('attempts', 0)
-    metadata["polling_elapsed_seconds"] = polling_result.get('elapsed_seconds', 0)
-    
+    metadata["check_elapsed_seconds"] = polling_result.get('elapsed_seconds', 0)
+
     if not polling_result['success']:
-        # Draw not available yet - update log and wait for next scheduler run
+        # Draw not available yet - update log and wait for next scheduler run (15 min)
         elapsed = (datetime.now() - start_time).total_seconds()
-        
-        # Increment pending_draw attempt counter
+
+        # Increment pending_draw attempt counter (tracks scheduler runs, not internal retries)
         db.update_pending_draw(expected_draw_date, increment_attempts=True)
         pending_info = db.get_pending_draw(expected_draw_date)
-        total_attempts = pending_info['attempts'] if pending_info else 1
-        
-        # Check if we've exceeded maximum attempts (e.g., 24 attempts = 6 hours of trying)
-        max_total_attempts = 24
-        if total_attempts >= max_total_attempts:
+        scheduler_attempts = pending_info['attempts'] if pending_info else 1
+
+        # Check if we've exceeded maximum scheduler attempts
+        # 28 attempts × 15 min = 7 hours (11:15 PM to 6:15 AM)
+        max_scheduler_attempts = 28
+        if scheduler_attempts >= max_scheduler_attempts:
             # Mark as permanently failed
             db.mark_pending_draw_failed(
                 expected_draw_date,
-                error_message=f"Failed after {total_attempts} total scheduler runs"
+                error_message=f"Failed after {scheduler_attempts} scheduler runs (~7 hours)"
             )
-            status_msg = f"❌ PERMANENTLY FAILED after {total_attempts} attempts"
+            status_msg = f"❌ PERMANENTLY FAILED after {scheduler_attempts} scheduler runs"
             final_status = "failed"
         else:
-            status_msg = f"⏳ PENDING (attempt {total_attempts}/{max_total_attempts})"
+            status_msg = f"⏳ PENDING (scheduler run {scheduler_attempts}/{max_scheduler_attempts})"
             final_status = "pending"
-        
+
         metadata["final_status"] = final_status
-        metadata["total_scheduler_attempts"] = total_attempts
-        
+        metadata["scheduler_attempts"] = scheduler_attempts
+
         db.update_pipeline_execution_log(
             execution_id=execution_id,
             status="completed",
@@ -2270,10 +2267,10 @@ async def smart_polling_pipeline():
             elapsed_seconds=elapsed,
             metadata=json.dumps(metadata)
         )
-        
+
         logger.info(f"[{execution_id}] {status_msg}")
         logger.info(f"[{execution_id}] Diagnostics: {metadata['source_diagnostics']}")
-        
+
         active_pipeline_execution_id = None
         return {
             'success': True,
@@ -2283,17 +2280,17 @@ async def smart_polling_pipeline():
             'diagnostics': metadata['source_diagnostics'],
             'message': f'Draw not available yet - {status_msg}'
         }
-    
+
     # ========== DRAW FOUND - EXECUTE FULL PIPELINE ==========
     draw_data = polling_result['draw_data']
     data_source = polling_result['source']
-    
+
     logger.info(f"[{execution_id}] ✅ STEP 1 SUCCESS via {data_source}")
     logger.info(f"[{execution_id}] Draw data: {draw_data}")
-    
+
     # Mark pending_draw as completed
     db.mark_pending_draw_completed(expected_draw_date, layer=7)  # 7 = unified system
-    
+
     # Execute pipeline steps 2-6 using existing helper
     result = await _execute_pipeline_steps(
         execution_id=execution_id,
@@ -2304,7 +2301,7 @@ async def smart_polling_pipeline():
         metadata=metadata,
         layer=7  # 7 = unified smart polling system
     )
-    
+
     active_pipeline_execution_id = None
     return result
 

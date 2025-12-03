@@ -24,7 +24,7 @@ from src.database import get_db_connection
 class SourceStatus(str, Enum):
     """Diagnostic status codes for data source responses."""
     SUCCESS = "SUCCESS"                      # ✅ Draw found and valid
-    NOT_AVAILABLE_YET = "NOT_AVAILABLE"      # ⏳ Draw not published yet  
+    NOT_AVAILABLE_YET = "NOT_AVAILABLE"      # ⏳ Draw not published yet
     WRONG_DATE = "WRONG_DATE"                # 📅 Found different date than expected
     API_REPORTING = "API_REPORTING"          # 🔄 MUSL API in 'reporting' state
     BLOCKED_IP = "BLOCKED_IP"                # 🚫 IP blocked (403/429)
@@ -51,7 +51,7 @@ class SourceDiagnostic:
     diagnostic_message: str = ""
     draw_data: Optional[Dict] = None
     raw_details: Optional[Dict] = None
-    
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
         result = asdict(self)
@@ -85,24 +85,24 @@ def _get_status_emoji(status: SourceStatus) -> str:
 def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
     """
     Check NC Lottery website with detailed diagnostics.
-    
+
     Returns SourceDiagnostic with full status information.
     """
     source_name = "nclottery_web"
     start_time = time.time()
-    
+
     try:
         from bs4 import BeautifulSoup
-        
+
         url = "https://nclottery.com/powerball"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         }
-        
+
         response = requests.get(url, headers=headers, timeout=15)
         response_time_ms = int((time.time() - start_time) * 1000)
-        
+
         # Check for IP blocking
         if response.status_code in [403, 429]:
             return SourceDiagnostic(
@@ -114,10 +114,10 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message=f"IP blocked or rate limited (HTTP {response.status_code})"
             )
-        
+
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         # Find draw date element
         drawdate_elem = soup.find('span', id='ctl00_MainContent_lblDrawdate')
         if not drawdate_elem:
@@ -131,7 +131,7 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message="Draw date element (id='ctl00_MainContent_lblDrawdate') not found - page structure may have changed",
                 raw_details={"html_size": len(response.text)}
             )
-        
+
         # Parse date
         drawdate_text = drawdate_elem.get_text(strip=True)
         try:
@@ -155,7 +155,7 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message=f"Cannot parse date '{drawdate_text}' - format may have changed",
                 raw_details={"raw_date": drawdate_text}
             )
-        
+
         # Check if correct date
         if normalized_date != expected_draw_date:
             return SourceDiagnostic(
@@ -168,7 +168,7 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
                 found_date=normalized_date,
                 diagnostic_message=f"Website shows {normalized_date}, waiting for {expected_draw_date}"
             )
-        
+
         # Extract numbers
         white_balls = []
         for i in range(1, 6):
@@ -185,7 +185,7 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
                     diagnostic_message=f"Ball {i} element not found - page structure may have changed"
                 )
             white_balls.append(int(ball_elem.get_text(strip=True)))
-        
+
         pb_elem = soup.find('span', id='ctl00_MainContent_lblPowerball')
         if not pb_elem:
             return SourceDiagnostic(
@@ -199,7 +199,7 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message="Powerball element not found - page structure may have changed"
             )
         powerball = int(pb_elem.get_text(strip=True))
-        
+
         # Extract multiplier
         multiplier = 1
         powerplay_elem = soup.find('span', id='ctl00_MainContent_lblPowerplay')
@@ -208,7 +208,7 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
             match = re.search(r'(\d+)x', powerplay_elem.get_text(strip=True))
             if match:
                 multiplier = int(match.group(1))
-        
+
         # SUCCESS
         draw_data = {
             'draw_date': expected_draw_date,
@@ -218,7 +218,7 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
             'multiplier': multiplier,
             'source': source_name
         }
-        
+
         return SourceDiagnostic(
             source=source_name,
             status=SourceStatus.SUCCESS,
@@ -230,7 +230,7 @@ def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
             draw_data=draw_data,
             diagnostic_message=f"Draw found: [{white_balls[0]}, {white_balls[1]}, {white_balls[2]}, {white_balls[3]}, {white_balls[4]}] + PB {powerball}"
         )
-        
+
     except requests.exceptions.Timeout:
         return SourceDiagnostic(
             source=source_name,
@@ -268,16 +268,16 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
     """
     source_name = "powerball_official"
     start_time = time.time()
-    
+
     try:
         from bs4 import BeautifulSoup
-        
+
         url = "https://www.powerball.com/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        
+
         response = requests.get(url, headers=headers, timeout=15)
         response_time_ms = int((time.time() - start_time) * 1000)
-        
+
         if response.status_code in [403, 429]:
             return SourceDiagnostic(
                 source=source_name,
@@ -288,10 +288,10 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message=f"IP blocked or rate limited (HTTP {response.status_code})"
             )
-        
+
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         # Find completed draw card
         card = soup.find('div', class_='card h-100 number-card number-powerball complete')
         if not card:
@@ -304,7 +304,7 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message="Draw card not marked 'complete' yet - results still being processed"
             )
-        
+
         date_elem = card.find('h5', class_='title-date')
         if not date_elem:
             return SourceDiagnostic(
@@ -316,13 +316,13 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message="Date element (h5.title-date) not found in card"
             )
-        
+
         draw_date_text = date_elem.get_text(strip=True)
         try:
             parsed_date = pd.to_datetime(draw_date_text, format='%a, %b %d, %Y')
         except Exception:
             parsed_date = pd.to_datetime(draw_date_text, errors='coerce')
-        
+
         if parsed_date is pd.NaT:
             return SourceDiagnostic(
                 source=source_name,
@@ -334,7 +334,7 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message=f"Cannot parse date '{draw_date_text}'",
                 raw_details={"raw_date": draw_date_text}
             )
-        
+
         normalized_date = parsed_date.strftime('%Y-%m-%d')
         if normalized_date != expected_draw_date:
             return SourceDiagnostic(
@@ -347,7 +347,7 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
                 found_date=normalized_date,
                 diagnostic_message=f"Website shows {normalized_date}, waiting for {expected_draw_date}"
             )
-        
+
         # Extract numbers
         white_ball_elements = card.select('div.form-control.col.white-balls.item-powerball')
         if len(white_ball_elements) != 5:
@@ -361,9 +361,9 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
                 found_date=normalized_date,
                 diagnostic_message=f"Found {len(white_ball_elements)} white balls, expected 5"
             )
-        
+
         white_balls = [int(el.get_text(strip=True)) for el in white_ball_elements]
-        
+
         powerball_elem = card.select_one('div.form-control.col.powerball.item-powerball')
         if not powerball_elem:
             return SourceDiagnostic(
@@ -377,10 +377,10 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message="Powerball element not found"
             )
         powerball = int(powerball_elem.get_text(strip=True))
-        
+
         multiplier_elem = card.select_one('span.multiplier')
         multiplier = int(multiplier_elem.get_text(strip=True).replace('x', '')) if multiplier_elem else 1
-        
+
         # SUCCESS
         draw_data = {
             'draw_date': expected_draw_date,
@@ -390,7 +390,7 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
             'multiplier': multiplier,
             'source': source_name
         }
-        
+
         return SourceDiagnostic(
             source=source_name,
             status=SourceStatus.SUCCESS,
@@ -402,7 +402,7 @@ def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
             draw_data=draw_data,
             diagnostic_message=f"Draw found: [{', '.join(map(str, white_balls))}] + PB {powerball}"
         )
-        
+
     except requests.exceptions.Timeout:
         return SourceDiagnostic(
             source=source_name,
@@ -440,7 +440,7 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
     """
     source_name = "musl_api"
     start_time = time.time()
-    
+
     api_key = os.getenv("MUSL_API_KEY")
     if not api_key:
         return SourceDiagnostic(
@@ -450,15 +450,15 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
             expected_date=expected_draw_date,
             diagnostic_message="MUSL_API_KEY not found in environment variables"
         )
-    
+
     try:
         url = "https://api.musl.com/v3/numbers"
         headers = {"x-api-key": api_key, "Accept": "application/json"}
         params = {"DrawDate": expected_draw_date, "GameCode": "powerball"}
-        
+
         response = requests.get(url, headers=headers, params=params, timeout=15)
         response_time_ms = int((time.time() - start_time) * 1000)
-        
+
         if response.status_code in [403, 429]:
             return SourceDiagnostic(
                 source=source_name,
@@ -469,7 +469,7 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message=f"API key invalid or rate limited (HTTP {response.status_code})"
             )
-        
+
         if response.status_code == 401:
             return SourceDiagnostic(
                 source=source_name,
@@ -480,10 +480,10 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message="API key unauthorized (HTTP 401) - check MUSL_API_KEY"
             )
-        
+
         response.raise_for_status()
         data = response.json()
-        
+
         if not data or 'drawDate' not in data:
             return SourceDiagnostic(
                 source=source_name,
@@ -495,10 +495,10 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message="Invalid API response - missing 'drawDate' field",
                 raw_details={"response_keys": list(data.keys()) if data else []}
             )
-        
+
         draw_date = data.get('drawDate', '')
         status_code = data.get('statusCode', '')
-        
+
         if draw_date != expected_draw_date:
             return SourceDiagnostic(
                 source=source_name,
@@ -511,7 +511,7 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message=f"API returned {draw_date}, expected {expected_draw_date}",
                 raw_details={"api_status": status_code}
             )
-        
+
         # Check draw status
         if status_code != 'complete':
             return SourceDiagnostic(
@@ -525,7 +525,7 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message=f"Draw in '{status_code}' state - waiting for 'complete' (results being certified)",
                 raw_details={"musl_status": status_code}
             )
-        
+
         # Parse numbers
         numbers_data = data.get('numbers', [])
         if not numbers_data:
@@ -538,11 +538,11 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message="No numbers array in API response"
             )
-        
+
         white_balls = []
         powerball = None
         multiplier = 1
-        
+
         for num_obj in numbers_data:
             if num_obj.get('ruleCode') == 'white-balls':
                 white_balls.append(int(num_obj.get('value', 0)))
@@ -550,9 +550,9 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
                 powerball = int(num_obj.get('value', 0))
             elif num_obj.get('itemCode') == 'power-play':
                 multiplier = int(num_obj.get('value', 1))
-        
+
         white_balls.sort()
-        
+
         if len(white_balls) != 5 or powerball is None:
             return SourceDiagnostic(
                 source=source_name,
@@ -563,7 +563,7 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message=f"Incomplete numbers: {len(white_balls)} white balls, pb={powerball}"
             )
-        
+
         # SUCCESS
         draw_data = {
             'draw_date': expected_draw_date,
@@ -573,7 +573,7 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
             'multiplier': multiplier,
             'source': source_name
         }
-        
+
         return SourceDiagnostic(
             source=source_name,
             status=SourceStatus.SUCCESS,
@@ -586,7 +586,7 @@ def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
             diagnostic_message=f"Draw found: [{', '.join(map(str, white_balls))}] + PB {powerball}",
             raw_details={"musl_status": status_code}
         )
-        
+
     except requests.exceptions.Timeout:
         return SourceDiagnostic(
             source=source_name,
@@ -624,14 +624,14 @@ def check_nclottery_csv(expected_draw_date: str) -> SourceDiagnostic:
     """
     source_name = "nclottery_csv"
     start_time = time.time()
-    
+
     try:
         csv_url = "https://nclottery.com/powerball-download"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        
+
         response = requests.get(csv_url, headers=headers, timeout=30)
         response_time_ms = int((time.time() - start_time) * 1000)
-        
+
         if response.status_code in [403, 429]:
             return SourceDiagnostic(
                 source=source_name,
@@ -642,23 +642,23 @@ def check_nclottery_csv(expected_draw_date: str) -> SourceDiagnostic:
                 expected_date=expected_draw_date,
                 diagnostic_message=f"IP blocked (HTTP {response.status_code})"
             )
-        
+
         response.raise_for_status()
-        
+
         from io import StringIO
         csv_content = StringIO(response.text)
         df = pd.read_csv(csv_content)
-        
+
         # Filter main draws
         main_draws = df[df['SubName'].isna()].copy()
         main_draws = main_draws[main_draws['Ball 1'].notna()].copy()
         main_draws['parsed_date'] = pd.to_datetime(main_draws['Date'], format='%m/%d/%Y')
         main_draws['date_str'] = main_draws['parsed_date'].dt.strftime('%Y-%m-%d')
-        
+
         latest_in_csv = main_draws['date_str'].max() if not main_draws.empty else "N/A"
-        
+
         target_draw = main_draws[main_draws['date_str'] == expected_draw_date]
-        
+
         if target_draw.empty:
             return SourceDiagnostic(
                 source=source_name,
@@ -671,7 +671,7 @@ def check_nclottery_csv(expected_draw_date: str) -> SourceDiagnostic:
                 diagnostic_message=f"Draw not in CSV yet. Latest available: {latest_in_csv}",
                 raw_details={"total_draws": len(main_draws), "latest_date": latest_in_csv}
             )
-        
+
         row = target_draw.iloc[0]
         white_balls = sorted([
             int(row['Ball 1']), int(row['Ball 2']), int(row['Ball 3']),
@@ -679,7 +679,7 @@ def check_nclottery_csv(expected_draw_date: str) -> SourceDiagnostic:
         ])
         powerball = int(row['Powerball'])
         multiplier = int(row['Power Play']) if pd.notna(row['Power Play']) else 1
-        
+
         # SUCCESS
         draw_data = {
             'draw_date': expected_draw_date,
@@ -689,7 +689,7 @@ def check_nclottery_csv(expected_draw_date: str) -> SourceDiagnostic:
             'multiplier': multiplier,
             'source': source_name
         }
-        
+
         return SourceDiagnostic(
             source=source_name,
             status=SourceStatus.SUCCESS,
@@ -701,7 +701,7 @@ def check_nclottery_csv(expected_draw_date: str) -> SourceDiagnostic:
             draw_data=draw_data,
             diagnostic_message=f"Draw found: [{', '.join(map(str, white_balls))}] + PB {powerball}"
         )
-        
+
     except requests.exceptions.Timeout:
         return SourceDiagnostic(
             source=source_name,
@@ -733,96 +733,45 @@ def check_nclottery_csv(expected_draw_date: str) -> SourceDiagnostic:
         )
 
 
-def smart_polling_check(
-    expected_draw_date: str,
-    max_attempts: int = 4,
-    delay_seconds: int = 30
-) -> Dict:
+def smart_polling_check(expected_draw_date: str) -> Dict:
     """
-    Smart polling with multiple attempts and detailed diagnostics.
+    Single check of all sources with detailed diagnostics.
     
-    This is the main function called by the scheduler. It performs multiple
-    polling attempts, each checking all sources in priority order.
+    This function checks all 4 sources ONCE in priority order and returns
+    immediately when a source succeeds or after all sources have been tried.
     
-    Design: Limited to 4 attempts × 30s = 2 minutes max per scheduler run
-    to avoid systemd timeout (~3 minutes).
+    The SCHEDULER handles retries every 15 minutes - this function does NOT
+    retry internally.
+    
+    Priority order:
+    1. powerball_official (powerball.com - scraping)
+    2. nclottery_web (nclottery.com - scraping)
+    3. musl_api (MUSL REST API)
+    4. nclottery_csv (NC Lottery CSV download)
     
     Args:
         expected_draw_date: Date in YYYY-MM-DD format
-        max_attempts: Maximum polling attempts (default: 4)
-        delay_seconds: Delay between attempts (default: 30)
         
     Returns:
-        Dict with polling results and full diagnostics:
+        Dict with check results and full diagnostics:
         {
             'success': bool,
             'draw_data': Dict or None,
             'source': str or None,
-            'attempts': int,
             'elapsed_seconds': float,
-            'diagnostics': [Dict, ...]
+            'diagnostics': [SourceDiagnostic, ...]
         }
     """
     from src.date_utils import DateManager
     
     start_time = time.time()
     current_et = DateManager.get_current_et_time()
-    all_diagnostics = []
     
     logger.info("=" * 80)
-    logger.info(f"🚀 [SMART POLLING] Starting for {expected_draw_date}")
-    logger.info(f"🚀 [SMART POLLING] Config: {max_attempts} attempts × {delay_seconds}s delay")
-    logger.info(f"🚀 [SMART POLLING] Time: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    logger.info(f"🔍 [SOURCE CHECK] Checking draw {expected_draw_date}")
+    logger.info(f"🔍 [SOURCE CHECK] Time: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     logger.info("=" * 80)
     
-    for attempt in range(1, max_attempts + 1):
-        elapsed = time.time() - start_time
-        logger.info(f"\n🔄 [ATTEMPT {attempt}/{max_attempts}] (elapsed: {elapsed:.1f}s)")
-        
-        # Try all sources in priority order
-        result = _single_polling_attempt(expected_draw_date)
-        all_diagnostics.extend(result['diagnostics'])
-        
-        if result['success']:
-            total_elapsed = time.time() - start_time
-            logger.info(f"\n✅ SUCCESS after {attempt} attempt(s) in {total_elapsed:.1f}s")
-            return {
-                'success': True,
-                'draw_data': result['draw_data'],
-                'source': result['source'],
-                'attempts': attempt,
-                'elapsed_seconds': total_elapsed,
-                'diagnostics': all_diagnostics
-            }
-        
-        # Not found yet - wait before next attempt (unless last attempt)
-        if attempt < max_attempts:
-            logger.info(f"⏳ Draw not available. Waiting {delay_seconds}s before next attempt...")
-            time.sleep(delay_seconds)
-    
-    total_elapsed = time.time() - start_time
-    logger.info(f"\n❌ FAILED after {max_attempts} attempts in {total_elapsed:.1f}s")
-    
-    return {
-        'success': False,
-        'draw_data': None,
-        'source': None,
-        'attempts': max_attempts,
-        'elapsed_seconds': total_elapsed,
-        'diagnostics': all_diagnostics
-    }
-
-
-def _single_polling_attempt(expected_draw_date: str) -> Dict:
-    """
-    Single polling attempt checking all sources once.
-    
-    Args:
-        expected_draw_date: Date in YYYY-MM-DD format
-        
-    Returns:
-        Dict with results from this single attempt
-    """
     # Define sources in priority order
     sources = [
         ("1/4", "powerball_official", check_powerball_official),
@@ -853,13 +802,77 @@ def _single_polling_attempt(expected_draw_date: str) -> Dict:
             logger.info(f"      → {diagnostic.diagnostic_message}")
         
         if diagnostic.success:
+            total_elapsed = time.time() - start_time
+            logger.info(f"\n✅ SUCCESS via {name} in {total_elapsed:.1f}s")
+            return {
+                'success': True,
+                'draw_data': diagnostic.draw_data,
+                'source': name,
+                'elapsed_seconds': total_elapsed,
+                'diagnostics': diagnostics
+            }
+    
+    total_elapsed = time.time() - start_time
+    logger.info(f"\n❌ NOT FOUND in any source ({total_elapsed:.1f}s)")
+    logger.info("   Scheduler will retry in 15 minutes...")
+    
+    return {
+        'success': False,
+        'draw_data': None,
+        'source': None,
+        'elapsed_seconds': total_elapsed,
+        'diagnostics': diagnostics
+    }
+
+
+# Keep _single_polling_attempt for backwards compatibility but mark deprecated
+def _single_polling_attempt(expected_draw_date: str) -> Dict:
+    """
+    DEPRECATED: Use smart_polling_check() directly.
+    
+    Single polling attempt checking all sources once.
+        expected_draw_date: Date in YYYY-MM-DD format
+
+    Returns:
+        Dict with results from this single attempt
+    """
+    # Define sources in priority order
+    sources = [
+        ("1/4", "powerball_official", check_powerball_official),
+        ("2/4", "nclottery_web", check_nclottery_website),
+        ("3/4", "musl_api", check_musl_api),
+        ("4/4", "nclottery_csv", check_nclottery_csv),
+    ]
+
+    diagnostics = []
+
+    for idx, name, check_func in sources:
+        logger.info(f"\n   📡 SOURCE {idx}: {name}")
+
+        diagnostic = check_func(expected_draw_date)
+        diagnostics.append(diagnostic)
+
+        emoji = _get_status_emoji(diagnostic.status)
+
+        # Compact logging
+        log_parts = [f"      {emoji} {diagnostic.status.value}"]
+        if diagnostic.http_status:
+            log_parts.append(f"HTTP:{diagnostic.http_status}")
+        if diagnostic.response_time_ms:
+            log_parts.append(f"({diagnostic.response_time_ms}ms)")
+        logger.info(" | ".join(log_parts))
+
+        if diagnostic.diagnostic_message:
+            logger.info(f"      → {diagnostic.diagnostic_message}")
+
+        if diagnostic.success:
             return {
                 'success': True,
                 'draw_data': diagnostic.draw_data,
                 'source': name,
                 'diagnostics': diagnostics
             }
-    
+
     return {
         'success': False,
         'draw_data': None,
