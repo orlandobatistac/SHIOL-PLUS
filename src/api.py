@@ -1148,7 +1148,7 @@ async def _execute_pipeline_steps(
             steps_completed=3
         )
 
-        eval_result = evaluate_predictions_for_draw(expected_draw_date)
+        eval_result = await evaluate_predictions_for_draw(expected_draw_date)
         logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluated {eval_result.get('evaluated', 0)} predictions")
 
         # ========== STEP 5: ADAPTIVE LEARNING ==========
@@ -1289,7 +1289,7 @@ async def _execute_pipeline_steps_without_insert(
             steps_completed=3
         )
 
-        eval_result = evaluate_predictions_for_draw(expected_draw_date)
+        eval_result = await evaluate_predictions_for_draw(expected_draw_date)
         logger.info(f"[{execution_id}] ✅ STEP 4 Complete: Evaluated {eval_result.get('evaluated', 0)} predictions")
 
         # ========== STEP 5: ADAPTIVE LEARNING ==========

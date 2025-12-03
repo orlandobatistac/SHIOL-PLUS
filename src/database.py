@@ -1072,10 +1072,10 @@ def get_latest_draw_date() -> Optional[str]:
 def get_draw_by_date(draw_date: str) -> Optional[Dict[str, Any]]:
     """
     Retrieve a specific draw by date.
-    
+
     Args:
         draw_date: Date in YYYY-MM-DD format
-        
+
     Returns:
         Dict with draw data or None if not found
     """
