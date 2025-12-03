@@ -1294,6 +1294,7 @@ async def _execute_pipeline_steps_without_insert(
 
         # ========== STEP 5: ADAPTIVE LEARNING ==========
         logger.info(f"[{execution_id}] STEP 5/6: Adaptive learning update...")
+        db.update_pipeline_execution_log(
             execution_id=execution_id,
             current_step="STEP 5/6: Adaptive learning",
             steps_completed=4
