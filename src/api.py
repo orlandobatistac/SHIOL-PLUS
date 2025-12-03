@@ -1159,7 +1159,7 @@ async def _execute_pipeline_steps(
             steps_completed=4
         )
 
-        adaptive_result = adaptive_learning_update()
+        adaptive_result = await adaptive_learning_update()
         logger.info(f"[{execution_id}] ✅ STEP 5 Complete: Weights updated")
 
         # ========== STEP 6: GENERATE PREDICTIONS ==========
@@ -1177,7 +1177,7 @@ async def _execute_pipeline_steps(
 
         # Generate in batches to avoid memory issues
         for batch_num in range(5):
-            batch_tickets = manager.generate_balanced_tickets(count=100)
+            batch_tickets = manager.generate_balanced_tickets(total=100)
             batch_saved = save_generated_tickets(batch_tickets, next_draw)
             total_saved += batch_saved
             logger.info(f"[{execution_id}] Batch {batch_num + 1}/5: Saved {batch_saved} tickets")
@@ -1300,7 +1300,7 @@ async def _execute_pipeline_steps_without_insert(
             steps_completed=4
         )
 
-        adaptive_result = adaptive_learning_update()
+        adaptive_result = await adaptive_learning_update()
         logger.info(f"[{execution_id}] ✅ STEP 5 Complete: Weights updated")
 
         # ========== STEP 6: GENERATE PREDICTIONS ==========
@@ -1328,7 +1328,7 @@ async def _execute_pipeline_steps_without_insert(
 
         # Generate in batches (3 x 100 = 300 tickets - optimized for speed)
         for batch_num in range(3):
-            batch_tickets = manager.generate_balanced_tickets(count=100)
+            batch_tickets = manager.generate_balanced_tickets(total=100)
             batch_saved = save_generated_tickets(batch_tickets, next_draw)
             total_saved += batch_saved
             logger.info(f"[{execution_id}] Batch {batch_num + 1}/3: Saved {batch_saved} tickets")
@@ -1399,7 +1399,7 @@ async def _generate_predictions_only(next_draw: str) -> int:
     total_saved = 0
 
     for batch_num in range(5):
-        batch_tickets = manager.generate_balanced_tickets(count=100)
+        batch_tickets = manager.generate_balanced_tickets(total=100)
         batch_saved = save_generated_tickets(batch_tickets, next_draw)
         total_saved += batch_saved
         gc.collect()
