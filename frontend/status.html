@@ -782,6 +782,20 @@
             // Format metadata object into readable key-value pairs
             if (!metadata) return '';
             
+            // Parse JSON string if needed
+            let metaObj = metadata;
+            if (typeof metadata === 'string') {
+                try {
+                    metaObj = JSON.parse(metadata);
+                } catch (e) {
+                    return metadata; // Return as-is if can't parse
+                }
+            }
+            
+            if (typeof metaObj !== 'object' || metaObj === null) {
+                return String(metaObj);
+            }
+
             const formatValue = (value) => {
                 if (value === null || value === undefined) return 'null';
                 if (typeof value === 'object' && !Array.isArray(value)) {
@@ -792,12 +806,12 @@
                 }
                 return String(value);
             };
-            
+
             const lines = [];
-            for (const [key, value] of Object.entries(metadata)) {
+            for (const [key, value] of Object.entries(metaObj)) {
                 const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 const formattedValue = formatValue(value);
-                
+
                 // Add emoji based on key
                 let emoji = '•';
                 if (key.includes('trigger')) emoji = '⚡';
@@ -808,11 +822,20 @@
                 else if (key.includes('ticket')) emoji = '🎫';
                 else if (key.includes('error')) emoji = '❌';
                 else if (key.includes('success') || key.includes('complete')) emoji = '✅';
-                
+
                 lines.push(`${emoji} <span class="text-cyan-400">${formattedKey}:</span> ${formattedValue}`);
             }
-            
+
             return lines.join('\n');
+        }
+
+        function cleanStepText(step) {
+            if (!step) return 'No step info';
+            // Remove "LAYER X" prefix and clean up
+            return step
+                .replace(/LAYER\s*\d+\s*/gi, '')
+                .replace(/^\s*/, '')
+                .trim();
         }
 
         async function loadPipelineLogs() {
@@ -997,7 +1020,7 @@
                                         <span class="text-xs text-gray-400">${startTime.toLocaleString()}</span>
                                     </div>
                                     <div class="text-sm text-gray-300">
-                                        ${log.current_step || 'No step info'}
+                                        ${cleanStepText(log.current_step)}
                                         <span class="text-gray-400">(${log.steps_completed}/${log.total_steps} steps)</span>
                                     </div>
                                     ${pollingSummaryHtml}
