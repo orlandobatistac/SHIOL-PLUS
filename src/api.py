@@ -1592,11 +1592,22 @@ def run_daily_full_sync():
 
 
 # ============================================================================
-# PIPELINE v6.1 - 3 LAYER ARCHITECTURE FUNCTIONS
+# DEPRECATED: PIPELINE v6.1 - 3 LAYER ARCHITECTURE FUNCTIONS
+# ============================================================================
+# These functions are DEPRECATED as of v7.0 (Smart Polling Unified Architecture)
+# They are kept temporarily for backwards compatibility and will be removed
+# in a future version.
+#
+# Use instead:
+# - smart_polling_pipeline() - replaces all 3 layers
+# - run_smart_polling() - scheduler wrapper for smart_polling_pipeline
+# - run_daily_sync() - scheduler wrapper for daily CSV sync
 # ============================================================================
 
 async def trigger_pipeline_layer1():
     """
+    DEPRECATED: Use smart_polling_pipeline() instead.
+    
     LAYER 1: Primary post-draw pipeline execution.
 
     Runs at 11:15 PM ET on drawing days (Mon/Wed/Sat).
@@ -1604,6 +1615,11 @@ async def trigger_pipeline_layer1():
 
     If Layer 1 fails to get the draw, it creates a pending_draw record
     for Layer 2 to retry.
+    """
+    logger.warning("⚠️ trigger_pipeline_layer1 is DEPRECATED - use smart_polling_pipeline()")
+    return await smart_polling_pipeline()
+    
+    # --- Original code below (disabled) ---
     """
     global active_pipeline_execution_id
     from src.loader import poll_draw_layer1
@@ -1699,14 +1715,22 @@ async def trigger_pipeline_layer1():
 
     active_pipeline_execution_id = None
     return result
+    """
 
 
 async def retry_pending_draws_layer2():
     """
+    DEPRECATED: Use smart_polling_pipeline() instead.
+    
     LAYER 2: Retry pending draws using multi-source polling.
 
     Runs every 15 minutes after drawing time until 6 AM.
     Tries all sources: powerball.com → MUSL API → NC Lottery CSV
+    """
+    logger.warning("⚠️ retry_pending_draws_layer2 is DEPRECATED - use smart_polling_pipeline()")
+    return await smart_polling_pipeline()
+    
+    # --- Original code below (disabled) ---
     """
     from src.loader import poll_draw_layer2
 
@@ -1787,15 +1811,24 @@ async def retry_pending_draws_layer2():
         'processed': len(pending),
         'results': results
     }
+    """
 
 
 async def emergency_recovery_layer3():
     """
+    DEPRECATED: Use smart_polling_pipeline() instead.
+    
     LAYER 3: Emergency recovery at 6 AM ET.
 
     Last chance to recover any pending draws. Uses all sources with maximum retries.
     If all fail, marks the draw as failed_permanent but still generates predictions
     for the next draw.
+    """
+    logger.warning("⚠️ emergency_recovery_layer3 is DEPRECATED - use smart_polling_pipeline()")
+    run_daily_full_sync()
+    return await smart_polling_pipeline()
+    
+    # --- Original code below (disabled) ---
     """
     from src.loader import poll_draw_layer3
     from src.date_utils import DateManager
@@ -1895,6 +1928,11 @@ async def emergency_recovery_layer3():
         'processed': len(pending),
         'results': results
     }
+    """
+
+# ============================================================================
+# END OF DEPRECATED LAYER FUNCTIONS
+# ============================================================================
 
 
 async def _execute_pipeline_steps(
@@ -2078,59 +2116,252 @@ async def _generate_predictions_only(next_draw: str) -> int:
 
 
 # ============================================================================
-# SCHEDULER JOB WRAPPERS (must be module-level sync functions)
+# SMART POLLING SYSTEM v7.0 - Single Unified Architecture
+# ============================================================================
+# Replaces the 3-Layer Architecture with a single intelligent polling system
+# that provides detailed diagnostics for each source.
+#
+# Features:
+# - Single polling function that checks all 4 sources with diagnostics
+# - Detailed status reporting (SUCCESS, BLOCKED_IP, TIMEOUT, ELEMENT_NOT_FOUND, etc.)
+# - Diagnostics stored in pipeline metadata for frontend visibility
+# - Automatic pending_draw management
+# - Max 4 attempts × 30s = 2 minutes per scheduler run (fits in systemd timeout)
+# ============================================================================
+
+
+async def smart_polling_pipeline():
+    """
+    SMART POLLING PIPELINE v7.0 - Unified polling with detailed diagnostics.
+    
+    This replaces the old 3-layer architecture (Layer 1, 2, 3) with a single
+    intelligent polling system that:
+    
+    1. Determines expected draw date
+    2. Checks all 4 sources with detailed diagnostics
+    3. Logs diagnostic results for frontend visibility
+    4. If draw found: executes pipeline steps 2-6
+    5. If draw not found: records diagnostics and waits for next scheduler run
+    
+    The scheduler runs this every 15 minutes on draw nights from 11:15 PM to 6 AM.
+    Each run is limited to 2 minutes (4 attempts × 30s) to avoid systemd timeout.
+    """
+    global active_pipeline_execution_id
+    from src.loader import smart_polling_check
+    from src.date_utils import DateManager
+    
+    logger.info("=" * 80)
+    logger.info("🚀 [SMART POLLING] STARTING UNIFIED PIPELINE v7.0")
+    logger.info("=" * 80)
+    
+    execution_id = str(uuid.uuid4())[:8]
+    active_pipeline_execution_id = execution_id
+    start_time = datetime.now()
+    
+    # Determine expected draw date
+    last_draw_in_db = db.get_latest_draw_date()
+    expected_draw_date = DateManager.get_expected_draw_for_pipeline(last_draw_in_db)
+    
+    if not expected_draw_date:
+        logger.error(f"[{execution_id}] Could not determine expected draw date")
+        active_pipeline_execution_id = None
+        return {'success': False, 'error': 'Could not determine expected draw date'}
+    
+    logger.info(f"[{execution_id}] Expected draw: {expected_draw_date}")
+    
+    # Check if draw already exists in database
+    existing_draw = db.get_draw_by_date(expected_draw_date)
+    if existing_draw:
+        logger.info(f"[{execution_id}] Draw {expected_draw_date} already in database - skipping polling")
+        active_pipeline_execution_id = None
+        return {
+            'success': True, 
+            'status': 'already_exists',
+            'message': f'Draw {expected_draw_date} already processed'
+        }
+    
+    # Create or update pending_draw record
+    db.insert_pending_draw(expected_draw_date)
+    
+    # Initialize pipeline log with diagnostic metadata
+    metadata = {
+        "trigger": "smart_polling_scheduled",
+        "version": "v7.0-unified",
+        "expected_draw": expected_draw_date,
+        "source_diagnostics": []  # Will be populated with check results
+    }
+    
+    db.insert_pipeline_execution_log(
+        execution_id=execution_id,
+        start_time=start_time.isoformat(),
+        metadata=json.dumps(metadata)
+    )
+    
+    db.update_pipeline_execution_log(
+        execution_id=execution_id,
+        current_step="STEP 1/6: Getting Draw (Smart Polling)",
+        target_draw_date=expected_draw_date
+    )
+    
+    # ========== STEP 1: SMART POLLING WITH DIAGNOSTICS ==========
+    logger.info(f"[{execution_id}] STEP 1: Smart Polling for {expected_draw_date}...")
+    
+    polling_result = smart_polling_check(
+        expected_draw_date,
+        max_attempts=4,
+        delay_seconds=30
+    )
+    
+    # Store diagnostics in metadata for frontend visibility
+    # diagnostics can be SourceDiagnostic objects or dicts
+    diagnostics_list = []
+    for d in polling_result.get('diagnostics', []):
+        if hasattr(d, 'to_dict'):
+            # SourceDiagnostic object
+            diagnostics_list.append(d.to_dict())
+        elif isinstance(d, dict):
+            # Already a dict
+            diagnostics_list.append(d)
+        else:
+            # Fallback - try to extract basic info
+            diagnostics_list.append({
+                "source": getattr(d, 'source', str(d)),
+                "status": getattr(d, 'status', 'unknown'),
+                "message": getattr(d, 'diagnostic_message', str(d))
+            })
+    
+    metadata["source_diagnostics"] = diagnostics_list
+    metadata["total_attempts"] = polling_result.get('attempts', 0)
+    metadata["polling_elapsed_seconds"] = polling_result.get('elapsed_seconds', 0)
+    
+    if not polling_result['success']:
+        # Draw not available yet - update log and wait for next scheduler run
+        elapsed = (datetime.now() - start_time).total_seconds()
+        
+        # Increment pending_draw attempt counter
+        db.update_pending_draw(expected_draw_date, increment_attempts=True)
+        pending_info = db.get_pending_draw(expected_draw_date)
+        total_attempts = pending_info['attempts'] if pending_info else 1
+        
+        # Check if we've exceeded maximum attempts (e.g., 24 attempts = 6 hours of trying)
+        max_total_attempts = 24
+        if total_attempts >= max_total_attempts:
+            # Mark as permanently failed
+            db.mark_pending_draw_failed(
+                expected_draw_date,
+                error_message=f"Failed after {total_attempts} total scheduler runs"
+            )
+            status_msg = f"❌ PERMANENTLY FAILED after {total_attempts} attempts"
+            final_status = "failed"
+        else:
+            status_msg = f"⏳ PENDING (attempt {total_attempts}/{max_total_attempts})"
+            final_status = "pending"
+        
+        metadata["final_status"] = final_status
+        metadata["total_scheduler_attempts"] = total_attempts
+        
+        db.update_pipeline_execution_log(
+            execution_id=execution_id,
+            status="completed",
+            current_step=status_msg,
+            steps_completed=1,
+            total_steps=6,
+            end_time=datetime.now().isoformat(),
+            elapsed_seconds=elapsed,
+            metadata=json.dumps(metadata)
+        )
+        
+        logger.info(f"[{execution_id}] {status_msg}")
+        logger.info(f"[{execution_id}] Diagnostics: {metadata['source_diagnostics']}")
+        
+        active_pipeline_execution_id = None
+        return {
+            'success': True,
+            'status': final_status,
+            'execution_id': execution_id,
+            'draw_date': expected_draw_date,
+            'diagnostics': metadata['source_diagnostics'],
+            'message': f'Draw not available yet - {status_msg}'
+        }
+    
+    # ========== DRAW FOUND - EXECUTE FULL PIPELINE ==========
+    draw_data = polling_result['draw_data']
+    data_source = polling_result['source']
+    
+    logger.info(f"[{execution_id}] ✅ STEP 1 SUCCESS via {data_source}")
+    logger.info(f"[{execution_id}] Draw data: {draw_data}")
+    
+    # Mark pending_draw as completed
+    db.mark_pending_draw_completed(expected_draw_date, layer=7)  # 7 = unified system
+    
+    # Execute pipeline steps 2-6 using existing helper
+    result = await _execute_pipeline_steps(
+        execution_id=execution_id,
+        draw_data=draw_data,
+        data_source=data_source,
+        expected_draw_date=expected_draw_date,
+        start_time=start_time,
+        metadata=metadata,
+        layer=7  # 7 = unified smart polling system
+    )
+    
+    active_pipeline_execution_id = None
+    return result
+
+
+def run_smart_polling():
+    """
+    Scheduler wrapper for smart_polling_pipeline.
+    MUST be module-level sync function for APScheduler serialization.
+    """
+    import asyncio
+    try:
+        logger.info("🚀 [scheduler] Starting Smart Polling Pipeline v7.0...")
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(smart_polling_pipeline())
+        else:
+            loop.run_until_complete(smart_polling_pipeline())
+    except Exception as e:
+        logger.error(f"🚀 [scheduler] Smart Polling exception: {e}", exc_info=True)
+
+
+def run_daily_sync():
+    """
+    Scheduler wrapper for daily CSV sync (historical data update).
+    Runs at 6 AM ET daily for data completeness.
+    MUST be module-level sync function for APScheduler serialization.
+    """
+    try:
+        logger.info("📥 [scheduler] Starting Daily CSV Sync...")
+        run_daily_full_sync()
+        logger.info("📥 [scheduler] Daily CSV Sync completed")
+    except Exception as e:
+        logger.error(f"📥 [scheduler] Daily Sync exception: {e}", exc_info=True)
+
+
+# ============================================================================
+# DEPRECATED FUNCTIONS (kept for backwards compatibility during transition)
+# TODO: Remove after v7.0 is stable
 # ============================================================================
 
 def run_pipeline_layer1():
-    """
-    Wrapper for Layer 1 pipeline - runs async function in event loop.
-    MUST be module-level function for APScheduler serialization.
-    """
-    import asyncio
-    try:
-        logger.info("🔵 [scheduler] Starting Layer 1 Pipeline...")
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If already in async context, create task
-            asyncio.create_task(trigger_pipeline_layer1())
-        else:
-            loop.run_until_complete(trigger_pipeline_layer1())
-    except Exception as e:
-        logger.error(f"🔵 [scheduler] Layer 1 exception: {e}", exc_info=True)
+    """DEPRECATED: Use run_smart_polling() instead."""
+    logger.warning("⚠️ run_pipeline_layer1 is DEPRECATED - redirecting to smart_polling")
+    run_smart_polling()
 
 
 def run_layer2_retry():
-    """
-    Wrapper for Layer 2 retry - runs async function in event loop.
-    MUST be module-level function for APScheduler serialization.
-    """
-    import asyncio
-    try:
-        logger.info("🟡 [scheduler] Starting Layer 2 Retry...")
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(retry_pending_draws_layer2())
-        else:
-            loop.run_until_complete(retry_pending_draws_layer2())
-    except Exception as e:
-        logger.error(f"🟡 [scheduler] Layer 2 exception: {e}", exc_info=True)
+    """DEPRECATED: Use run_smart_polling() instead."""
+    logger.warning("⚠️ run_layer2_retry is DEPRECATED - redirecting to smart_polling")
+    run_smart_polling()
 
 
 def run_layer3_emergency():
-    """
-    Wrapper for Layer 3 emergency recovery - runs async function in event loop.
-    MUST be module-level function for APScheduler serialization.
-    """
-    import asyncio
-    try:
-        logger.info("🔴 [scheduler] Starting Layer 3 Emergency Recovery...")
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(emergency_recovery_layer3())
-        else:
-            loop.run_until_complete(emergency_recovery_layer3())
-    except Exception as e:
-        logger.error(f"🔴 [scheduler] Layer 3 exception: {e}", exc_info=True)
+    """DEPRECATED: Use run_smart_polling() instead."""
+    logger.warning("⚠️ run_layer3_emergency is DEPRECATED - redirecting to smart_polling")
+    run_daily_sync()
+    run_smart_polling()
 
 
 # ============================================================================
@@ -2159,78 +2390,62 @@ async def lifespan(app: FastAPI):
     # Pipeline orchestrator removed - deprecated system that caused inconsistent results
 
     # ============================================================================
-    # SCHEDULER CONFIGURATION - Pipeline v6.1 - 3 Layer Architecture
+    # SCHEDULER CONFIGURATION - Pipeline v7.0 - Smart Polling Unified Architecture
     # ============================================================================
-    # NEW ARCHITECTURE (November 2025 v6.1):
-    # - Layer 1: Primary polling at 11:15 PM ET (powerball.com only, 10 min max)
-    # - Layer 2: Retry every 15 min for pending draws (all sources)
-    # - Layer 3: Emergency recovery at 6:00 AM ET (max effort + daily sync)
+    # NEW ARCHITECTURE (November 2025 v7.0):
+    # - Single Smart Polling job replaces 3-layer system
+    # - Runs every 15 min on draw nights from 11:15 PM to 6 AM
+    # - Each run is limited to 2 minutes (4 attempts × 30s)
+    # - Daily sync at 6 AM for historical data completeness
+    # - Detailed diagnostics stored in pipeline metadata for frontend
     # ============================================================================
 
-    # JOB #1: LAYER 1 - Primary Post-Draw Pipeline (11:15 PM ET on drawing days)
-    # Purpose: Fast polling using powerball.com only
-    # - 11:15 PM = 16 minutes after 10:59 PM draw (gives time for results to post)
-    # - 10 attempts × 60s = 10 minutes maximum
-    # - If fails, creates pending_draw for Layer 2
+    # JOB #1: SMART POLLING - Unified Draw Polling (draw nights only)
+    # Purpose: Poll all 4 sources with diagnostics until draw is found
+    # - Starts at 11:15 PM ET (16 min after 10:59 PM draw)
+    # - Runs every 15 min until 6 AM
+    # - Each run: 4 attempts × 30s = 2 min max (fits systemd timeout)
+    # - Total: up to 28 runs × 4 attempts = 112 total attempts over 7 hours
     scheduler.add_job(
-        func=run_pipeline_layer1,
+        func=run_smart_polling,
         trigger="cron",
-        day_of_week="mon,wed,sat",   # Powerball drawing days
-        hour=23,                      # 11:15 PM ET
-        minute=15,
+        day_of_week="mon,wed,sat",    # Powerball drawing days only
+        hour="23,0,1,2,3,4,5",         # 11 PM to 5:59 AM
+        minute="15,30,45,0",           # Every 15 min
         timezone="America/New_York",
-        id="layer1_post_draw",
-        name="Layer 1: Post-Draw Pipeline 11:15 PM ET",
+        id="smart_polling",
+        name="Smart Polling v7.0 (every 15 min on draw nights)",
         max_instances=1,
         coalesce=True,
         replace_existing=True
     )
 
-    # JOB #2: LAYER 2 - Retry Pending Draws (every 15 min, drawing nights only)
-    # Purpose: Multi-source retry for draws that Layer 1 couldn't fetch
-    # - Runs from 11:30 PM to 5:45 AM on drawing nights
-    # - Tries all sources: powerball.com → MUSL API → NC CSV
+    # JOB #2: DAILY SYNC - Historical Data Update (6 AM daily)
+    # Purpose: Ensure database has all historical draws from NC Lottery CSV
+    # - Runs daily at 6 AM ET for data completeness
+    # - Lightweight sync, only inserts missing draws
     scheduler.add_job(
-        func=run_layer2_retry,
+        func=run_daily_sync,
         trigger="cron",
-        day_of_week="mon,tue,wed,thu,sat,sun",  # Nights after draws
-        hour="23,0,1,2,3,4,5",                   # 11 PM to 5 AM
-        minute="30,45,0,15",                     # Every 15 min
-        timezone="America/New_York",
-        id="layer2_retry",
-        name="Layer 2: Retry Pending Draws (every 15 min)",
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True
-    )
-
-    # JOB #3: LAYER 3 - Emergency Recovery + Daily Sync (6:00 AM ET)
-    # Purpose: Last chance recovery for any pending draws, plus daily sync
-    # - Maximum effort: all sources with 3 retries each
-    # - If all fail, marks as failed_permanent but still generates predictions
-    # - Runs daily sync as final cleanup
-    scheduler.add_job(
-        func=run_layer3_emergency,
-        trigger="cron",
-        hour=6,                       # 6:00 AM ET
+        hour=6,
         minute=0,
         timezone="America/New_York",
-        id="layer3_emergency",
-        name="Layer 3: Emergency Recovery + Daily Sync 6:00 AM ET",
+        id="daily_sync",
+        name="Daily CSV Sync 6:00 AM ET",
         max_instances=1,
         coalesce=True,
         replace_existing=True
     )
 
-    # DEPRECATED Jobs (removed in v6.1):
-    # - daily_full_sync: Now integrated into Layer 3
-    # - post_drawing_pipeline: Replaced by Layer 1
-    # - maintenance_data_update: Replaced by Layer 2
+    # DEPRECATED Jobs (removed in v7.0):
+    # - layer1_post_draw: Replaced by smart_polling
+    # - layer2_retry: Replaced by smart_polling
+    # - layer3_emergency: Replaced by daily_sync + smart_polling
 
     # Start scheduler after configuration
     try:
         scheduler.start()
-        logger.info("✅ Scheduler started with Pipeline v6.1 - 3 Layer Architecture")
+        logger.info("✅ Scheduler started with Pipeline v7.0 - Smart Polling Unified Architecture")
         logger.info(f"📁 Jobstore location: {scheduler_db_path}")
 
         # Record scheduler start time for uptime metrics

@@ -1,5 +1,8 @@
 import os
+import time
 from typing import Optional, Dict, List
+from enum import Enum
+from dataclasses import dataclass, asdict
 
 import pandas as pd
 import requests
@@ -12,6 +15,857 @@ from src.database import (
     initialize_database,
 )
 from src.database import get_db_connection
+
+
+# ============================================================================
+# SOURCE STATUS DIAGNOSTICS
+# ============================================================================
+
+class SourceStatus(str, Enum):
+    """Diagnostic status codes for data source responses."""
+    SUCCESS = "SUCCESS"                      # ✅ Draw found and valid
+    NOT_AVAILABLE_YET = "NOT_AVAILABLE"      # ⏳ Draw not published yet  
+    WRONG_DATE = "WRONG_DATE"                # 📅 Found different date than expected
+    API_REPORTING = "API_REPORTING"          # 🔄 MUSL API in 'reporting' state
+    BLOCKED_IP = "BLOCKED_IP"                # 🚫 IP blocked (403/429)
+    TIMEOUT = "TIMEOUT"                      # ⏱️ Connection timeout
+    CONNECTION_ERROR = "CONNECTION_ERROR"    # 🌐 Network error
+    PARSE_ERROR = "PARSE_ERROR"              # 🔧 Error parsing HTML/JSON
+    ELEMENT_NOT_FOUND = "ELEMENT_NOT_FOUND"  # 🔎 HTML element not found
+    INVALID_RESPONSE = "INVALID_RESPONSE"    # ❌ Invalid response structure
+    API_KEY_MISSING = "API_KEY_MISSING"      # 🔑 Missing API key
+    UNKNOWN_ERROR = "UNKNOWN_ERROR"          # ❓ Unknown error
+
+
+@dataclass
+class SourceDiagnostic:
+    """Detailed diagnostic result from a data source check."""
+    source: str
+    status: SourceStatus
+    success: bool
+    http_status: Optional[int] = None
+    response_time_ms: Optional[int] = None
+    expected_date: Optional[str] = None
+    found_date: Optional[str] = None
+    error_message: Optional[str] = None
+    diagnostic_message: str = ""
+    draw_data: Optional[Dict] = None
+    raw_details: Optional[Dict] = None
+    
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        result = asdict(self)
+        result['status'] = self.status.value
+        return result
+
+
+def _get_status_emoji(status: SourceStatus) -> str:
+    """Return emoji for status code."""
+    emoji_map = {
+        SourceStatus.SUCCESS: "✅",
+        SourceStatus.NOT_AVAILABLE_YET: "⏳",
+        SourceStatus.WRONG_DATE: "📅",
+        SourceStatus.API_REPORTING: "🔄",
+        SourceStatus.BLOCKED_IP: "🚫",
+        SourceStatus.TIMEOUT: "⏱️",
+        SourceStatus.CONNECTION_ERROR: "🌐",
+        SourceStatus.PARSE_ERROR: "🔧",
+        SourceStatus.ELEMENT_NOT_FOUND: "🔎",
+        SourceStatus.INVALID_RESPONSE: "❌",
+        SourceStatus.API_KEY_MISSING: "🔑",
+        SourceStatus.UNKNOWN_ERROR: "❓",
+    }
+    return emoji_map.get(status, "❓")
+
+
+# ============================================================================
+# DIAGNOSTIC SOURCE FUNCTIONS (Return detailed SourceDiagnostic)
+# ============================================================================
+
+def check_nclottery_website(expected_draw_date: str) -> SourceDiagnostic:
+    """
+    Check NC Lottery website with detailed diagnostics.
+    
+    Returns SourceDiagnostic with full status information.
+    """
+    source_name = "nclottery_web"
+    start_time = time.time()
+    
+    try:
+        from bs4 import BeautifulSoup
+        
+        url = "https://nclottery.com/powerball"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        
+        response = requests.get(url, headers=headers, timeout=15)
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        # Check for IP blocking
+        if response.status_code in [403, 429]:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.BLOCKED_IP,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message=f"IP blocked or rate limited (HTTP {response.status_code})"
+            )
+        
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Find draw date element
+        drawdate_elem = soup.find('span', id='ctl00_MainContent_lblDrawdate')
+        if not drawdate_elem:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.ELEMENT_NOT_FOUND,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message="Draw date element (id='ctl00_MainContent_lblDrawdate') not found - page structure may have changed",
+                raw_details={"html_size": len(response.text)}
+            )
+        
+        # Parse date
+        drawdate_text = drawdate_elem.get_text(strip=True)
+        try:
+            if ', 20' in drawdate_text:
+                parsed_date = pd.to_datetime(drawdate_text, format='%A, %b %d, %Y')
+            else:
+                import datetime
+                current_year = datetime.datetime.now().year
+                drawdate_with_year = f"{drawdate_text}, {current_year}"
+                parsed_date = pd.to_datetime(drawdate_with_year, format='%a, %b %d, %Y')
+            normalized_date = parsed_date.strftime('%Y-%m-%d')
+        except Exception as e:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.PARSE_ERROR,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                error_message=str(e),
+                diagnostic_message=f"Cannot parse date '{drawdate_text}' - format may have changed",
+                raw_details={"raw_date": drawdate_text}
+            )
+        
+        # Check if correct date
+        if normalized_date != expected_draw_date:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.WRONG_DATE,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                found_date=normalized_date,
+                diagnostic_message=f"Website shows {normalized_date}, waiting for {expected_draw_date}"
+            )
+        
+        # Extract numbers
+        white_balls = []
+        for i in range(1, 6):
+            ball_elem = soup.find('span', id=f'ctl00_MainContent_lblBall{i}')
+            if not ball_elem:
+                return SourceDiagnostic(
+                    source=source_name,
+                    status=SourceStatus.ELEMENT_NOT_FOUND,
+                    success=False,
+                    http_status=response.status_code,
+                    response_time_ms=response_time_ms,
+                    expected_date=expected_draw_date,
+                    found_date=normalized_date,
+                    diagnostic_message=f"Ball {i} element not found - page structure may have changed"
+                )
+            white_balls.append(int(ball_elem.get_text(strip=True)))
+        
+        pb_elem = soup.find('span', id='ctl00_MainContent_lblPowerball')
+        if not pb_elem:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.ELEMENT_NOT_FOUND,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                found_date=normalized_date,
+                diagnostic_message="Powerball element not found - page structure may have changed"
+            )
+        powerball = int(pb_elem.get_text(strip=True))
+        
+        # Extract multiplier
+        multiplier = 1
+        powerplay_elem = soup.find('span', id='ctl00_MainContent_lblPowerplay')
+        if powerplay_elem:
+            import re
+            match = re.search(r'(\d+)x', powerplay_elem.get_text(strip=True))
+            if match:
+                multiplier = int(match.group(1))
+        
+        # SUCCESS
+        draw_data = {
+            'draw_date': expected_draw_date,
+            'n1': white_balls[0], 'n2': white_balls[1], 'n3': white_balls[2],
+            'n4': white_balls[3], 'n5': white_balls[4],
+            'pb': powerball,
+            'multiplier': multiplier,
+            'source': source_name
+        }
+        
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.SUCCESS,
+            success=True,
+            http_status=response.status_code,
+            response_time_ms=response_time_ms,
+            expected_date=expected_draw_date,
+            found_date=normalized_date,
+            draw_data=draw_data,
+            diagnostic_message=f"Draw found: [{white_balls[0]}, {white_balls[1]}, {white_balls[2]}, {white_balls[3]}, {white_balls[4]}] + PB {powerball}"
+        )
+        
+    except requests.exceptions.Timeout:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.TIMEOUT,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            diagnostic_message="Connection timeout (>15s) - server may be slow or unreachable"
+        )
+    except requests.exceptions.ConnectionError as e:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.CONNECTION_ERROR,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            error_message=str(e)[:100],
+            diagnostic_message="Network connection failed - check internet or DNS"
+        )
+    except Exception as e:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.UNKNOWN_ERROR,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            error_message=str(e)[:100],
+            diagnostic_message=f"Unexpected error: {type(e).__name__}"
+        )
+
+
+def check_powerball_official(expected_draw_date: str) -> SourceDiagnostic:
+    """
+    Check Powerball.com official website with detailed diagnostics.
+    """
+    source_name = "powerball_official"
+    start_time = time.time()
+    
+    try:
+        from bs4 import BeautifulSoup
+        
+        url = "https://www.powerball.com/"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        
+        response = requests.get(url, headers=headers, timeout=15)
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        if response.status_code in [403, 429]:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.BLOCKED_IP,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message=f"IP blocked or rate limited (HTTP {response.status_code})"
+            )
+        
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Find completed draw card
+        card = soup.find('div', class_='card h-100 number-card number-powerball complete')
+        if not card:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.NOT_AVAILABLE_YET,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message="Draw card not marked 'complete' yet - results still being processed"
+            )
+        
+        date_elem = card.find('h5', class_='title-date')
+        if not date_elem:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.ELEMENT_NOT_FOUND,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message="Date element (h5.title-date) not found in card"
+            )
+        
+        draw_date_text = date_elem.get_text(strip=True)
+        try:
+            parsed_date = pd.to_datetime(draw_date_text, format='%a, %b %d, %Y')
+        except Exception:
+            parsed_date = pd.to_datetime(draw_date_text, errors='coerce')
+        
+        if parsed_date is pd.NaT:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.PARSE_ERROR,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message=f"Cannot parse date '{draw_date_text}'",
+                raw_details={"raw_date": draw_date_text}
+            )
+        
+        normalized_date = parsed_date.strftime('%Y-%m-%d')
+        if normalized_date != expected_draw_date:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.WRONG_DATE,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                found_date=normalized_date,
+                diagnostic_message=f"Website shows {normalized_date}, waiting for {expected_draw_date}"
+            )
+        
+        # Extract numbers
+        white_ball_elements = card.select('div.form-control.col.white-balls.item-powerball')
+        if len(white_ball_elements) != 5:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.ELEMENT_NOT_FOUND,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                found_date=normalized_date,
+                diagnostic_message=f"Found {len(white_ball_elements)} white balls, expected 5"
+            )
+        
+        white_balls = [int(el.get_text(strip=True)) for el in white_ball_elements]
+        
+        powerball_elem = card.select_one('div.form-control.col.powerball.item-powerball')
+        if not powerball_elem:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.ELEMENT_NOT_FOUND,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                found_date=normalized_date,
+                diagnostic_message="Powerball element not found"
+            )
+        powerball = int(powerball_elem.get_text(strip=True))
+        
+        multiplier_elem = card.select_one('span.multiplier')
+        multiplier = int(multiplier_elem.get_text(strip=True).replace('x', '')) if multiplier_elem else 1
+        
+        # SUCCESS
+        draw_data = {
+            'draw_date': expected_draw_date,
+            'n1': white_balls[0], 'n2': white_balls[1], 'n3': white_balls[2],
+            'n4': white_balls[3], 'n5': white_balls[4],
+            'pb': powerball,
+            'multiplier': multiplier,
+            'source': source_name
+        }
+        
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.SUCCESS,
+            success=True,
+            http_status=response.status_code,
+            response_time_ms=response_time_ms,
+            expected_date=expected_draw_date,
+            found_date=normalized_date,
+            draw_data=draw_data,
+            diagnostic_message=f"Draw found: [{', '.join(map(str, white_balls))}] + PB {powerball}"
+        )
+        
+    except requests.exceptions.Timeout:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.TIMEOUT,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            diagnostic_message="Connection timeout (>15s)"
+        )
+    except requests.exceptions.ConnectionError as e:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.CONNECTION_ERROR,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            error_message=str(e)[:100],
+            diagnostic_message="Network connection failed"
+        )
+    except Exception as e:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.UNKNOWN_ERROR,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            error_message=str(e)[:100],
+            diagnostic_message=f"Unexpected error: {type(e).__name__}"
+        )
+
+
+def check_musl_api(expected_draw_date: str) -> SourceDiagnostic:
+    """
+    Check MUSL API with detailed diagnostics.
+    """
+    source_name = "musl_api"
+    start_time = time.time()
+    
+    api_key = os.getenv("MUSL_API_KEY")
+    if not api_key:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.API_KEY_MISSING,
+            success=False,
+            expected_date=expected_draw_date,
+            diagnostic_message="MUSL_API_KEY not found in environment variables"
+        )
+    
+    try:
+        url = "https://api.musl.com/v3/numbers"
+        headers = {"x-api-key": api_key, "Accept": "application/json"}
+        params = {"DrawDate": expected_draw_date, "GameCode": "powerball"}
+        
+        response = requests.get(url, headers=headers, params=params, timeout=15)
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        if response.status_code in [403, 429]:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.BLOCKED_IP,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message=f"API key invalid or rate limited (HTTP {response.status_code})"
+            )
+        
+        if response.status_code == 401:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.API_KEY_MISSING,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message="API key unauthorized (HTTP 401) - check MUSL_API_KEY"
+            )
+        
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data or 'drawDate' not in data:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.INVALID_RESPONSE,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message="Invalid API response - missing 'drawDate' field",
+                raw_details={"response_keys": list(data.keys()) if data else []}
+            )
+        
+        draw_date = data.get('drawDate', '')
+        status_code = data.get('statusCode', '')
+        
+        if draw_date != expected_draw_date:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.WRONG_DATE,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                found_date=draw_date,
+                diagnostic_message=f"API returned {draw_date}, expected {expected_draw_date}",
+                raw_details={"api_status": status_code}
+            )
+        
+        # Check draw status
+        if status_code != 'complete':
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.API_REPORTING,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                found_date=draw_date,
+                diagnostic_message=f"Draw in '{status_code}' state - waiting for 'complete' (results being certified)",
+                raw_details={"musl_status": status_code}
+            )
+        
+        # Parse numbers
+        numbers_data = data.get('numbers', [])
+        if not numbers_data:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.INVALID_RESPONSE,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message="No numbers array in API response"
+            )
+        
+        white_balls = []
+        powerball = None
+        multiplier = 1
+        
+        for num_obj in numbers_data:
+            if num_obj.get('ruleCode') == 'white-balls':
+                white_balls.append(int(num_obj.get('value', 0)))
+            elif num_obj.get('ruleCode') == 'powerball':
+                powerball = int(num_obj.get('value', 0))
+            elif num_obj.get('itemCode') == 'power-play':
+                multiplier = int(num_obj.get('value', 1))
+        
+        white_balls.sort()
+        
+        if len(white_balls) != 5 or powerball is None:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.INVALID_RESPONSE,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message=f"Incomplete numbers: {len(white_balls)} white balls, pb={powerball}"
+            )
+        
+        # SUCCESS
+        draw_data = {
+            'draw_date': expected_draw_date,
+            'n1': white_balls[0], 'n2': white_balls[1], 'n3': white_balls[2],
+            'n4': white_balls[3], 'n5': white_balls[4],
+            'pb': powerball,
+            'multiplier': multiplier,
+            'source': source_name
+        }
+        
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.SUCCESS,
+            success=True,
+            http_status=response.status_code,
+            response_time_ms=response_time_ms,
+            expected_date=expected_draw_date,
+            found_date=draw_date,
+            draw_data=draw_data,
+            diagnostic_message=f"Draw found: [{', '.join(map(str, white_balls))}] + PB {powerball}",
+            raw_details={"musl_status": status_code}
+        )
+        
+    except requests.exceptions.Timeout:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.TIMEOUT,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            diagnostic_message="API timeout (>15s)"
+        )
+    except requests.exceptions.ConnectionError as e:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.CONNECTION_ERROR,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            error_message=str(e)[:100],
+            diagnostic_message="Network connection failed"
+        )
+    except Exception as e:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.UNKNOWN_ERROR,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            error_message=str(e)[:100],
+            diagnostic_message=f"Unexpected error: {type(e).__name__}"
+        )
+
+
+def check_nclottery_csv(expected_draw_date: str) -> SourceDiagnostic:
+    """
+    Check NC Lottery CSV with detailed diagnostics.
+    """
+    source_name = "nclottery_csv"
+    start_time = time.time()
+    
+    try:
+        csv_url = "https://nclottery.com/powerball-download"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        
+        response = requests.get(csv_url, headers=headers, timeout=30)
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        if response.status_code in [403, 429]:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.BLOCKED_IP,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                diagnostic_message=f"IP blocked (HTTP {response.status_code})"
+            )
+        
+        response.raise_for_status()
+        
+        from io import StringIO
+        csv_content = StringIO(response.text)
+        df = pd.read_csv(csv_content)
+        
+        # Filter main draws
+        main_draws = df[df['SubName'].isna()].copy()
+        main_draws = main_draws[main_draws['Ball 1'].notna()].copy()
+        main_draws['parsed_date'] = pd.to_datetime(main_draws['Date'], format='%m/%d/%Y')
+        main_draws['date_str'] = main_draws['parsed_date'].dt.strftime('%Y-%m-%d')
+        
+        latest_in_csv = main_draws['date_str'].max() if not main_draws.empty else "N/A"
+        
+        target_draw = main_draws[main_draws['date_str'] == expected_draw_date]
+        
+        if target_draw.empty:
+            return SourceDiagnostic(
+                source=source_name,
+                status=SourceStatus.NOT_AVAILABLE_YET,
+                success=False,
+                http_status=response.status_code,
+                response_time_ms=response_time_ms,
+                expected_date=expected_draw_date,
+                found_date=latest_in_csv,
+                diagnostic_message=f"Draw not in CSV yet. Latest available: {latest_in_csv}",
+                raw_details={"total_draws": len(main_draws), "latest_date": latest_in_csv}
+            )
+        
+        row = target_draw.iloc[0]
+        white_balls = sorted([
+            int(row['Ball 1']), int(row['Ball 2']), int(row['Ball 3']),
+            int(row['Ball 4']), int(row['Ball 5'])
+        ])
+        powerball = int(row['Powerball'])
+        multiplier = int(row['Power Play']) if pd.notna(row['Power Play']) else 1
+        
+        # SUCCESS
+        draw_data = {
+            'draw_date': expected_draw_date,
+            'n1': white_balls[0], 'n2': white_balls[1], 'n3': white_balls[2],
+            'n4': white_balls[3], 'n5': white_balls[4],
+            'pb': powerball,
+            'multiplier': multiplier,
+            'source': source_name
+        }
+        
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.SUCCESS,
+            success=True,
+            http_status=response.status_code,
+            response_time_ms=response_time_ms,
+            expected_date=expected_draw_date,
+            found_date=expected_draw_date,
+            draw_data=draw_data,
+            diagnostic_message=f"Draw found: [{', '.join(map(str, white_balls))}] + PB {powerball}"
+        )
+        
+    except requests.exceptions.Timeout:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.TIMEOUT,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            diagnostic_message="CSV download timeout (>30s)"
+        )
+    except requests.exceptions.ConnectionError as e:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.CONNECTION_ERROR,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            error_message=str(e)[:100],
+            diagnostic_message="Network connection failed"
+        )
+    except Exception as e:
+        return SourceDiagnostic(
+            source=source_name,
+            status=SourceStatus.UNKNOWN_ERROR,
+            success=False,
+            response_time_ms=int((time.time() - start_time) * 1000),
+            expected_date=expected_draw_date,
+            error_message=str(e)[:100],
+            diagnostic_message=f"Unexpected error: {type(e).__name__}"
+        )
+
+
+def smart_polling_check(
+    expected_draw_date: str,
+    max_attempts: int = 4,
+    delay_seconds: int = 30
+) -> Dict:
+    """
+    Smart polling with multiple attempts and detailed diagnostics.
+    
+    This is the main function called by the scheduler. It performs multiple
+    polling attempts, each checking all sources in priority order.
+    
+    Design: Limited to 4 attempts × 30s = 2 minutes max per scheduler run
+    to avoid systemd timeout (~3 minutes).
+    
+    Args:
+        expected_draw_date: Date in YYYY-MM-DD format
+        max_attempts: Maximum polling attempts (default: 4)
+        delay_seconds: Delay between attempts (default: 30)
+        
+    Returns:
+        Dict with polling results and full diagnostics:
+        {
+            'success': bool,
+            'draw_data': Dict or None,
+            'source': str or None,
+            'attempts': int,
+            'elapsed_seconds': float,
+            'diagnostics': [Dict, ...]
+        }
+    """
+    from src.date_utils import DateManager
+    
+    start_time = time.time()
+    current_et = DateManager.get_current_et_time()
+    all_diagnostics = []
+    
+    logger.info("=" * 80)
+    logger.info(f"🚀 [SMART POLLING] Starting for {expected_draw_date}")
+    logger.info(f"🚀 [SMART POLLING] Config: {max_attempts} attempts × {delay_seconds}s delay")
+    logger.info(f"🚀 [SMART POLLING] Time: {current_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    logger.info("=" * 80)
+    
+    for attempt in range(1, max_attempts + 1):
+        elapsed = time.time() - start_time
+        logger.info(f"\n🔄 [ATTEMPT {attempt}/{max_attempts}] (elapsed: {elapsed:.1f}s)")
+        
+        # Try all sources in priority order
+        result = _single_polling_attempt(expected_draw_date)
+        all_diagnostics.extend(result['diagnostics'])
+        
+        if result['success']:
+            total_elapsed = time.time() - start_time
+            logger.info(f"\n✅ SUCCESS after {attempt} attempt(s) in {total_elapsed:.1f}s")
+            return {
+                'success': True,
+                'draw_data': result['draw_data'],
+                'source': result['source'],
+                'attempts': attempt,
+                'elapsed_seconds': total_elapsed,
+                'diagnostics': all_diagnostics
+            }
+        
+        # Not found yet - wait before next attempt (unless last attempt)
+        if attempt < max_attempts:
+            logger.info(f"⏳ Draw not available. Waiting {delay_seconds}s before next attempt...")
+            time.sleep(delay_seconds)
+    
+    total_elapsed = time.time() - start_time
+    logger.info(f"\n❌ FAILED after {max_attempts} attempts in {total_elapsed:.1f}s")
+    
+    return {
+        'success': False,
+        'draw_data': None,
+        'source': None,
+        'attempts': max_attempts,
+        'elapsed_seconds': total_elapsed,
+        'diagnostics': all_diagnostics
+    }
+
+
+def _single_polling_attempt(expected_draw_date: str) -> Dict:
+    """
+    Single polling attempt checking all sources once.
+    
+    Args:
+        expected_draw_date: Date in YYYY-MM-DD format
+        
+    Returns:
+        Dict with results from this single attempt
+    """
+    # Define sources in priority order
+    sources = [
+        ("1/4", "powerball_official", check_powerball_official),
+        ("2/4", "nclottery_web", check_nclottery_website),
+        ("3/4", "musl_api", check_musl_api),
+        ("4/4", "nclottery_csv", check_nclottery_csv),
+    ]
+    
+    diagnostics = []
+    
+    for idx, name, check_func in sources:
+        logger.info(f"\n   📡 SOURCE {idx}: {name}")
+        
+        diagnostic = check_func(expected_draw_date)
+        diagnostics.append(diagnostic)
+        
+        emoji = _get_status_emoji(diagnostic.status)
+        
+        # Compact logging
+        log_parts = [f"      {emoji} {diagnostic.status.value}"]
+        if diagnostic.http_status:
+            log_parts.append(f"HTTP:{diagnostic.http_status}")
+        if diagnostic.response_time_ms:
+            log_parts.append(f"({diagnostic.response_time_ms}ms)")
+        logger.info(" | ".join(log_parts))
+        
+        if diagnostic.diagnostic_message:
+            logger.info(f"      → {diagnostic.diagnostic_message}")
+        
+        if diagnostic.success:
+            return {
+                'success': True,
+                'draw_data': diagnostic.draw_data,
+                'source': name,
+                'diagnostics': diagnostics
+            }
+    
+    return {
+        'success': False,
+        'draw_data': None,
+        'source': None,
+        'diagnostics': diagnostics
+    }
 
 
 class DataLoader:
