@@ -1283,23 +1283,23 @@ class StrategyManager:
     def generate_tickets_per_strategy(self, count_per_strategy: int = 10) -> List[Dict]:
         """
         Generate exactly N tickets per strategy for equal evaluation.
-        
+
         Args:
             count_per_strategy: Number of tickets to generate per strategy (default: 10)
-            
+
         Returns:
             List of tickets with exactly count_per_strategy tickets from each strategy
         """
         logger.info(f"StrategyManager.generate_tickets_per_strategy called with {count_per_strategy} per strategy")
-        
+
         all_tickets = []
         generated_set = set()  # Track unique combinations
-        
+
         for strategy_name, strategy in self.strategies.items():
             strategy_tickets = []
             attempts = 0
             max_attempts = count_per_strategy * 5  # Allow retries for duplicates
-            
+
             while len(strategy_tickets) < count_per_strategy and attempts < max_attempts:
                 attempts += 1
                 try:
@@ -1309,20 +1309,20 @@ class StrategyManager:
                         wb = tuple(sorted(ticket['white_balls']))
                         pb = ticket['powerball']
                         key = (wb, pb)
-                        
+
                         if key not in generated_set:
                             generated_set.add(key)
                             ticket['strategy'] = strategy_name
                             strategy_tickets.append(ticket)
-                            
+
                             if len(strategy_tickets) >= count_per_strategy:
                                 break
                 except Exception as e:
                     logger.warning(f"Error generating ticket for {strategy_name}: {e}")
-            
+
             logger.debug(f"{strategy_name}: Generated {len(strategy_tickets)} tickets")
             all_tickets.extend(strategy_tickets)
-        
+
         total_expected = count_per_strategy * len(self.strategies)
         logger.info(f"StrategyManager generated {len(all_tickets)} tickets ({count_per_strategy} per strategy × {len(self.strategies)} strategies)")
         return all_tickets
