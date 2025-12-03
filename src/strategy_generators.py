@@ -300,17 +300,24 @@ class AIGuidedStrategy(BaseStrategy):
     def __init__(self, max_date: str = None):
         super().__init__("ai_guided", max_date=max_date)
         self._predictor = None
+        self._cached_wb_probs = None  # Cache for white ball probabilities
+        self._cached_pb_probs = None  # Cache for powerball probabilities
         self._ml_available = self._initialize_ml_predictor()
 
     def _initialize_ml_predictor(self) -> bool:
-        """Initialize the ML predictor. Returns True if successful."""
+        """Initialize the ML predictor and pre-compute probabilities."""
         try:
             from src.predictor import Predictor
             self._predictor = Predictor()
             
             # Verify model is loaded
             if self._predictor.model is not None:
-                logger.info(f"{self.name}: XGBoost ML model loaded successfully")
+                # PRE-COMPUTE probabilities once during initialization (OPTIMIZATION)
+                try:
+                    self._cached_wb_probs, self._cached_pb_probs = self._predictor.predict_probabilities(use_ensemble=False)
+                    logger.info(f"{self.name}: XGBoost ML model loaded and probabilities cached")
+                except Exception as e:
+                    logger.warning(f"{self.name}: Could not cache probabilities: {e}")
                 return True
             else:
                 logger.warning(f"{self.name}: ML model not available, will use fallback")
@@ -320,18 +327,17 @@ class AIGuidedStrategy(BaseStrategy):
             return False
 
     def generate(self, count: int = 5) -> List[Dict]:
-        """Generate tickets using XGBoost ML model probabilities"""
+        """Generate tickets using cached XGBoost ML probabilities"""
         tickets = []
 
-        # Try ML-guided generation first
-        if self._ml_available and self._predictor is not None:
+        # Use cached probabilities (OPTIMIZED - no recalculation)
+        if self._cached_wb_probs is not None and self._cached_pb_probs is not None:
             try:
-                # Get probability predictions from ML model
-                wb_probs, pb_probs = self._predictor.predict_probabilities(use_ensemble=False)
+                wb_probs, pb_probs = self._cached_wb_probs, self._cached_pb_probs
                 
-                logger.info(f"{self.name}: Successfully obtained ML probabilities")
+                logger.debug(f"{self.name}: Using cached ML probabilities")
                 
-                # Generate tickets using ML probabilities
+                # Generate tickets using cached ML probabilities
                 for _ in range(count):
                     try:
                         # Sample white balls using ML probabilities
@@ -364,11 +370,11 @@ class AIGuidedStrategy(BaseStrategy):
                             'confidence': 0.50
                         })
                 
-                logger.info(f"{self.name}: Generated {len(tickets)} tickets using ML model")
+                logger.debug(f"{self.name}: Generated {len(tickets)} tickets using cached ML probabilities")
                 return tickets
                 
             except Exception as e:
-                logger.error(f"{self.name}: ML prediction pipeline failed: {e}, using fallback")
+                logger.error(f"{self.name}: Cached probability sampling failed: {e}, using fallback")
                 # Continue to fallback below
 
         # Fallback: Use IntelligentGenerator (frequency-based)
@@ -451,17 +457,24 @@ class XGBoostMLStrategy(BaseStrategy):
     def __init__(self, max_date: str = None):
         super().__init__("xgboost_ml", max_date=max_date)
         self._predictor = None
+        self._cached_wb_probs = None  # Cache for white ball probabilities
+        self._cached_pb_probs = None  # Cache for powerball probabilities
         self._ml_available = self._initialize_ml_predictor()
 
     def _initialize_ml_predictor(self) -> bool:
-        """Initialize the XGBoost predictor. Returns True if successful."""
+        """Initialize the XGBoost predictor and pre-compute probabilities."""
         try:
             from src.predictor import Predictor
             self._predictor = Predictor()
             
             # Verify model is loaded
             if self._predictor.model is not None:
-                logger.info(f"{self.name}: XGBoost ML model loaded successfully")
+                # PRE-COMPUTE probabilities once during initialization (OPTIMIZATION)
+                try:
+                    self._cached_wb_probs, self._cached_pb_probs = self._predictor.predict_probabilities(use_ensemble=False)
+                    logger.info(f"{self.name}: XGBoost ML model loaded and probabilities cached")
+                except Exception as e:
+                    logger.warning(f"{self.name}: Could not cache probabilities: {e}")
                 return True
             else:
                 logger.warning(f"{self.name}: ML model not available, will use fallback")
@@ -471,14 +484,13 @@ class XGBoostMLStrategy(BaseStrategy):
             return False
 
     def generate(self, count: int = 5) -> List[Dict]:
-        """Generate tickets using XGBoost ML model probabilities"""
+        """Generate tickets using cached XGBoost ML probabilities"""
         tickets = []
 
-        # Try ML-guided generation first
-        if self._ml_available and self._predictor is not None:
+        # Use cached probabilities (OPTIMIZED - no recalculation)
+        if self._cached_wb_probs is not None and self._cached_pb_probs is not None:
             try:
-                # Get probability predictions from XGBoost model (use_ensemble=False for pure XGBoost)
-                wb_probs, pb_probs = self._predictor.predict_probabilities(use_ensemble=False)
+                wb_probs, pb_probs = self._cached_wb_probs, self._cached_pb_probs
                 
                 logger.debug(f"{self.name}: Successfully obtained XGBoost ML probabilities")
                 
@@ -515,14 +527,14 @@ class XGBoostMLStrategy(BaseStrategy):
                             'confidence': 0.50
                         })
                 
-                logger.debug(f"{self.name}: Generated {len(tickets)} tickets using XGBoost ML model")
+                logger.debug(f"{self.name}: Generated {len(tickets)} tickets using cached XGBoost probabilities")
                 return tickets
                 
             except Exception as e:
-                logger.error(f"{self.name}: ML prediction pipeline failed: {e}, using fallback")
+                logger.error(f"{self.name}: Cached probability sampling failed: {e}, using fallback")
                 # Continue to fallback below
 
-        # Fallback to random if ML not available
+        # Fallback to random if cache not available
         for _ in range(count):
             white_balls = sorted(random.sample(range(1, 70), 5))
             powerball = random.randint(1, 26)
@@ -543,17 +555,24 @@ class RandomForestMLStrategy(BaseStrategy):
     def __init__(self, max_date: str = None):
         super().__init__("random_forest_ml", max_date=max_date)
         self._rf_model = None
+        self._cached_wb_probs = None  # Cache for white ball probabilities
+        self._cached_pb_probs = None  # Cache for powerball probabilities
         self._ml_available = self._initialize_rf_model()
 
     def _initialize_rf_model(self) -> bool:
-        """Initialize the Random Forest model. Returns True if successful."""
+        """Initialize the Random Forest model and pre-compute probabilities."""
         try:
             from src.ml_models.random_forest_model import RandomForestModel
             self._rf_model = RandomForestModel(use_pretrained=True)
             
             # Verify models are loaded
             if self._rf_model.wb_models and self._rf_model.pb_model:
-                logger.info(f"{self.name}: Random Forest models loaded successfully")
+                # PRE-COMPUTE probabilities once during initialization (OPTIMIZATION)
+                try:
+                    self._cached_wb_probs, self._cached_pb_probs = self._rf_model.predict_probabilities(self.draws_df)
+                    logger.info(f"{self.name}: Random Forest models loaded and probabilities cached")
+                except Exception as e:
+                    logger.warning(f"{self.name}: Could not cache RF probabilities: {e}")
                 return True
             else:
                 logger.warning(f"{self.name}: RF models not available, will use fallback")
@@ -563,18 +582,17 @@ class RandomForestMLStrategy(BaseStrategy):
             return False
 
     def generate(self, count: int = 5) -> List[Dict]:
-        """Generate tickets using Random Forest model probabilities"""
+        """Generate tickets using cached Random Forest probabilities"""
         tickets = []
 
-        # Try RF-guided generation first
-        if self._ml_available and self._rf_model is not None:
+        # Use cached probabilities (OPTIMIZED - no recalculation)
+        if self._cached_wb_probs is not None and self._cached_pb_probs is not None:
             try:
-                # Get probability predictions from Random Forest model
-                wb_probs, pb_probs = self._rf_model.predict_probabilities(self.draws_df)
+                wb_probs, pb_probs = self._cached_wb_probs, self._cached_pb_probs
                 
-                logger.debug(f"{self.name}: Successfully obtained Random Forest probabilities")
+                logger.debug(f"{self.name}: Using cached Random Forest probabilities")
                 
-                # Generate tickets using RF probabilities
+                # Generate tickets using cached RF probabilities
                 for _ in range(count):
                     try:
                         # Sample white balls using RF probabilities
@@ -635,17 +653,24 @@ class LSTMNeuralStrategy(BaseStrategy):
     def __init__(self, max_date: str = None):
         super().__init__("lstm_neural", max_date=max_date)
         self._lstm_model = None
+        self._cached_wb_probs = None  # Cache for white ball probabilities
+        self._cached_pb_probs = None  # Cache for powerball probabilities
         self._ml_available = self._initialize_lstm_model()
 
     def _initialize_lstm_model(self) -> bool:
-        """Initialize the LSTM model. Returns True if successful."""
+        """Initialize the LSTM model and pre-compute probabilities."""
         try:
             from src.ml_models.lstm_model import LSTMModel
             self._lstm_model = LSTMModel(use_pretrained=True)
             
             # Verify models are loaded
             if self._lstm_model.wb_model and self._lstm_model.pb_model:
-                logger.info(f"{self.name}: LSTM models loaded successfully")
+                # PRE-COMPUTE probabilities once during initialization (OPTIMIZATION)
+                try:
+                    self._cached_wb_probs, self._cached_pb_probs = self._lstm_model.predict_probabilities(self.draws_df)
+                    logger.info(f"{self.name}: LSTM models loaded and probabilities cached")
+                except Exception as e:
+                    logger.warning(f"{self.name}: Could not cache LSTM probabilities: {e}")
                 return True
             else:
                 logger.warning(f"{self.name}: LSTM models not available, will use fallback")
@@ -655,16 +680,15 @@ class LSTMNeuralStrategy(BaseStrategy):
             return False
 
     def generate(self, count: int = 5) -> List[Dict]:
-        """Generate tickets using LSTM model probabilities"""
+        """Generate tickets using cached LSTM probabilities"""
         tickets = []
 
-        # Try LSTM-guided generation first
-        if self._ml_available and self._lstm_model is not None:
+        # Use cached probabilities (OPTIMIZED - no recalculation)
+        if self._cached_wb_probs is not None and self._cached_pb_probs is not None:
             try:
-                # Get probability predictions from LSTM model
-                wb_probs, pb_probs = self._lstm_model.predict_probabilities(self.draws_df)
+                wb_probs, pb_probs = self._cached_wb_probs, self._cached_pb_probs
                 
-                logger.debug(f"{self.name}: Successfully obtained LSTM probabilities")
+                logger.debug(f"{self.name}: Using cached LSTM probabilities")
                 
                 # Generate tickets using LSTM probabilities
                 for _ in range(count):
