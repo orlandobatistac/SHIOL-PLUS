@@ -4,6 +4,10 @@
 import sys
 sys.path.insert(0, '.')
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.loader import (
     check_powerball_official,
     check_nclottery_website,
