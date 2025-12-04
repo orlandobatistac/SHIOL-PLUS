@@ -8,6 +8,8 @@ They require Authorization: Bearer <PREDICTLOTTOPRO_API_KEY>.
 from __future__ import annotations
 
 import os
+import time
+from collections import Counter
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -17,7 +19,7 @@ from loguru import logger
 
 from src.plp_api_key import verify_plp_api_key
 from src.prediction_engine import UnifiedPredictionEngine
-from src.database import save_prediction_log, calculate_next_drawing_date
+from src.database import save_prediction_log, calculate_next_drawing_date, get_db_connection
 from src.ticket_processor import create_ticket_processor
 from src.ticket_verifier import create_ticket_verifier
 
@@ -31,6 +33,124 @@ from src.api_prediction_endpoints import (
 from src.analytics_engine import get_analytics_overview
 from src.ticket_scorer import TicketScorer
 from src.strategy_generators import CustomInteractiveGenerator, StrategyManager
+
+
+# =============================================================================
+# HOT/COLD NUMBERS CACHE SYSTEM
+# =============================================================================
+# Cache for hot/cold numbers - data only changes after draws (Mon/Wed/Sat)
+# 5-minute TTL is sufficient since draws happen 3x per week
+
+_hot_cold_cache: Optional[Dict[str, Any]] = None
+_hot_cold_cache_timestamp: Optional[float] = None
+HOT_COLD_CACHE_TTL = 300  # 5 minutes
+
+
+def _is_hot_cold_cache_valid() -> bool:
+    """Check if hot/cold cache exists and is not expired"""
+    if _hot_cold_cache is None or _hot_cold_cache_timestamp is None:
+        return False
+    age = time.time() - _hot_cold_cache_timestamp
+    return age < HOT_COLD_CACHE_TTL
+
+
+def _calculate_hot_cold_numbers(limit: int = 100) -> Dict[str, Any]:
+    """
+    Calculate hot and cold numbers from recent draws.
+    Hot = most frequently drawn, Cold = least frequently drawn.
+
+    Args:
+        limit: Number of recent draws to analyze (default 100)
+
+    Returns:
+        Dictionary with hot/cold numbers for white balls and powerballs
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT n1, n2, n3, n4, n5, pb
+            FROM powerball_draws
+            WHERE pb_is_current = 1
+            ORDER BY draw_date DESC
+            LIMIT ?
+        """, (limit,))
+        draws = cursor.fetchall()
+
+    if not draws:
+        return {
+            "hot_numbers": {"white_balls": [], "powerballs": []},
+            "cold_numbers": {"white_balls": [], "powerballs": []},
+            "draws_analyzed": 0
+        }
+
+    # Count frequencies
+    white_counter: Counter = Counter()
+    pb_counter: Counter = Counter()
+
+    for draw in draws:
+        for ball in draw[:5]:  # white_1 through white_5
+            white_counter[ball] += 1
+        pb_counter[draw[5]] += 1  # powerball
+
+    # Sort by frequency
+    white_sorted = white_counter.most_common()
+    pb_sorted = pb_counter.most_common()
+
+    # Hot = top 10 most frequent, Cold = bottom 10 least frequent
+    return {
+        "hot_numbers": {
+            "white_balls": [num for num, _ in white_sorted[:10]],
+            "powerballs": [num for num, _ in pb_sorted[:5]]
+        },
+        "cold_numbers": {
+            "white_balls": [num for num, _ in white_sorted[-10:]],
+            "powerballs": [num for num, _ in pb_sorted[-5:]]
+        },
+        "draws_analyzed": len(draws)
+    }
+
+
+def get_cached_hot_cold_numbers() -> Dict[str, Any]:
+    """
+    Get hot/cold numbers with 5-minute cache.
+    Returns cached data if available and fresh, otherwise recalculates.
+    """
+    global _hot_cold_cache, _hot_cold_cache_timestamp
+
+    now = time.time()
+
+    # Return cached result if valid
+    if _hot_cold_cache and _hot_cold_cache_timestamp:
+        age = now - _hot_cold_cache_timestamp
+        if age < HOT_COLD_CACHE_TTL:
+            return {
+                **_hot_cold_cache,
+                "from_cache": True,
+                "cache_age_seconds": round(age, 1)
+            }
+
+    # Calculate fresh data
+    start = time.perf_counter()
+    result = _calculate_hot_cold_numbers()
+    calc_time = (time.perf_counter() - start) * 1000
+
+    # Update cache
+    _hot_cold_cache = result
+    _hot_cold_cache_timestamp = now
+
+    return {
+        **result,
+        "from_cache": False,
+        "calculation_time_ms": round(calc_time, 2)
+    }
+
+
+def invalidate_hot_cold_cache() -> None:
+    """Invalidate the hot/cold cache. Call after new draw data is loaded."""
+    global _hot_cold_cache, _hot_cold_cache_timestamp
+    _hot_cold_cache = None
+    _hot_cold_cache_timestamp = None
+    logger.info("Hot/cold numbers cache invalidated")
 
 
 router = APIRouter(
@@ -240,7 +360,7 @@ def _transform_generated_tickets_v2(draw_date: Optional[str], tickets: List[Dict
     for idx, t in enumerate(tickets, start=1):
         name = t.get("strategy") or "unknown"
         strategies_used[name] = strategies_used.get(name, 0) + 1
-        
+
         # Convert numpy types to native Python types for JSON serialization
         numbers = t.get("white_balls") or t.get("numbers")
         if numbers:
@@ -248,7 +368,7 @@ def _transform_generated_tickets_v2(draw_date: Optional[str], tickets: List[Dict
         powerball = t.get("powerball")
         if powerball is not None:
             powerball = int(powerball)
-        
+
         items.append({
             "numbers": numbers,
             "powerball": powerball,
@@ -571,47 +691,47 @@ async def plp_ticket_verify_manual(req: PlpManualVerifyRequest) -> Dict[str, Any
 async def plp_analytics_context() -> Dict[str, Any]:
     """
     Get analytics context for PLP dashboard (hot/cold numbers, momentum, gaps).
-    
+
     This endpoint provides pre-computed analytics data for the gamified experience,
     including hot numbers, cold numbers, momentum trends, and gap analysis.
-    
+
     Returns:
         Dict with success, data (hot_numbers, cold_numbers, momentum, gaps), timestamp
     """
     try:
         # Get comprehensive analytics overview
         overview = get_analytics_overview()
-        
+
         # Extract gap analysis for hot/cold numbers
         gap_analysis = overview.get('gap_analysis', {})
         white_balls_gaps = gap_analysis.get('white_balls', {})
         powerball_gaps = gap_analysis.get('powerball', {})
-        
+
         # Extract momentum scores
         momentum_scores = overview.get('momentum_scores', {})
         white_balls_momentum = momentum_scores.get('white_balls', {})
         powerball_momentum = momentum_scores.get('powerball', {})
-        
+
         # Identify hot numbers (low gap = recently drawn)
         white_balls_gaps_sorted = sorted(white_balls_gaps.items(), key=lambda x: x[1])
         hot_numbers = [int(num) for num, gap in white_balls_gaps_sorted[:10]]
-        
+
         # Identify cold numbers (high gap = overdue)
         cold_numbers = [int(num) for num, gap in white_balls_gaps_sorted[-10:]]
-        
+
         # Identify rising momentum numbers (positive momentum)
         rising_numbers = sorted(
             [(int(num), score) for num, score in white_balls_momentum.items()],
             key=lambda x: x[1],
             reverse=True
         )[:10]
-        
+
         # Identify falling momentum numbers (negative momentum)
         falling_numbers = sorted(
             [(int(num), score) for num, score in white_balls_momentum.items()],
             key=lambda x: x[1]
         )[:10]
-        
+
         # Build response with expected key names
         data = {
             'hot_numbers': {
@@ -639,14 +759,14 @@ async def plp_analytics_context() -> Dict[str, Any]:
             },
             'data_summary': overview.get('data_summary', {}),
         }
-        
+
         return {
             'success': True,
             'data': data,
             'timestamp': datetime.utcnow().isoformat() + 'Z',
             'error': None,
         }
-        
+
     except Exception as e:
         logger.error(f"Analytics context endpoint failed: {e}")
         raise HTTPException(
@@ -667,15 +787,15 @@ class AnalyzeTicketRequest(BaseModel):
 async def plp_analyze_ticket(req: AnalyzeTicketRequest) -> Dict[str, Any]:
     """
     Score a user's ticket based on statistical quality (0-100 scale).
-    
+
     Analyzes tickets based on:
     - Diversity: Spread across number ranges
     - Balance: Sum range and odd/even ratio
     - Potential: Alignment with hot numbers and rising momentum
-    
+
     Args:
         req: Request with white_balls (5 numbers) and powerball
-        
+
     Returns:
         Dict with success, data (total_score, details, recommendation), timestamp
     """
@@ -683,27 +803,27 @@ async def plp_analyze_ticket(req: AnalyzeTicketRequest) -> Dict[str, Any]:
         # Validate white balls
         if len(req.white_balls) != 5:
             raise HTTPException(status_code=400, detail="Must provide exactly 5 white ball numbers")
-        
+
         if len(set(req.white_balls)) != 5:
             raise HTTPException(status_code=400, detail="White ball numbers must be unique")
-        
+
         if not all(1 <= n <= 69 for n in req.white_balls):
             raise HTTPException(status_code=400, detail="White ball numbers must be between 1 and 69")
-        
+
         # Get analytics context
         context = get_analytics_overview()
-        
+
         # Initialize scorer and score the ticket
         scorer = TicketScorer()
         score_result = scorer.score_ticket(req.white_balls, req.powerball, context)
-        
+
         return {
             'success': True,
             'data': score_result,
             'timestamp': datetime.utcnow().isoformat() + 'Z',
             'error': None,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -728,16 +848,16 @@ class InteractiveGeneratorRequest(BaseModel):
 async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[str, Any]:
     """
     Generate tickets based on user's risk and temperature preferences.
-    
+
     This endpoint provides an interactive generation experience where users can
     control the strategy through sliders:
     - Risk: How much to deviate from statistical norms
     - Temperature: Favor hot (recent) or cold (overdue) numbers
     - Exclusions: Numbers to avoid in generation
-    
+
     Args:
         req: Request with risk, temperature, exclude list, and count
-        
+
     Returns:
         Dict with success, data (generated tickets), timestamp
     """
@@ -749,7 +869,7 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
                 status_code=400,
                 detail=f"Invalid risk level '{req.risk}'. Must be 'low', 'med', or 'high'"
             )
-        
+
         # Validate temperature
         temperature = req.temperature.lower()
         if temperature not in ['hot', 'cold', 'neutral']:
@@ -757,7 +877,7 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
                 status_code=400,
                 detail=f"Invalid temperature '{req.temperature}'. Must be 'hot', 'cold', or 'neutral'"
             )
-        
+
         # Validate exclusions
         if req.exclude_numbers:
             if len(req.exclude_numbers) > 20:
@@ -771,20 +891,20 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
                     status_code=400,
                     detail=f"Invalid exclusion numbers: {invalid_exclusions}. Must be between 1 and 69"
                 )
-        
+
         # Validate count
         if req.count > 10:
             raise HTTPException(
                 status_code=400,
                 detail="Too many tickets requested. Maximum 10 allowed."
             )
-        
+
         # Get analytics context
         context = get_analytics_overview()
-        
+
         # Initialize generator
         generator = CustomInteractiveGenerator()
-        
+
         # Build parameters
         params = {
             'count': req.count,
@@ -792,21 +912,21 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
             'temperature': temperature,
             'exclude': req.exclude_numbers,
         }
-        
+
         # Generate tickets
         tickets = generator.generate_custom(params, context)
-        
+
         # Format response tickets
         formatted_tickets = []
         for idx, ticket in enumerate(tickets, start=1):
             # Convert numpy types to native Python types for JSON serialization
             white_balls = ticket.get('white_balls') or ticket.get('numbers') or []
             white_balls = [int(n) for n in white_balls]
-            
+
             powerball = ticket.get('powerball')
             if powerball is not None:
                 powerball = int(powerball)
-            
+
             formatted_tickets.append({
                 'rank': idx,
                 'white_balls': white_balls,
@@ -814,7 +934,7 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
                 'strategy': ticket.get('strategy', 'custom_interactive'),
                 'confidence': float(ticket.get('confidence', 0.5)),
             })
-        
+
         return {
             'success': True,
             'data': {
@@ -830,7 +950,7 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
             'timestamp': datetime.utcnow().isoformat() + 'Z',
             'error': None,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -839,3 +959,99 @@ async def plp_interactive_generator(req: InteractiveGeneratorRequest) -> Dict[st
             status_code=500,
             detail=f"Failed to generate tickets: {str(e)}"
         )
+
+
+# =============================================================================
+# HOT/COLD NUMBERS ENDPOINTS
+# =============================================================================
+
+@router.get("/hot-cold-numbers")
+async def plp_hot_cold_numbers() -> Dict[str, Any]:
+    """
+    Get hot and cold numbers based on recent draws (last 100).
+
+    Hot numbers = most frequently drawn in recent history
+    Cold numbers = least frequently drawn in recent history
+
+    Results are cached for 5 minutes for optimal performance.
+
+    Returns:
+        - hot_numbers: top 10 white balls and top 5 powerballs
+        - cold_numbers: bottom 10 white balls and bottom 5 powerballs
+        - draws_analyzed: number of draws used in calculation
+        - from_cache: whether result came from cache
+    """
+    return get_cached_hot_cold_numbers()
+
+
+@router.get("/overview-enhanced")
+async def plp_overview_enhanced() -> Dict[str, Any]:
+    """
+    Get comprehensive analytics overview including hot/cold numbers.
+
+    Combines:
+    - Basic overview data (strategy performance, pipeline status)
+    - Hot/cold numbers analysis
+
+    All data is cached for optimal performance.
+    """
+    start_total = time.perf_counter()
+
+    # Get hot/cold numbers (cached)
+    hot_cold = get_cached_hot_cold_numbers()
+
+    # Get basic stats (lightweight query)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Total draws count
+        cursor.execute("SELECT COUNT(*) FROM powerball_draws WHERE pb_is_current = 1")
+        total_draws = cursor.fetchone()[0]
+
+        # Latest draw date
+        cursor.execute("SELECT MAX(draw_date) FROM powerball_draws")
+        latest_draw = cursor.fetchone()[0]
+
+        # Strategy performance summary
+        cursor.execute("""
+            SELECT strategy_name, current_weight, total_plays, win_rate
+            FROM strategy_performance
+            ORDER BY current_weight DESC
+            LIMIT 5
+        """)
+        top_strategies = [
+            {
+                "name": row[0],
+                "weight": round(row[1], 4) if row[1] else 0,
+                "predictions": row[2] or 0,
+                "win_rate": round(row[3], 4) if row[3] else 0
+            }
+            for row in cursor.fetchall()
+        ]
+
+    total_time = (time.perf_counter() - start_total) * 1000
+
+    return {
+        "hot_cold_analysis": hot_cold,
+        "draw_stats": {
+            "total_draws_current_era": total_draws,
+            "latest_draw_date": latest_draw
+        },
+        "top_strategies": top_strategies,
+        "response_time_ms": round(total_time, 2),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.post("/cache/invalidate-hot-cold")
+async def plp_invalidate_hot_cold_cache() -> Dict[str, Any]:
+    """
+    Manually invalidate the hot/cold numbers cache.
+    Use after loading new draw data to force recalculation.
+    """
+    invalidate_hot_cold_cache()
+    return {
+        "status": "success",
+        "message": "Hot/cold numbers cache invalidated",
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
