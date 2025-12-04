@@ -1055,3 +1055,36 @@ async def plp_invalidate_hot_cold_cache() -> Dict[str, Any]:
         "message": "Hot/cold numbers cache invalidated",
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+
+
+@router.get("/draw-stats")
+async def plp_draw_stats() -> Dict[str, Any]:
+    """
+    Get draw statistics summary.
+
+    Returns:
+        - total_draws: Total number of draws in database (all eras)
+        - most_recent: Date of the most recent draw
+        - current_era: Number of draws in current era (pb_is_current = 1)
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Total draws (all eras)
+        cursor.execute("SELECT COUNT(*) FROM powerball_draws")
+        total_draws = cursor.fetchone()[0]
+
+        # Most recent draw date
+        cursor.execute("SELECT MAX(draw_date) FROM powerball_draws")
+        most_recent = cursor.fetchone()[0]
+
+        # Current era draws count
+        cursor.execute("SELECT COUNT(*) FROM powerball_draws WHERE pb_is_current = 1")
+        current_era = cursor.fetchone()[0]
+
+    return {
+        "total_draws": total_draws,
+        "most_recent": most_recent,
+        "current_era": current_era,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
