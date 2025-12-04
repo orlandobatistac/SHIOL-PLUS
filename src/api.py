@@ -1217,10 +1217,10 @@ async def _execute_pipeline_steps(
 
         manager = StrategyManager()
 
-        # Generate 110 tickets distributed by adaptive weights
+        # Generate 55 tickets distributed by adaptive weights (5 per strategy)
         # Strategies with higher win rates get more tickets
         # This allows the system to naturally phase out underperforming strategies
-        batch_tickets = manager.generate_balanced_tickets(total=110)
+        batch_tickets = manager.generate_balanced_tickets(total=55)
         total_saved = save_generated_tickets(batch_tickets, next_draw)
         logger.info(f"[{execution_id}] Saved {total_saved} tickets for {next_draw}")
         gc.collect()
@@ -1367,9 +1367,9 @@ async def _execute_pipeline_steps_without_insert(
 
         manager = StrategyManager()
 
-        # Generate 110 tickets distributed by adaptive weights
+        # Generate 55 tickets distributed by adaptive weights (5 per strategy)
         # Strategies with higher win rates get more tickets
-        batch_tickets = manager.generate_balanced_tickets(total=110)
+        batch_tickets = manager.generate_balanced_tickets(total=55)
         total_saved = save_generated_tickets(batch_tickets, next_draw)
         logger.info(f"[{execution_id}] Generated {total_saved} tickets (weighted by strategy performance)")
         gc.collect()
@@ -1437,8 +1437,8 @@ async def _generate_predictions_only(next_draw: str) -> int:
 
     manager = StrategyManager()
 
-    # Generate 110 tickets distributed by adaptive weights
-    batch_tickets = manager.generate_balanced_tickets(total=110)
+    # Generate 55 tickets distributed by adaptive weights (5 per strategy)
+    batch_tickets = manager.generate_balanced_tickets(total=55)
     total_saved = save_generated_tickets(batch_tickets, next_draw)
     gc.collect()
 
