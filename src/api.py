@@ -1696,11 +1696,14 @@ def run_smart_polling():
     import asyncio
     try:
         logger.info("🚀 [scheduler] Starting Smart Polling Pipeline v8.0 (scheduler mode)...")
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(smart_polling_pipeline(force_pipeline=False))
-        else:
+        # Create a new event loop for this thread (APScheduler runs in ThreadPoolExecutor)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
             loop.run_until_complete(smart_polling_pipeline(force_pipeline=False))
+        finally:
+            loop.close()
+        logger.info("🚀 [scheduler] Smart Polling Pipeline completed")
     except Exception as e:
         logger.error(f"🚀 [scheduler] Smart Polling exception: {e}", exc_info=True)
 
