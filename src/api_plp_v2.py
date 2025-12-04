@@ -1178,10 +1178,13 @@ DASHBOARD_CACHE_TTL = 300  # 5 minutes
 def _build_dashboard_data() -> Dict[str, Any]:
     """
     Build complete dashboard data for PLP frontend.
-    Combines: draw stats + hot/cold numbers + top strategies
+    Combines: draw stats + hot/cold numbers + top strategies + predictions
     All in one optimized query batch.
     """
     start_time = time.perf_counter()
+
+    # Calculate next drawing date for predictions
+    next_draw_date = calculate_next_drawing_date()
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1219,6 +1222,18 @@ def _build_dashboard_data() -> Dict[str, Any]:
         """)
         strategies_rows = cursor.fetchall()
 
+        # ===== QUERY 4: Predictions for next draw (top 25 by confidence) =====
+        cursor.execute("""
+            SELECT 
+                n1, n2, n3, n4, n5, powerball,
+                confidence_score, strategy_used, created_at
+            FROM generated_tickets 
+            WHERE draw_date = ?
+            ORDER BY confidence_score DESC
+            LIMIT 25
+        """, (next_draw_date,))
+        predictions_raw = cursor.fetchall()
+
     # ===== Calculate Hot/Cold Numbers =====
     white_counter: Counter = Counter()
     pb_counter: Counter = Counter()
@@ -1247,6 +1262,26 @@ def _build_dashboard_data() -> Dict[str, Any]:
         for row in strategies_rows
     ]
 
+    # ===== Build Predictions (5 sets of 5 tickets, grouped by strategy) =====
+    # Group predictions by strategy
+    predictions_by_strategy: Dict[str, List[Dict[str, Any]]] = {}
+    for pred in predictions_raw:
+        strategy = pred[7] or "unknown"
+        ticket = {
+            "white_balls": [pred[0], pred[1], pred[2], pred[3], pred[4]],
+            "powerball": pred[5],
+            "confidence": round(pred[6], 4) if pred[6] else 0.5,
+        }
+        predictions_by_strategy.setdefault(strategy, []).append(ticket)
+
+    # Build prediction sets (5 sets max, 5 tickets per set)
+    prediction_sets = []
+    for strategy_name, tickets in list(predictions_by_strategy.items())[:5]:
+        prediction_sets.append({
+            "strategy": strategy_name,
+            "tickets": tickets[:5]  # Max 5 tickets per set
+        })
+
     calc_time = (time.perf_counter() - start_time) * 1000
 
     return {
@@ -1267,6 +1302,11 @@ def _build_dashboard_data() -> Dict[str, Any]:
             "draws_analyzed": len(recent_draws)
         },
         "top_strategies": top_strategies,
+        "predictions": {
+            "next_draw_date": next_draw_date,
+            "total_tickets": len(predictions_raw),
+            "sets": prediction_sets
+        },
         "calculation_time_ms": round(calc_time, 2)
     }
 

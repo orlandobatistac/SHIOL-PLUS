@@ -77,6 +77,18 @@ def test_single_vs_multiple():
     print(f"    - draw_stats:     total={data.get('draw_stats', {}).get('total_draws')}")
     print(f"    - hot_cold:       {len(data.get('hot_cold', {}).get('hot_numbers', {}).get('white_balls', []))} hot white balls")
     print(f"    - top_strategies: {len(data.get('top_strategies', []))} strategies")
+    
+    # Show predictions
+    predictions = data.get('predictions', {})
+    print(f"    - predictions:")
+    print(f"        next_draw_date: {predictions.get('next_draw_date')}")
+    print(f"        total_tickets:  {predictions.get('total_tickets')}")
+    print(f"        sets:           {len(predictions.get('sets', []))} strategy sets")
+    
+    # Show prediction sets detail
+    for pset in predictions.get('sets', [])[:3]:  # Show first 3 sets
+        tickets = pset.get('tickets', [])
+        print(f"          - {pset.get('strategy')}: {len(tickets)} tickets")
 
     # ===== TEST 3: Cached Single Endpoint =====
     print("\n[TEST 3] SINGLE ENDPOINT (cached)...")
@@ -140,9 +152,25 @@ def test_single_vs_multiple():
       "draws_analyzed": 100
     },
     "top_strategies": [
-      {"name": "frequency_weighted", "weight": 0.1751, ...},
-      ...
-    ]
+      {"name": "frequency_weighted", "weight": 0.1751, ...}
+    ],
+    "predictions": {
+      "next_draw_date": "2025-12-04",
+      "total_tickets": 25,
+      "sets": [
+        {
+          "strategy": "frequency_weighted",
+          "tickets": [
+            {"white_balls": [5, 12, 28, 43, 62], "powerball": 7, "confidence": 0.85},
+            {"white_balls": [3, 17, 29, 52, 68], "powerball": 19, "confidence": 0.82}
+          ]
+        },
+        {
+          "strategy": "cooccurrence",
+          "tickets": [...]
+        }
+      ]
+    }
   },
   "from_cache": true,
   "cache_age_seconds": 45.2
