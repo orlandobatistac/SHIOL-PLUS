@@ -1,9 +1,27 @@
 # PLP V2 API Reference - Quick Start Guide
 
 **Base URL**: `https://shiolplus.com` (Production) | `http://localhost:8000` (Development)
-**API Version**: v2
+**API Version**: v2.3.0
 **Authentication**: Bearer token in `Authorization` header
 **Last Updated**: 2025-12-03
+
+---
+
+## 🚀 RECOMMENDED: Single Endpoint for Dashboard
+
+> **⚡ USE THIS ENDPOINT**: Instead of making multiple API calls, use `/api/v2/plp-dashboard` to get ALL dashboard data in a single request. This saves ~112ms of network latency and simplifies your code.
+
+```bash
+# ONE call instead of 3-5 calls
+curl -X GET "https://shiolplus.com/api/v2/plp-dashboard" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Benefits:**
+- ✅ **All data in one response**: draw stats + hot/cold + strategies + predictions
+- ✅ **~112ms faster** than multiple endpoint calls (with network latency)
+- ✅ **5-minute cache**: subsequent requests return in <2ms
+- ✅ **Simpler code**: one fetch, one response to parse
 
 ---
 
@@ -23,24 +41,168 @@ Authorization: Bearer YOUR_PLP_API_KEY
 - `403`: Invalid API key
 - `200`: Success
 
+**Rate Limiting**: 100 requests/minute per API key
+
 ---
 
 ## 📊 Endpoints Overview
 
-| Endpoint                           | Method | Purpose                      | Avg Response Time |
-| ---------------------------------- | ------ | ---------------------------- | ----------------- |
-| `/api/v2/analytics/context`        | GET    | Dashboard analytics (cached) | **<5ms** (cached) |
-| `/api/v2/hot-cold-numbers`         | GET    | Hot/cold numbers only        | **<1ms** (cached) |
-| `/api/v2/draw-stats`               | GET    | Draw statistics summary      | **<5ms**          |
-| `/api/v2/overview-enhanced`        | GET    | Enhanced overview            | **<15ms**         |
-| `/api/v2/analytics/analyze-ticket` | POST   | Score user tickets           | <10ms             |
-| `/api/v2/generator/interactive`    | POST   | Generate custom tickets      | <10ms             |
+| Endpoint                           | Method | Purpose                              | Avg Response Time   |
+| ---------------------------------- | ------ | ------------------------------------ | ------------------- |
+| **`/api/v2/plp-dashboard`** ⭐     | GET    | **ALL dashboard data (RECOMMENDED)** | **<2ms** (cached)   |
+| `/api/v2/analytics/context`        | GET    | Dashboard analytics (legacy)         | <5ms (cached)       |
+| `/api/v2/hot-cold-numbers`         | GET    | Hot/cold numbers only                | <1ms (cached)       |
+| `/api/v2/draw-stats`               | GET    | Draw statistics summary              | <5ms                |
+| `/api/v2/overview-enhanced`        | GET    | Enhanced overview                    | <15ms               |
+| `/api/v2/analytics/analyze-ticket` | POST   | Score user tickets                   | <10ms               |
+| `/api/v2/generator/interactive`    | POST   | Generate custom tickets              | <10ms               |
 
-> **⚡ Performance Note**: All analytics endpoints now include 5-minute caching. First request calculates data (~600ms), subsequent requests return cached data (<5ms).
+> **⚡ Performance Note**: All analytics endpoints include 5-minute caching. First request calculates data (~20ms), subsequent requests return cached data (<2ms).
 
 ---
 
-## 1. GET /api/v2/analytics/context ⚡ CACHED
+## ⭐ 1. GET /api/v2/plp-dashboard (RECOMMENDED)
+
+**Purpose**: Get ALL dashboard data in a single call - draw stats, hot/cold numbers, top strategies, AND predictions for next draw.
+
+**⚡ Performance**:
+- First request: ~20ms (4 DB queries)
+- Cached requests: **<2ms** (cache TTL: 5 minutes)
+
+### Request
+
+```bash
+curl -X GET "https://shiolplus.com/api/v2/plp-dashboard" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200 OK)
+
+```json
+{
+  "success": true,
+  "data": {
+    "draw_stats": {
+      "total_draws": 2260,
+      "most_recent": "2025-12-01",
+      "current_era": 1980
+    },
+    "hot_cold": {
+      "hot_numbers": {
+        "white_balls": [28, 43, 7, 29, 3, 62, 52, 32, 8, 15],
+        "powerballs": [25, 1, 2, 19, 20]
+      },
+      "cold_numbers": {
+        "white_balls": [11, 63, 36, 20, 46, 21, 41, 38, 55, 56],
+        "powerballs": [8, 13, 26, 16, 6]
+      },
+      "draws_analyzed": 100
+    },
+    "top_strategies": [
+      {
+        "name": "frequency_weighted",
+        "weight": 0.1751,
+        "total_plays": 432,
+        "win_rate": 0.0185
+      },
+      {
+        "name": "cooccurrence",
+        "weight": 0.1523,
+        "total_plays": 398,
+        "win_rate": 0.0156
+      }
+    ],
+    "predictions": {
+      "next_draw_date": "2025-12-04",
+      "total_tickets": 25,
+      "sets": [
+        {
+          "strategy": "frequency_weighted",
+          "tickets": [
+            {"white_balls": [5, 12, 28, 43, 62], "powerball": 7, "confidence": 0.85},
+            {"white_balls": [3, 17, 29, 52, 68], "powerball": 19, "confidence": 0.82},
+            {"white_balls": [8, 22, 35, 48, 61], "powerball": 4, "confidence": 0.79},
+            {"white_balls": [11, 26, 39, 55, 67], "powerball": 12, "confidence": 0.76},
+            {"white_balls": [2, 19, 33, 46, 59], "powerball": 23, "confidence": 0.74}
+          ]
+        },
+        {
+          "strategy": "cooccurrence",
+          "tickets": [
+            {"white_balls": [7, 14, 28, 41, 56], "powerball": 9, "confidence": 0.81},
+            {"white_balls": [4, 18, 32, 45, 63], "powerball": 15, "confidence": 0.78}
+          ]
+        }
+      ]
+    },
+    "calculation_time_ms": 18.5
+  },
+  "from_cache": true,
+  "cache_age_seconds": 45.2,
+  "timestamp": "2025-12-03T10:30:00Z"
+}
+```
+
+### Data Structure
+
+- **draw_stats**: Draw statistics
+  - `total_draws`: Total number of draws in database (all eras)
+  - `most_recent`: Date of most recent draw (YYYY-MM-DD)
+  - `current_era`: Number of draws in current era (Powerball 1-26)
+
+- **hot_cold**: Hot and cold numbers analysis (last 100 draws)
+  - `hot_numbers.white_balls`: Top 10 most frequent white balls
+  - `hot_numbers.powerballs`: Top 5 most frequent powerballs
+  - `cold_numbers.white_balls`: Top 10 least frequent white balls
+  - `cold_numbers.powerballs`: Top 5 least frequent powerballs
+  - `draws_analyzed`: Number of draws analyzed (100)
+
+- **top_strategies**: Top 5 performing strategies
+  - `name`: Strategy name
+  - `weight`: Current adaptive weight (0-1)
+  - `total_plays`: Total predictions generated
+  - `win_rate`: Historical win rate
+
+- **predictions**: Predictions for next draw
+  - `next_draw_date`: Target draw date (YYYY-MM-DD)
+  - `total_tickets`: Total tickets returned
+  - `sets`: Array of prediction sets grouped by strategy
+    - `strategy`: Strategy name
+    - `tickets`: Array of tickets (max 5 per strategy)
+      - `white_balls`: Array of 5 white ball numbers (1-69)
+      - `powerball`: Powerball number (1-26)
+      - `confidence`: Confidence score (0-1)
+
+### Cache Metadata
+
+- **from_cache** (boolean): `true` if response was served from cache
+- **cache_age_seconds** (float): Age of cached data in seconds
+- **calculation_time_ms** (float): Time to calculate data in ms (only when `from_cache: false`)
+
+### Migration from Multiple Endpoints
+
+**Before (3+ API calls):**
+```javascript
+// ❌ OLD WAY - Multiple calls, ~163ms with network latency
+const [stats, hotCold, predictions] = await Promise.all([
+  fetch('/api/v2/draw-stats'),
+  fetch('/api/v2/hot-cold-numbers'),
+  fetch('/api/v2/analytics/context')
+]);
+```
+
+**After (1 API call):**
+```javascript
+// ✅ NEW WAY - Single call, ~51ms with network latency
+const dashboard = await fetch('/api/v2/plp-dashboard');
+const { draw_stats, hot_cold, top_strategies, predictions } = dashboard.data;
+```
+
+---
+
+## 2. GET /api/v2/analytics/context ⚡ CACHED (Legacy)
+
+> **Note**: Consider using `/api/v2/plp-dashboard` instead for a more complete response.
 
 **Purpose**: Get pre-computed analytics data for dashboard (hot/cold numbers, momentum trends, gap patterns).
 
@@ -155,7 +317,7 @@ curl -X GET "https://shiolplus.com/api/v2/analytics/context" \
 
 **Purpose**: Get hot and cold numbers based on the last 100 draws. Lightweight alternative to `/analytics/context`.
 
-**⚡ Performance**: 
+**⚡ Performance**:
 - First request: ~4ms
 - Cached requests: **<0.01ms** (cache TTL: 5 minutes)
 
@@ -683,7 +845,17 @@ def generate_tickets(risk='med', temperature='neutral', exclude_numbers=None, co
 
 ## 📝 Changelog
 
-### v2.2.0 (2025-12-03) - CURRENT
+### v2.3.0 (2025-12-03) - CURRENT
+
+- ⭐ **NEW**: `/plp-dashboard` - **CONSOLIDATED ENDPOINT** (RECOMMENDED)
+  - Returns ALL dashboard data in a single call
+  - Includes: draw_stats + hot_cold + top_strategies + predictions
+  - 5 sets of predictions (5 tickets each) for next draw date
+  - **~112ms faster** than multiple endpoint calls (with network latency)
+  - Cached for 5 minutes (<2ms on cache hit)
+- ✅ **MIGRATION**: Use `/plp-dashboard` instead of multiple calls to `/draw-stats`, `/hot-cold-numbers`, `/analytics/context`
+
+### v2.2.0 (2025-12-03)
 
 - ✅ **NEW**: `/hot-cold-numbers` - Lightweight endpoint for hot/cold analysis (~0.01ms cached)
 - ✅ **NEW**: `/draw-stats` - Quick draw statistics (total, recent, current era)
@@ -717,6 +889,6 @@ def generate_tickets(risk='med', temperature='neutral', exclude_numbers=None, co
 ---
 
 **Production URL**: https://shiolplus.com
-**API Version**: v2
+**API Version**: v2.3.0
 **Status**: ✅ Production Ready
-**Last Verified**: 2025-11-21
+**Last Verified**: 2025-12-03
