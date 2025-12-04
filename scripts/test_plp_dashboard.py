@@ -77,14 +77,14 @@ def test_single_vs_multiple():
     print(f"    - draw_stats:     total={data.get('draw_stats', {}).get('total_draws')}")
     print(f"    - hot_cold:       {len(data.get('hot_cold', {}).get('hot_numbers', {}).get('white_balls', []))} hot white balls")
     print(f"    - top_strategies: {len(data.get('top_strategies', []))} strategies")
-    
+
     # Show predictions
     predictions = data.get('predictions', {})
     print(f"    - predictions:")
     print(f"        next_draw_date: {predictions.get('next_draw_date')}")
     print(f"        total_tickets:  {predictions.get('total_tickets')}")
     print(f"        sets:           {len(predictions.get('sets', []))} strategy sets")
-    
+
     # Show prediction sets detail
     for pset in predictions.get('sets', [])[:3]:  # Show first 3 sets
         tickets = pset.get('tickets', [])

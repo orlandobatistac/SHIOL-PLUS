@@ -1224,10 +1224,10 @@ def _build_dashboard_data() -> Dict[str, Any]:
 
         # ===== QUERY 4: Predictions for next draw (top 25 by confidence) =====
         cursor.execute("""
-            SELECT 
+            SELECT
                 n1, n2, n3, n4, n5, powerball,
                 confidence_score, strategy_used, created_at
-            FROM generated_tickets 
+            FROM generated_tickets
             WHERE draw_date = ?
             ORDER BY confidence_score DESC
             LIMIT 25
