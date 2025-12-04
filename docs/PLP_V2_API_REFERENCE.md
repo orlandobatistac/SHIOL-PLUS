@@ -1,9 +1,9 @@
 # PLP V2 API Reference - Quick Start Guide
 
-**Base URL**: `https://shiolplus.com` (Production) | `http://localhost:8000` (Development)  
-**API Version**: v2  
-**Authentication**: Bearer token in `Authorization` header  
-**Last Updated**: 2025-11-21
+**Base URL**: `https://shiolplus.com` (Production) | `http://localhost:8000` (Development)
+**API Version**: v2
+**Authentication**: Bearer token in `Authorization` header
+**Last Updated**: 2025-12-03
 
 ---
 
@@ -27,17 +27,26 @@ Authorization: Bearer YOUR_PLP_API_KEY
 
 ## 📊 Endpoints Overview
 
-| Endpoint                           | Method | Purpose                 | Avg Response Time |
-| ---------------------------------- | ------ | ----------------------- | ----------------- |
-| `/api/v2/analytics/context`        | GET    | Dashboard analytics     | ~605ms            |
-| `/api/v2/analytics/analyze-ticket` | POST   | Score user tickets      | <1ms              |
-| `/api/v2/generator/interactive`    | POST   | Generate custom tickets | <1ms              |
+| Endpoint                           | Method | Purpose                      | Avg Response Time |
+| ---------------------------------- | ------ | ---------------------------- | ----------------- |
+| `/api/v2/analytics/context`        | GET    | Dashboard analytics (cached) | **<5ms** (cached) |
+| `/api/v2/hot-cold-numbers`         | GET    | Hot/cold numbers only        | **<1ms** (cached) |
+| `/api/v2/draw-stats`               | GET    | Draw statistics summary      | **<5ms**          |
+| `/api/v2/overview-enhanced`        | GET    | Enhanced overview            | **<15ms**         |
+| `/api/v2/analytics/analyze-ticket` | POST   | Score user tickets           | <10ms             |
+| `/api/v2/generator/interactive`    | POST   | Generate custom tickets      | <10ms             |
+
+> **⚡ Performance Note**: All analytics endpoints now include 5-minute caching. First request calculates data (~600ms), subsequent requests return cached data (<5ms).
 
 ---
 
-## 1. GET /api/v2/analytics/context
+## 1. GET /api/v2/analytics/context ⚡ CACHED
 
 **Purpose**: Get pre-computed analytics data for dashboard (hot/cold numbers, momentum trends, gap patterns).
+
+**⚡ Performance**:
+- First request: ~600-800ms (full calculation)
+- Cached requests: **<5ms** (cache TTL: 5 minutes)
 
 ### Request
 
@@ -53,7 +62,7 @@ curl -X GET "https://shiolplus.com/api/v2/analytics/context" \
   "success": true,
   "data": {
     "hot_numbers": {
-      "white_balls": [7, 33, 50, 57, 66, 10, 29, 45, 53, 21],
+      "white_balls": [5, 18, 26, 47, 59, 7, 33, 50, 57, 66],
       "powerball": [
         [23, 0],
         [21, 2],
@@ -63,7 +72,7 @@ curl -X GET "https://shiolplus.com/api/v2/analytics/context" \
       ]
     },
     "cold_numbers": {
-      "white_balls": [5, 11, 35, 55, 69, 1, 4, 34, 37, 43],
+      "white_balls": [45, 42, 46, 41, 23, 1, 4, 34, 37, 43],
       "powerball": [
         [1, 45],
         [2, 42],
@@ -95,15 +104,23 @@ curl -X GET "https://shiolplus.com/api/v2/analytics/context" \
       }
     },
     "data_summary": {
-      "total_draws": 2254,
-      "most_recent_date": "2025-11-20",
-      "current_era_draws": 1974
+      "total_draws": 2260,
+      "most_recent_date": "2025-12-01",
+      "current_era_draws": 1980
     }
   },
-  "timestamp": "2025-11-21T10:30:00Z",
-  "error": null
+  "timestamp": "2025-12-03T10:30:00Z",
+  "error": null,
+  "from_cache": true,
+  "cache_age_seconds": 45.2
 }
 ```
+
+### Cache Metadata Fields (NEW)
+
+- **from_cache** (boolean): `true` if response was served from cache
+- **cache_age_seconds** (float): Age of cached data in seconds (only when `from_cache: true`)
+- **calculation_time_ms** (float): Time to calculate analytics in ms (only when `from_cache: false`)
 
 ### Data Structure
 
@@ -134,7 +151,134 @@ curl -X GET "https://shiolplus.com/api/v2/analytics/context" \
 
 ---
 
-## 2. POST /api/v2/analytics/analyze-ticket
+## 2. GET /api/v2/hot-cold-numbers ⚡ CACHED (NEW)
+
+**Purpose**: Get hot and cold numbers based on the last 100 draws. Lightweight alternative to `/analytics/context`.
+
+**⚡ Performance**: 
+- First request: ~4ms
+- Cached requests: **<0.01ms** (cache TTL: 5 minutes)
+
+### Request
+
+```bash
+curl -X GET "https://shiolplus.com/api/v2/hot-cold-numbers" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200 OK)
+
+```json
+{
+  "hot_numbers": {
+    "white_balls": [28, 43, 7, 29, 3, 62, 52, 32, 8, 15],
+    "powerballs": [25, 1, 2, 19, 20]
+  },
+  "cold_numbers": {
+    "white_balls": [11, 63, 36, 20, 46, 21, 41, 38, 55, 56],
+    "powerballs": [8, 13, 26, 16, 6]
+  },
+  "draws_analyzed": 100,
+  "from_cache": true,
+  "cache_age_seconds": 45.2
+}
+```
+
+### Data Structure
+
+- **hot_numbers**: Most frequently drawn in last 100 draws
+  - `white_balls`: Top 10 hot white ball numbers (1-69)
+  - `powerballs`: Top 5 hot powerball numbers (1-26)
+
+- **cold_numbers**: Least frequently drawn in last 100 draws
+  - `white_balls`: Bottom 10 cold white ball numbers
+  - `powerballs`: Bottom 5 cold powerball numbers
+
+- **draws_analyzed**: Number of draws used in calculation (always 100)
+- **from_cache**: Whether response came from cache
+- **cache_age_seconds**: Age of cache in seconds
+
+---
+
+## 3. GET /api/v2/draw-stats (NEW)
+
+**Purpose**: Get draw statistics summary (total draws, most recent date, current era count).
+
+### Request
+
+```bash
+curl -X GET "https://shiolplus.com/api/v2/draw-stats" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200 OK)
+
+```json
+{
+  "total_draws": 2260,
+  "most_recent": "2025-12-01",
+  "current_era": 1980,
+  "timestamp": "2025-12-03T10:30:00Z"
+}
+```
+
+### Data Structure
+
+- **total_draws**: Total number of draws in database (all eras)
+- **most_recent**: Date of the most recent draw (YYYY-MM-DD)
+- **current_era**: Number of draws in current era (Powerball 1-26, since October 2015)
+
+---
+
+## 4. GET /api/v2/overview-enhanced ⚡ CACHED (NEW)
+
+**Purpose**: Get comprehensive overview combining hot/cold numbers with strategy performance.
+
+**⚡ Performance**: ~15ms (uses hot/cold cache internally)
+
+### Request
+
+```bash
+curl -X GET "https://shiolplus.com/api/v2/overview-enhanced" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200 OK)
+
+```json
+{
+  "hot_cold_analysis": {
+    "hot_numbers": {
+      "white_balls": [28, 43, 7, 29, 3, 62, 52, 32, 8, 15],
+      "powerballs": [25, 1, 2, 19, 20]
+    },
+    "cold_numbers": {
+      "white_balls": [11, 63, 36, 20, 46, 21, 41, 38, 55, 56],
+      "powerballs": [8, 13, 26, 16, 6]
+    },
+    "draws_analyzed": 100,
+    "from_cache": true
+  },
+  "draw_stats": {
+    "total_draws_current_era": 1980,
+    "latest_draw_date": "2025-12-01"
+  },
+  "top_strategies": [
+    {
+      "name": "frequency_weighted",
+      "weight": 0.0909,
+      "predictions": 432,
+      "win_rate": 0.0185
+    }
+  ],
+  "response_time_ms": 12.5,
+  "timestamp": "2025-12-03T10:30:00Z"
+}
+```
+
+---
+
+## 5. POST /api/v2/analytics/analyze-ticket
 
 **Purpose**: Score a user's ticket (0-100) based on statistical quality (diversity, balance, potential).
 
@@ -539,7 +683,16 @@ def generate_tickets(risk='med', temperature='neutral', exclude_numbers=None, co
 
 ## 📝 Changelog
 
-### v2.1.0 (2025-11-21) - CURRENT
+### v2.2.0 (2025-12-03) - CURRENT
+
+- ✅ **NEW**: `/hot-cold-numbers` - Lightweight endpoint for hot/cold analysis (~0.01ms cached)
+- ✅ **NEW**: `/draw-stats` - Quick draw statistics (total, recent, current era)
+- ✅ **NEW**: `/overview-enhanced` - Comprehensive overview with strategy performance
+- ✅ **PERF**: Added 5-minute TTL cache to `/analytics/context` (600ms → 3ms, **170x faster**)
+- ✅ **PERF**: Hot/cold calculations cached (484x faster on subsequent requests)
+- ✅ **META**: Response now includes `from_cache` and `cache_age_seconds` fields
+
+### v2.1.0 (2025-11-21)
 
 - ✅ Fixed response structure keys: `momentum` → `momentum_trends`, `gaps` → `gap_patterns`
 - ✅ Added strict validation: max 10 tickets, max 20 exclusions
@@ -557,13 +710,13 @@ def generate_tickets(risk='med', temperature='neutral', exclude_numbers=None, co
 
 ## 📞 Support
 
-**Issues**: Open issue at [github.com/orlandobatistac/SHIOL-PLUS](https://github.com/orlandobatistac/SHIOL-PLUS)  
-**Contact**: Orlando B. - [LinkedIn](https://www.linkedin.com/in/orlandobatista-ai/)  
+**Issues**: Open issue at [github.com/orlandobatistac/SHIOL-PLUS](https://github.com/orlandobatistac/SHIOL-PLUS)
+**Contact**: Orlando B. - [LinkedIn](https://www.linkedin.com/in/orlandobatista-ai/)
 **Documentation**: See `docs/PLP_V2_ANALYTICS_ENDPOINTS.md` for detailed implementation notes
 
 ---
 
-**Production URL**: https://shiolplus.com  
-**API Version**: v2  
-**Status**: ✅ Production Ready  
+**Production URL**: https://shiolplus.com
+**API Version**: v2
+**Status**: ✅ Production Ready
 **Last Verified**: 2025-11-21
